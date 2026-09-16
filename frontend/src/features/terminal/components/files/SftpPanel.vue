@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import AppIcon from '@shared/components/AppIcon.vue';
-import type { IconName } from '@shared/components/AppIcon.vue';
+import AppContextMenu from '@shared/components/context-menu/AppContextMenu.vue';
+import type { ContextMenuEntry as FileContextMenuItem } from '@shared/components/context-menu/types';
 import type { TerminalDownloadProtocol, TerminalFileEntry } from '../../types';
 import {
   fileText,
@@ -52,16 +53,6 @@ interface DirectoryContextMenuState {
   x: number;
   y: number;
 }
-interface FileContextMenuItem {
-  id: string;
-  label: string;
-  icon: IconName;
-  enabled: boolean;
-  danger?: boolean;
-  separatorBefore?: boolean;
-  children?: FileContextMenuItem[];
-  action: () => void | Promise<void>;
-}
 interface FileMarqueeState {
   active: boolean;
   startX: number;
@@ -79,9 +70,6 @@ interface FileUploadExpose {
   openFolder: () => void;
 }
 
-const FILE_CONTEXT_MENU_WIDTH = 220;
-const FILE_CONTEXT_MENU_HEIGHT = 540;
-const DIRECTORY_CONTEXT_MENU_HEIGHT = 300;
 const TRANSFER_PANEL_DEFAULT_HEIGHT = 170;
 const TRANSFER_PANEL_MIN_HEIGHT = 96;
 const TRANSFER_PANEL_MAX_HEIGHT = 360;
@@ -219,32 +207,18 @@ function selectEntry(entry: TerminalFileEntry, event: MouseEvent | KeyboardEvent
 }
 function openFileContextMenu(entry: TerminalFileEntry, event: MouseEvent) {
   if (!props.active) return;
-  event.preventDefault();
-  event.stopPropagation();
   if (!browser.isSelected(entry)) browser.setSelection([entry], isParentEntry(entry) ? '' : entry.path);
   else browser.selectedEntry.value = entry;
   closeDirectoryContextMenu();
-  fileContextMenu.value = { visible: true, ...contextMenuPosition(event, FILE_CONTEXT_MENU_HEIGHT), entry };
+  fileContextMenu.value = { visible: true, x: event.clientX, y: event.clientY, entry };
 }
 function openDirectoryContextMenu(event: MouseEvent) {
   if (!props.active) return;
   const target = event.target as Element | null;
   if (target?.closest('.terminal-file-item') || target?.closest('.terminal-file-context-menu')) return;
-  event.preventDefault();
-  event.stopPropagation();
   browser.setSelection([], '');
   closeFileContextMenu();
-  directoryContextMenu.value = { visible: true, ...contextMenuPosition(event, DIRECTORY_CONTEXT_MENU_HEIGHT) };
-}
-function contextMenuPosition(event: MouseEvent, height: number) {
-  const padding = 8;
-  return {
-    x: Math.max(padding, Math.min(event.clientX, window.innerWidth - FILE_CONTEXT_MENU_WIDTH - padding)),
-    y: Math.max(padding, Math.min(event.clientY, window.innerHeight - height - padding)),
-  };
-}
-function submenuLeft(x: number) {
-  return x + FILE_CONTEXT_MENU_WIDTH * 2 + 16 > window.innerWidth;
+  directoryContextMenu.value = { visible: true, x: event.clientX, y: event.clientY };
 }
 function closeFileContextMenu() {
   fileContextMenu.value = { visible: false, x: 0, y: 0, entry: null };
@@ -474,6 +448,7 @@ function onWindowClick() {
   closeContextMenus();
 }
 function onWindowKeydown(event: KeyboardEvent) {
+  if ((event.target as Element | null)?.closest('.shadcn-context-menu-content')) return;
   if (event.key !== 'Escape') return;
   closeContextMenus();
   browser.closeDialogs();
@@ -514,35 +489,48 @@ onBeforeUnmount(() => {
       @parent="browser.openParentDirectory"
       @refresh="browser.loadDirectory()"
     />
-    <FileTable
-      ref="fileTable"
-      :active="active"
-      :path="browser.path.value"
-      :entries="browser.entries.value"
-      :selected-paths="browser.selectedPaths.value"
-      :loading="browser.isLoading.value"
-      :error="browser.error.value"
-      :drag-over="browser.isDragOver.value"
-      :marquee-active="marquee.active"
-      :marquee-style="marqueeStyle"
-      :rename="browser.rename.value"
-      :format-size="formatEntrySize"
-      :text="fileText"
-      :is-parent="isParentEntry"
-      @select="selectEntry"
-      @entry-context="openFileContextMenu"
-      @directory-context="openDirectoryContextMenu"
-      @marquee-start="startMarquee"
-      @drag-start="startDragDownload"
-      @open="browser.openDirectory"
-      @drag-enter="dragEnter"
-      @drag-over="dragOver"
-      @drag-leave="dragLeave"
-      @drop="dropFiles"
-      @rename-name="changeRenameName"
-      @save-rename="browser.saveRename"
-      @cancel-rename="browser.cancelRename"
-    />
+    <AppContextMenu
+      :open="fileContextMenu.visible || directoryContextMenu.visible"
+      :items="fileContextMenu.visible ? fileContextMenuItems : directoryContextMenuItems"
+      :disabled="!active"
+      @update:open="!$event && closeContextMenus()"
+      @select="runContextMenuItem"
+    >
+      <div
+        style="display: contents"
+        @contextmenu="!($event.target as Element).closest('.terminal-file-list') && $event.preventDefault()"
+      >
+        <FileTable
+          ref="fileTable"
+          :active="active"
+          :path="browser.path.value"
+          :entries="browser.entries.value"
+          :selected-paths="browser.selectedPaths.value"
+          :loading="browser.isLoading.value"
+          :error="browser.error.value"
+          :drag-over="browser.isDragOver.value"
+          :marquee-active="marquee.active"
+          :marquee-style="marqueeStyle"
+          :rename="browser.rename.value"
+          :format-size="formatEntrySize"
+          :text="fileText"
+          :is-parent="isParentEntry"
+          @select="selectEntry"
+          @entry-context="openFileContextMenu"
+          @directory-context="openDirectoryContextMenu"
+          @marquee-start="startMarquee"
+          @drag-start="startDragDownload"
+          @open="browser.openDirectory"
+          @drag-enter="dragEnter"
+          @drag-over="dragOver"
+          @drag-leave="dragLeave"
+          @drop="dropFiles"
+          @rename-name="changeRenameName"
+          @save-rename="browser.saveRename"
+          @cancel-rename="browser.cancelRename"
+        />
+      </div>
+    </AppContextMenu>
     <footer class="terminal-file-status">
       <span>{{ browser.selectionStatusText.value }}</span>
       <span class="terminal-file-protocol" :class="browser.status.value">{{ browser.statusText.value }}</span>
@@ -580,48 +568,6 @@ onBeforeUnmount(() => {
     />
     <FileUploadDialog ref="uploadDialog" @selected="browser.uploadFiles" />
 
-    <div
-      v-if="fileContextMenu.visible"
-      class="terminal-file-context-menu"
-      :class="{ 'submenu-left': submenuLeft(fileContextMenu.x) }"
-      :style="{ left: `${fileContextMenu.x}px`, top: `${fileContextMenu.y}px` }"
-      role="menu"
-      @click.stop
-      @contextmenu.prevent.stop
-    >
-      <div v-for="item in fileContextMenuItems" :key="item.id" class="terminal-file-context-menu-row" :class="{ separator: item.separatorBefore }">
-        <el-button text role="menuitem" class="terminal-file-context-menu-item" :class="{ danger: item.danger }" :disabled="!item.enabled" @click="runContextMenuItem(item)">
-          <AppIcon :name="item.icon" :size="15" />
-          <span>{{ item.label }}</span>
-          <AppIcon v-if="item.children?.length" name="chevronRight" :size="14" />
-        </el-button>
-        <div v-if="item.children?.length" class="terminal-file-context-submenu" role="menu">
-          <el-button v-for="child in item.children" :key="child.id" text role="menuitem" class="terminal-file-context-menu-item" :disabled="!child.enabled" @click="runContextMenuItem(child)">
-            <AppIcon :name="child.icon" :size="15" /><span>{{ child.label }}</span>
-          </el-button>
-        </div>
-      </div>
-    </div>
-    <div
-      v-if="directoryContextMenu.visible"
-      class="terminal-file-context-menu terminal-file-directory-context-menu"
-      :class="{ 'submenu-left': submenuLeft(directoryContextMenu.x) }"
-      :style="{ left: `${directoryContextMenu.x}px`, top: `${directoryContextMenu.y}px` }"
-      role="menu"
-      @click.stop
-      @contextmenu.prevent.stop
-    >
-      <div v-for="item in directoryContextMenuItems" :key="item.id" class="terminal-file-context-menu-row" :class="{ separator: item.separatorBefore }">
-        <el-button text role="menuitem" class="terminal-file-context-menu-item" :disabled="!item.enabled" @click="runContextMenuItem(item)">
-          <AppIcon :name="item.icon" :size="15" /><span>{{ item.label }}</span><AppIcon v-if="item.children?.length" name="chevronRight" :size="14" />
-        </el-button>
-        <div v-if="item.children?.length" class="terminal-file-context-submenu" role="menu">
-          <el-button v-for="child in item.children" :key="child.id" text role="menuitem" class="terminal-file-context-menu-item" :disabled="!child.enabled" @click="runContextMenuItem(child)">
-            <AppIcon :name="child.icon" :size="15" /><span>{{ child.label }}</span>
-          </el-button>
-        </div>
-      </div>
-    </div>
 
     <el-dialog
       :model-value="browser.deleteDialog.value.visible"

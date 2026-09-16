@@ -57,6 +57,8 @@ import {
   readStoredTerminalFontSize,
 } from '../../utils/terminalSettings';
 import AppIcon from '@shared/components/AppIcon.vue';
+import AppContextMenu from '@shared/components/context-menu/AppContextMenu.vue';
+import type { ContextMenuEntry as TerminalContextMenuItem } from '@shared/components/context-menu/types';
 import type { IconName } from '@shared/components/AppIcon.vue';
 import type { AccountUser, TerminalSettingsConfig } from '../../types';
 
@@ -186,19 +188,6 @@ interface TerminalContextMenuState {
   selectedText: string;
 }
 
-interface TerminalContextMenuItem {
-  id: string;
-  label: string;
-  icon: IconName;
-  enabled: boolean;
-  danger?: boolean;
-  selected?: boolean;
-  swatchColor?: string;
-  separatorBefore?: boolean;
-  shortcut?: string;
-  children?: TerminalContextMenuItem[];
-  action: () => void | Promise<void>;
-}
 
 interface TerminalTabContextMenuState {
   visible: boolean;
@@ -248,13 +237,6 @@ const TERMINAL_SPLIT_MODE_STORAGE_KEY = 'ops-tool.web-terminal.split-mode';
 const TERMINAL_SIDEBAR_DEFAULT_WIDTH = 284;
 const TERMINAL_SIDEBAR_MIN_WIDTH = 200;
 const TERMINAL_WORKSPACE_MIN_WIDTH = 360;
-const TERMINAL_CONTEXT_MENU_WIDTH = 248;
-const TERMINAL_CONTEXT_SUBMENU_WIDTH = 226;
-const TERMINAL_CONTEXT_SUBMENU_OFFSET = 1;
-const TERMINAL_CONTEXT_MENU_HEIGHT = 560;
-const TERMINAL_TAB_CONTEXT_MENU_WIDTH = 252;
-const TERMINAL_TAB_CONTEXT_SUBMENU_WIDTH = 232;
-const TERMINAL_TAB_CONTEXT_MENU_HEIGHT = 560;
 const TERMINAL_TAB_TITLE_MAX_LENGTH = 40;
 const TERMINAL_MONITOR_REFRESH_MS = 5000;
 const TERMINAL_QUICK_COMMAND_PANEL_HEIGHT_STORAGE_KEY = 'ops-tool.web-terminal.quick-command-panel-height';
@@ -1065,18 +1047,6 @@ function cssEscape(value: string) {
   return escape ? escape(value) : value.replace(/["\\]/g, '\\$&');
 }
 
-function isTerminalContextSubmenuLeft(x: number, menuWidth: number, submenuWidth: number) {
-  const rightSpace = window.innerWidth - (x + menuWidth);
-  const leftSpace = x;
-  const requiredSubmenuSpace = submenuWidth + TERMINAL_CONTEXT_SUBMENU_OFFSET;
-  if (rightSpace < requiredSubmenuSpace && leftSpace >= requiredSubmenuSpace) {
-    return true;
-  }
-  if (leftSpace < requiredSubmenuSpace && rightSpace >= requiredSubmenuSpace) {
-    return false;
-  }
-  return leftSpace > rightSpace;
-}
 
 function toggleTerminalTabMenu() {
   isTerminalTabMenuOpen.value = !isTerminalTabMenuOpen.value;
@@ -1378,8 +1348,6 @@ async function runTerminalTabContextMenuItem(item: TerminalContextMenuItem) {
 }
 
 function openTerminalTabContextMenu(tab: TerminalTab, event: MouseEvent) {
-  event.preventDefault();
-  event.stopPropagation();
   if (tab.id !== activeTabId.value) {
     void activateTab(tab.id);
   }
@@ -1389,14 +1357,16 @@ function openTerminalTabContextMenu(tab: TerminalTab, event: MouseEvent) {
   terminalTabContextMenu.value = {
     visible: true,
     tabId: tab.id,
-    ...getTerminalTabContextMenuPosition(event),
+    x: event.clientX,
+    y: event.clientY,
   };
 }
 
 function openTerminalContextMenu(tab: TerminalTab, event: MouseEvent) {
-  event.preventDefault();
-  event.stopPropagation();
-  if (!isTerminalTabVisible(tab)) return;
+  if (!isTerminalTabVisible(tab)) {
+    event.preventDefault();
+    return;
+  }
   if (tab.id !== activeTabId.value) {
     void activateTab(tab.id);
   }
@@ -1408,25 +1378,12 @@ function openTerminalContextMenu(tab: TerminalTab, event: MouseEvent) {
     visible: true,
     tabId: tab.id,
     selectedText,
-    ...getTerminalContextMenuPosition(event),
+    x: event.clientX,
+    y: event.clientY,
   };
 }
 
-function getTerminalTabContextMenuPosition(event: MouseEvent) {
-  const padding = 8;
-  return {
-    x: Math.max(padding, Math.min(event.clientX, window.innerWidth - TERMINAL_TAB_CONTEXT_MENU_WIDTH - padding)),
-    y: Math.max(padding, Math.min(event.clientY, window.innerHeight - TERMINAL_TAB_CONTEXT_MENU_HEIGHT - padding)),
-  };
-}
 
-function getTerminalContextMenuPosition(event: MouseEvent) {
-  const padding = 8;
-  return {
-    x: Math.max(padding, Math.min(event.clientX, window.innerWidth - TERMINAL_CONTEXT_MENU_WIDTH - padding)),
-    y: Math.max(padding, Math.min(event.clientY, window.innerHeight - TERMINAL_CONTEXT_MENU_HEIGHT - padding)),
-  };
-}
 
 function closeTerminalContextMenu() {
   if (!terminalContextMenu.value.visible) return;
@@ -2257,6 +2214,7 @@ onBeforeUnmount(() => {
 });
 
 function closeTerminalContextMenusOnEscape(event: KeyboardEvent) {
+  if ((event.target as Element | null)?.closest('.shadcn-context-menu-content')) return;
   const key = event.key.toLowerCase();
   if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'v') {
     event.preventDefault();
@@ -3550,36 +3508,44 @@ function readTerminalQuickCommandPanelCollapsed() {
         </div>
       </div>
       <div class="terminal-tabbar">
-        <div ref="terminalTabsRef" class="terminal-tabs" @scroll="syncTerminalTabsScrollState">
-          <el-button
-            v-for="tab in tabs"
-            :key="tab.id"
-            native-type="button"
-            class="terminal-tab"
-            :data-terminal-tab-id="tab.id"
-            :class="{
-              active: tab.id === activeTabId,
-              closed: tab.status === 'closed',
-              error: tab.status === 'error',
-              'multi-execution-target': shouldShowTerminalMultiExecutionTabIndicator(tab),
-            }"
-            :style="getTerminalTabStyle(tab)"
-            @click="activateTab(tab.id)"
-            @contextmenu="openTerminalTabContextMenu(tab, $event)"
-          >
-            <span class="terminal-tab-label">{{ getTerminalTabLabel(tab) }}</span>
-            <span
-              v-if="shouldShowTerminalMultiExecutionTabIndicator(tab)"
-              class="terminal-tab-multi-execution-indicator"
-              title="多执行控制中"
-              aria-label="多执行控制中"
+        <AppContextMenu
+          :open="terminalTabContextMenu.visible"
+          :items="terminalTabContextMenuItems"
+          :disabled="!tabs.length"
+          @update:open="!$event && closeTerminalTabContextMenu()"
+          @select="runTerminalTabContextMenuItem"
+        >
+          <div ref="terminalTabsRef" class="terminal-tabs" @scroll="syncTerminalTabsScrollState">
+            <el-button
+              v-for="tab in tabs"
+              :key="tab.id"
+              native-type="button"
+              class="terminal-tab"
+              :data-terminal-tab-id="tab.id"
+              :class="{
+                active: tab.id === activeTabId,
+                closed: tab.status === 'closed',
+                error: tab.status === 'error',
+                'multi-execution-target': shouldShowTerminalMultiExecutionTabIndicator(tab),
+              }"
+              :style="getTerminalTabStyle(tab)"
+              @click="activateTab(tab.id)"
+              @contextmenu="openTerminalTabContextMenu(tab, $event)"
             >
-              <AppIcon name="chevronsRight" :size="12" :stroke-width="2.5" />
-            </span>
-            <span class="terminal-tab-status" :class="[tab.status, { unread: tab.hasUnreadOutput && tab.id !== activeTabId }]"></span>
-            <span class="terminal-tab-close" title="关闭" @click.stop="closeTab(tab)"><AppIcon name="x" :size="13" /></span>
-          </el-button>
-        </div>
+              <span class="terminal-tab-label">{{ getTerminalTabLabel(tab) }}</span>
+              <span
+                v-if="shouldShowTerminalMultiExecutionTabIndicator(tab)"
+                class="terminal-tab-multi-execution-indicator"
+                title="多执行控制中"
+                aria-label="多执行控制中"
+              >
+                <AppIcon name="chevronsRight" :size="12" :stroke-width="2.5" />
+              </span>
+              <span class="terminal-tab-status" :class="[tab.status, { unread: tab.hasUnreadOutput && tab.id !== activeTabId }]"></span>
+              <span class="terminal-tab-close" title="关闭" @click.stop="closeTab(tab)"><AppIcon name="x" :size="13" /></span>
+            </el-button>
+          </div>
+        </AppContextMenu>
         <div v-if="tabs.length" class="terminal-tab-overview" @click.stop>
           <el-button
             native-type="button"
@@ -3633,174 +3599,84 @@ function readTerminalQuickCommandPanelCollapsed() {
           </div>
         </div>
       </div>
-      <div
-        v-if="terminalTabContextMenu.visible"
-        class="terminal-file-context-menu terminal-context-menu terminal-tab-context-menu"
-        :class="{ 'submenu-left': isTerminalContextSubmenuLeft(terminalTabContextMenu.x, TERMINAL_TAB_CONTEXT_MENU_WIDTH, TERMINAL_TAB_CONTEXT_SUBMENU_WIDTH) }"
-        :style="{ left: `${terminalTabContextMenu.x}px`, top: `${terminalTabContextMenu.y}px` }"
-        role="menu"
-        aria-label="标签页操作"
-        @click.stop
-        @contextmenu.prevent.stop
-      >
-        <div
-          v-for="item in terminalTabContextMenuItems"
-          :key="item.id"
-          class="terminal-file-context-menu-row"
-          :class="{ separator: item.separatorBefore }"
-        >
-          <el-button
-            native-type="button"
-            class="terminal-file-context-menu-item terminal-context-menu-item terminal-tab-context-menu-item"
-            :class="{ danger: item.danger, selected: item.selected }"
-            :disabled="!item.enabled"
-            role="menuitem"
-            @click="runTerminalTabContextMenuItem(item)"
-          >
-            <span v-if="item.swatchColor" class="terminal-tab-color-swatch" :style="{ background: item.swatchColor }">
-              <AppIcon v-if="item.selected" name="check" :size="11" :stroke-width="3" />
-            </span>
-            <AppIcon v-else :name="item.selected ? 'check' : item.icon" :size="14" />
-            <span>{{ item.label }}</span>
-            <kbd v-if="item.shortcut">{{ item.shortcut }}</kbd>
-            <AppIcon v-else-if="item.children?.length" name="chevronRight" :size="13" />
-          </el-button>
-          <div v-if="item.children?.length" class="terminal-file-context-submenu terminal-context-submenu terminal-tab-context-submenu">
-            <el-button
-              v-for="child in item.children"
-              :key="child.id"
-              native-type="button"
-              class="terminal-file-context-menu-item terminal-context-menu-item terminal-tab-context-menu-item"
-              :class="{ danger: child.danger, selected: child.selected, separator: child.separatorBefore }"
-              :disabled="!child.enabled"
-              role="menuitem"
-              @click="runTerminalTabContextMenuItem(child)"
-            >
-              <span v-if="child.swatchColor" class="terminal-tab-color-swatch" :style="{ background: child.swatchColor }">
-                <AppIcon v-if="child.selected" name="check" :size="11" :stroke-width="3" />
-              </span>
-              <AppIcon v-else :name="child.selected ? 'check' : child.icon" :size="14" />
-              <span>{{ child.label }}</span>
-              <kbd v-if="child.shortcut">{{ child.shortcut }}</kbd>
-              <AppIcon v-else-if="child.children?.length" name="chevronRight" :size="13" />
-            </el-button>
-          </div>
-        </div>
-      </div>
       <div class="terminal-workspace-body" :class="{ 'monitor-open': isTerminalMonitorPanelOpen }">
-        <div
-          class="terminal-screen"
-          :class="[`split-${terminalSplitMode}`, { 'split-active': isTerminalSplitActive }]"
-          :style="terminalScreenStyle"
-        >
-          <div v-if="!tabs.length" class="terminal-empty">双击左侧主机名连接 SSH 终端。</div>
-          <div
-            v-for="tab in tabs"
-            :key="tab.id"
-            class="terminal-panel"
-            :class="{
-              active: tab.id === activeTabId,
-              visible: isTerminalTabVisible(tab),
-              excluded: isTerminalMultiExecutionEnabled && isTerminalMultiExecutionExcluded(tab),
-            }"
-            :aria-hidden="!isTerminalTabVisible(tab)"
-            @mousedown.capture="isTerminalTabVisible(tab) && tab.id !== activeTabId && activateTab(tab.id)"
-            @contextmenu="openTerminalContextMenu(tab, $event)"
-          >
-            <div
-              v-if="isTerminalSearchOpen && tab.id === activeTabId"
-              class="terminal-panel-search"
-              @click.stop
-              @mousedown.stop
-              @contextmenu.stop
-            >
-              <AppIcon name="search" :size="14" />
-              <el-input
-                ref="terminalSearchInputRef"
-                v-model="terminalSearchQuery"
-                type="search"
-                placeholder="查找当前终端"
-                @keydown.enter.prevent="searchCurrentTerminal($event.shiftKey ? 'previous' : 'next')"
-                @keydown.esc.prevent.stop="closeTerminalSearch"
-              />
-              <span class="terminal-panel-search-count">{{ terminalSearchResultText }}</span>
-              <el-button native-type="button" title="上一个" aria-label="上一个" :disabled="!terminalSearchQuery.trim()" @click="searchCurrentTerminal('previous')">
-                <AppIcon name="chevronDown" :size="14" />
-              </el-button>
-              <el-button native-type="button" title="下一个" aria-label="下一个" :disabled="!terminalSearchQuery.trim()" @click="searchCurrentTerminal('next')">
-                <AppIcon name="chevronDown" :size="14" />
-              </el-button>
-              <el-button native-type="button" title="关闭" aria-label="关闭" @click="closeTerminalSearch">
-                <AppIcon name="x" :size="14" />
-              </el-button>
-            </div>
-            <div
-              :ref="(element) => setTerminalContainer(tab.id, element)"
-              :class="tab.kind === 'rdp' ? 'terminal-rdp-host' : 'terminal-xterm-host'"
-            ></div>
-            <div v-if="tab.kind === 'rdp' && tab.rdpErrorMessage" class="terminal-rdp-status-overlay">
-              <strong>RDP connection failed</strong>
-              <span>{{ tab.rdpErrorMessage }}</span>
-            </div>
-            <label
-              v-if="isTerminalMultiExecutionEnabled && tab.kind === 'ssh'"
-              class="terminal-multi-execution-exclude"
-              @click.stop
-              @mousedown.stop
-              @contextmenu.stop
-            >
-              <el-checkbox
-                :model-value="isTerminalMultiExecutionExcluded(tab)"
-                @change="setTerminalMultiExecutionExcludedFromEvent(tab, $event)"
-              />
-              <span>不控制 {{ getTerminalTabLabel(tab) }}</span>
-            </label>
-          </div>
-        </div>
-        <div
-          v-if="terminalContextMenu.visible"
-          class="terminal-file-context-menu terminal-context-menu"
-          :class="{ 'submenu-left': isTerminalContextSubmenuLeft(terminalContextMenu.x, TERMINAL_CONTEXT_MENU_WIDTH, TERMINAL_CONTEXT_SUBMENU_WIDTH) }"
-          :style="{ left: `${terminalContextMenu.x}px`, top: `${terminalContextMenu.y}px` }"
-          @click.stop
-          @contextmenu.prevent.stop
+        <AppContextMenu
+          :open="terminalContextMenu.visible"
+          :items="terminalContextMenuItems"
+          :disabled="!tabs.length"
+          @update:open="!$event && closeTerminalContextMenu()"
+          @select="runTerminalContextMenuItem"
         >
           <div
-            v-for="item in terminalContextMenuItems"
-            :key="item.id"
-            class="terminal-file-context-menu-row"
-            :class="{ separator: item.separatorBefore }"
+            class="terminal-screen"
+            :class="[`split-${terminalSplitMode}`, { 'split-active': isTerminalSplitActive }]"
+            :style="terminalScreenStyle"
           >
-            <el-button
-              native-type="button"
-              class="terminal-file-context-menu-item terminal-context-menu-item"
-              :class="{ danger: item.danger }"
-              :disabled="!item.enabled"
-              @click="runTerminalContextMenuItem(item)"
+            <div v-if="!tabs.length" class="terminal-empty">双击左侧主机名连接 SSH 终端。</div>
+            <div
+              v-for="tab in tabs"
+              :key="tab.id"
+              class="terminal-panel"
+              :class="{
+                active: tab.id === activeTabId,
+                visible: isTerminalTabVisible(tab),
+                excluded: isTerminalMultiExecutionEnabled && isTerminalMultiExecutionExcluded(tab),
+              }"
+              :aria-hidden="!isTerminalTabVisible(tab)"
+              @mousedown.capture="isTerminalTabVisible(tab) && tab.id !== activeTabId && activateTab(tab.id)"
+              @contextmenu="openTerminalContextMenu(tab, $event)"
             >
-              <AppIcon :name="item.icon" :size="14" />
-              <span>{{ item.label }}</span>
-              <kbd v-if="item.shortcut">{{ item.shortcut }}</kbd>
-              <AppIcon v-else-if="item.children?.length" name="chevronRight" :size="13" />
-            </el-button>
-            <div v-if="item.children?.length" class="terminal-file-context-submenu terminal-context-submenu">
-              <el-button
-                v-for="child in item.children"
-                :key="child.id"
-                native-type="button"
-                class="terminal-file-context-menu-item terminal-context-menu-item"
-                :class="{ danger: child.danger, separator: child.separatorBefore }"
-                :disabled="!child.enabled"
-                @click="runTerminalContextMenuItem(child)"
+              <div
+                v-if="isTerminalSearchOpen && tab.id === activeTabId"
+                class="terminal-panel-search"
+                @click.stop
+                @mousedown.stop
+                @contextmenu.stop
               >
-                <AppIcon :name="child.icon" :size="14" />
-                <span>{{ child.label }}</span>
-                <kbd v-if="child.shortcut">{{ child.shortcut }}</kbd>
-                <AppIcon v-else-if="child.children?.length" name="chevronRight" :size="13" />
-              </el-button>
+                <AppIcon name="search" :size="14" />
+                <el-input
+                  ref="terminalSearchInputRef"
+                  v-model="terminalSearchQuery"
+                  type="search"
+                  placeholder="查找当前终端"
+                  @keydown.enter.prevent="searchCurrentTerminal($event.shiftKey ? 'previous' : 'next')"
+                  @keydown.esc.prevent.stop="closeTerminalSearch"
+                />
+                <span class="terminal-panel-search-count">{{ terminalSearchResultText }}</span>
+                <el-button native-type="button" title="上一个" aria-label="上一个" :disabled="!terminalSearchQuery.trim()" @click="searchCurrentTerminal('previous')">
+                  <AppIcon name="chevronDown" :size="14" />
+                </el-button>
+                <el-button native-type="button" title="下一个" aria-label="下一个" :disabled="!terminalSearchQuery.trim()" @click="searchCurrentTerminal('next')">
+                  <AppIcon name="chevronDown" :size="14" />
+                </el-button>
+                <el-button native-type="button" title="关闭" aria-label="关闭" @click="closeTerminalSearch">
+                  <AppIcon name="x" :size="14" />
+                </el-button>
+              </div>
+              <div
+                :ref="(element) => setTerminalContainer(tab.id, element)"
+                :class="tab.kind === 'rdp' ? 'terminal-rdp-host' : 'terminal-xterm-host'"
+              ></div>
+              <div v-if="tab.kind === 'rdp' && tab.rdpErrorMessage" class="terminal-rdp-status-overlay">
+                <strong>RDP connection failed</strong>
+                <span>{{ tab.rdpErrorMessage }}</span>
+              </div>
+              <label
+                v-if="isTerminalMultiExecutionEnabled && tab.kind === 'ssh'"
+                class="terminal-multi-execution-exclude"
+                @click.stop
+                @mousedown.stop
+                @contextmenu.stop
+              >
+                <el-checkbox
+                  :model-value="isTerminalMultiExecutionExcluded(tab)"
+                  @change="setTerminalMultiExecutionExcludedFromEvent(tab, $event)"
+                />
+                <span>不控制 {{ getTerminalTabLabel(tab) }}</span>
+              </label>
             </div>
           </div>
-        </div>
+        </AppContextMenu>
         <div
           v-if="terminalPastePrompt.visible"
           class="terminal-paste-prompt"

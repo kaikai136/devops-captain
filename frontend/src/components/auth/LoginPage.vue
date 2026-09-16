@@ -13,7 +13,7 @@ const props = defineProps<{
   verifyTwoFactorSetupLogin: (code: string) => Promise<unknown>;
 }>();
 
-type LoginLayoutKey = 'dual' | 'glass' | 'slide' | 'center' | 'immersive' | 'classic';
+type LoginLayoutKey = 'koi' | 'dual' | 'glass' | 'slide' | 'center' | 'immersive' | 'classic';
 type LoginModeKey = 'light' | 'dark';
 type LoginPanelKey = 'layout' | 'color' | null;
 
@@ -26,13 +26,14 @@ interface LoginAppearance {
 
 const APPEARANCE_KEY = 'ops-login-appearance';
 const defaultAppearance: LoginAppearance = {
-  layout: 'dual',
+  layout: 'koi',
   mode: 'light',
   color: '#2563EB',
   customColor: '#2563EB',
 };
 
 const layoutOptions: Array<{ key: LoginLayoutKey; title: string; subtitle: string }> = [
+  { key: 'koi', title: 'Koi UI', subtitle: '清透分屏 + 科技插画' },
   { key: 'dual', title: '臻享双栏', subtitle: '品牌展示 + 登录表单' },
   { key: 'glass', title: '动感玻璃', subtitle: '光斑动效与仪表盘装饰' },
   { key: 'slide', title: '滑动登录', subtitle: '登录 / 注册滑动切换' },

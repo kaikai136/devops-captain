@@ -23,6 +23,7 @@
     "element-plus": "^2.14.5",
     "guacamole-common-js": "^1.5.0",
     "jsqr": "^1.4.0",
+    "reka-ui": "^2.10.4",
     "vite": "^5.4.21",
     "vue": "^3.5.16"
   },

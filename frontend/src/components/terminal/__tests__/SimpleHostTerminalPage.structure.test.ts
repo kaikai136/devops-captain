@@ -45,46 +45,17 @@ describe('SimpleHostTerminalPage structure', () => {
     const template = parseSfc(source(), { filename: 'SimpleHostTerminalPage.vue' }).descriptor.template?.content ?? '';
 
     expect(template).toContain('simple-host-terminal-search');
-    expect(template).toContain('simple-host-terminal-context-menu');
+    expect(template).toContain('<AppContextMenu');
+    expect(template).toContain(':items="terminalContextMenuItems"');
+    expect(template).toContain('@select="runContextMenuItem"');
     expect(template).toContain('@contextmenu="openSshContextMenu($event)"');
   });
 
-  it('lets standalone context menu contents participate in the button grid', () => {
-    const styles = readFileSync(fileURLToPath(new URL('../../../styles/simple-host-terminal.css', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
-
-    expect(styles).toContain('.simple-host-terminal-context-item > span {\n  display: contents;\n}');
-  });
-
-  it('aligns standalone terminal submenus to the parent outer edge without covering their left column', () => {
-    const styles = readFileSync(fileURLToPath(new URL('../../../styles/simple-host-terminal.css', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
-
-    expect(styles).toContain(
-      '.simple-host-terminal-context-submenu {\n  position: absolute;\n  top: -4px;\n  left: calc(100% + 1px);\n  display: none;\n  width: 226px;\n  z-index: 1;',
-    );
-    expect(styles).toContain(
-      '.simple-host-terminal-context-menu.submenu-left .simple-host-terminal-context-submenu {\n  right: calc(100% + 1px);\n  left: auto;\n}',
-    );
-  });
-
-  it('raises the hovered standalone context row above neighboring rows so submenus stay visible', () => {
-    const styles = readFileSync(fileURLToPath(new URL('../../../styles/simple-host-terminal.css', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
-
-    expect(styles).toContain('.simple-host-terminal-context-row:hover {\n  z-index: 2;\n}');
-    expect(styles).toContain('.simple-host-terminal-context-row:focus-within {\n  z-index: 2;\n}');
-  });
-
-  it('chooses the side with more room for the standalone submenu', () => {
-    const script = parseSfc(source(), { filename: 'SimpleHostTerminalPage.vue' }).descriptor.scriptSetup?.content ?? '';
-
-    expect(script).toContain('const SIMPLE_TERMINAL_CONTEXT_SUBMENU_WIDTH = 226;');
-    expect(script).toContain('const SIMPLE_TERMINAL_CONTEXT_SUBMENU_OFFSET = 1;');
-    expect(script).toContain('function isContextSubmenuLeft()');
-    expect(script).toContain('const rightSpace = window.innerWidth - (terminalContextMenu.value.x + SIMPLE_TERMINAL_CONTEXT_MENU_WIDTH);');
-    expect(script).toContain('const leftSpace = terminalContextMenu.value.x;');
-    expect(script).toContain('const requiredSubmenuSpace = SIMPLE_TERMINAL_CONTEXT_SUBMENU_WIDTH + SIMPLE_TERMINAL_CONTEXT_SUBMENU_OFFSET;');
-    expect(script).toContain('if (rightSpace < requiredSubmenuSpace && leftSpace >= requiredSubmenuSpace) {');
-    expect(script).toContain('if (leftSpace < requiredSubmenuSpace && rightSpace >= requiredSubmenuSpace) {');
-    expect(script).toContain('return leftSpace > rightSpace;');
+  it('delegates submenu placement and overflow to the shared menu primitives', () => {
+    const { descriptor } = parseSfc(source());
+    expect(descriptor.template?.content).not.toContain('simple-host-terminal-context-submenu');
+    expect(descriptor.scriptSetup?.content).not.toContain('isContextSubmenuLeft');
+    expect(descriptor.scriptSetup?.content).not.toContain('SIMPLE_TERMINAL_CONTEXT_MENU_HEIGHT');
   });
 
   it('actively syncs SSH terminal size after standalone fits', () => {

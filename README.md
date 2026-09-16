@@ -118,7 +118,7 @@ wsl.exe --cd /mnt/c/Users/kaikai/Desktop/django-vue/backend -e env APP_CONFIG_FI
 启动后端：
 
 ```powershell
-cd C:\Users\kaikai\Desktop\django-vue\backend
+cd backend
 .\start-wsl.ps1
 ```
 

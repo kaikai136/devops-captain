@@ -8,7 +8,8 @@ import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } f
 import type { InputInstance } from 'element-plus';
 
 import AppIcon from '@shared/components/AppIcon.vue';
-import type { IconName } from '@shared/components/AppIcon.vue';
+import AppContextMenu from '@shared/components/context-menu/AppContextMenu.vue';
+import type { ContextMenuEntry as SimpleTerminalContextMenuItem } from '@shared/components/context-menu/types';
 import { listTerminalTree } from '@features/terminal/api/terminal';
 import type { TerminalHost, TerminalTabKind } from '@features/terminal/types';
 import {
@@ -77,22 +78,7 @@ interface SimplePastePromptState {
   value: string;
 }
 
-interface SimpleTerminalContextMenuItem {
-  id: string;
-  label: string;
-  icon: IconName;
-  enabled: boolean;
-  danger?: boolean;
-  separatorBefore?: boolean;
-  shortcut?: string;
-  children?: SimpleTerminalContextMenuItem[];
-  action: () => void | Promise<void>;
-}
 
-const SIMPLE_TERMINAL_CONTEXT_MENU_WIDTH = 248;
-const SIMPLE_TERMINAL_CONTEXT_SUBMENU_WIDTH = 226;
-const SIMPLE_TERMINAL_CONTEXT_SUBMENU_OFFSET = 1;
-const SIMPLE_TERMINAL_CONTEXT_MENU_HEIGHT = 520;
 const TERMINAL_SETTINGS_SETTING_KEY = 'terminal_settings';
 
 const host = ref<TerminalHost | null>(null);
@@ -792,36 +778,19 @@ function increaseTerminalFontSize() {
 }
 
 function openSshContextMenu(event: MouseEvent) {
-  if (protocol.value !== 'ssh' || !xterm) return;
-  event.preventDefault();
-  event.stopPropagation();
+  if (protocol.value !== 'ssh' || !xterm) {
+    event.preventDefault();
+    return;
+  }
   terminalContextMenu.value = {
     visible: true,
     selectedText: xterm.hasSelection() ? xterm.getSelection() : '',
-    ...getContextMenuPosition(event),
+    x: event.clientX,
+    y: event.clientY,
   };
 }
 
-function getContextMenuPosition(event: MouseEvent) {
-  const padding = 8;
-  return {
-    x: Math.max(padding, Math.min(event.clientX, window.innerWidth - SIMPLE_TERMINAL_CONTEXT_MENU_WIDTH - padding)),
-    y: Math.max(padding, Math.min(event.clientY, window.innerHeight - SIMPLE_TERMINAL_CONTEXT_MENU_HEIGHT - padding)),
-  };
-}
 
-function isContextSubmenuLeft() {
-  const rightSpace = window.innerWidth - (terminalContextMenu.value.x + SIMPLE_TERMINAL_CONTEXT_MENU_WIDTH);
-  const leftSpace = terminalContextMenu.value.x;
-  const requiredSubmenuSpace = SIMPLE_TERMINAL_CONTEXT_SUBMENU_WIDTH + SIMPLE_TERMINAL_CONTEXT_SUBMENU_OFFSET;
-  if (rightSpace < requiredSubmenuSpace && leftSpace >= requiredSubmenuSpace) {
-    return true;
-  }
-  if (leftSpace < requiredSubmenuSpace && rightSpace >= requiredSubmenuSpace) {
-    return false;
-  }
-  return leftSpace > rightSpace;
-}
 
 function closeContextMenu() {
   if (!terminalContextMenu.value.visible) return;
@@ -835,6 +804,7 @@ async function runContextMenuItem(item: SimpleTerminalContextMenuItem) {
 }
 
 function handleWindowKeydown(event: KeyboardEvent) {
+  if ((event.target as Element | null)?.closest('.shadcn-context-menu-content')) return;
   if (event.key === 'Escape') {
     if (pastePrompt.value.visible) {
       closePastePrompt();
@@ -1061,12 +1031,20 @@ function rdpErrorMessage(error?: unknown) {
     </header>
 
     <section class="simple-host-terminal-shell" :class="protocol">
-      <div
-        v-show="protocol === 'ssh'"
-        ref="terminalRef"
-        class="simple-host-terminal-xterm"
-        @contextmenu="openSshContextMenu($event)"
-      ></div>
+      <AppContextMenu
+        :open="terminalContextMenu.visible"
+        :items="terminalContextMenuItems"
+        :disabled="protocol !== 'ssh'"
+        @update:open="!$event && closeContextMenu()"
+        @select="runContextMenuItem"
+      >
+        <div
+          v-show="protocol === 'ssh'"
+          ref="terminalRef"
+          class="simple-host-terminal-xterm"
+          @contextmenu="openSshContextMenu($event)"
+        ></div>
+      </AppContextMenu>
       <div
         v-if="isSearchOpen && protocol === 'ssh'"
         class="simple-host-terminal-search"
@@ -1098,54 +1076,6 @@ function rdpErrorMessage(error?: unknown) {
       <div v-if="errorMessage || status === 'denied'" class="simple-host-terminal-overlay">
         <strong>{{ status === 'denied' ? '没有终端权限' : '连接不可用' }}</strong>
         <span>{{ errorMessage }}</span>
-      </div>
-      <div
-        v-if="terminalContextMenu.visible"
-        class="simple-host-terminal-context-menu"
-        :class="{ 'submenu-left': isContextSubmenuLeft() }"
-        :style="{ left: `${terminalContextMenu.x}px`, top: `${terminalContextMenu.y}px` }"
-        role="menu"
-        aria-label="终端操作菜单"
-        @click.stop
-        @contextmenu.prevent.stop
-      >
-        <div
-          v-for="item in terminalContextMenuItems"
-          :key="item.id"
-          class="simple-host-terminal-context-row"
-          :class="{ separator: item.separatorBefore }"
-        >
-          <el-button
-            text
-            class="simple-host-terminal-context-item"
-            :class="{ danger: item.danger }"
-            :disabled="!item.enabled"
-            role="menuitem"
-            @click="runContextMenuItem(item)"
-          >
-            <AppIcon :name="item.icon" :size="14" />
-            <span>{{ item.label }}</span>
-            <kbd v-if="item.shortcut">{{ item.shortcut }}</kbd>
-            <AppIcon v-else-if="item.children?.length" name="chevronRight" :size="13" />
-          </el-button>
-          <div v-if="item.children?.length" class="simple-host-terminal-context-submenu">
-            <el-button
-              v-for="child in item.children"
-              :key="child.id"
-              text
-              class="simple-host-terminal-context-item"
-              :class="{ danger: child.danger, separator: child.separatorBefore }"
-              :disabled="!child.enabled"
-              role="menuitem"
-              @click="runContextMenuItem(child)"
-            >
-              <AppIcon :name="child.icon" :size="14" />
-              <span>{{ child.label }}</span>
-              <kbd v-if="child.shortcut">{{ child.shortcut }}</kbd>
-              <AppIcon v-else-if="child.children?.length" name="chevronRight" :size="13" />
-            </el-button>
-          </div>
-        </div>
       </div>
       <div
         v-if="pastePrompt.visible"

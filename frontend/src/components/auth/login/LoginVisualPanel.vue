@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 
+import science from '../../../assets/images/login/koi-science.png';
+
 import { useAppContext } from '@app/context';
 import AppIcon from '@shared/components/AppIcon.vue';
 
@@ -13,46 +15,32 @@ const loginCopyright = computed(() => renderSystemTemplate(loginContent.value.co
 
 <template>
   <aside class="login-left-panel">
-    <div class="login-brand-mesh" aria-hidden="true"></div>
-    <div class="login-brand-shine" aria-hidden="true"></div>
-    <div class="login-brand-glow" aria-hidden="true"></div>
+    <div class="login-koi-shape login-koi-shape--one" aria-hidden="true"></div>
+    <div class="login-koi-shape login-koi-shape--two" aria-hidden="true"></div>
+    <div class="login-koi-shape login-koi-shape--three" aria-hidden="true"></div>
+    <div class="login-koi-glass" aria-hidden="true"></div>
 
-    <div class="login-brand-row">
-      <div class="login-logo-wrap">
-        <img :src="siteIdentity.iconUrl" :alt="siteIdentity.appName" />
-      </div>
-      <div class="login-brand-text">
+    <div class="login-koi-content">
+      <div class="login-koi-brand">
+        <div class="login-logo-wrap">
+          <img :src="siteIdentity.iconUrl" :alt="siteIdentity.appName" />
+        </div>
         <strong>{{ siteIdentity.appName }}</strong>
-        <span>{{ siteIdentity.appSubtitle }}</span>
       </div>
-    </div>
 
-    <div class="login-brand-content">
-      <div class="login-brand">
+      <img class="login-koi-science" :src="science" alt="" aria-hidden="true" />
+
+      <div class="login-koi-copy">
+        <p class="login-koi-welcome">欢迎回来</p>
         <h1>{{ loginTitle }}</h1>
         <p>{{ loginDescription }}</p>
       </div>
 
       <ul class="login-feature-tags" aria-label="平台能力">
-        <li><span><AppIcon name="zap" :size="14" /></span>极速开发体验</li>
-        <li><span><AppIcon name="dashboard" :size="14" /></span>现代化 UI 设计</li>
-        <li><span><AppIcon name="shield" :size="14" /></span>企业级安全保障</li>
+        <li><span><AppIcon name="zap" :size="14" /></span>高效管理</li>
+        <li><span><AppIcon name="dashboard" :size="14" /></span>现代设计</li>
+        <li><span><AppIcon name="shield" :size="14" /></span>安全可靠</li>
       </ul>
-
-      <div class="login-illustration" aria-hidden="true">
-        <div class="login-orbit login-orbit-1"></div>
-        <div class="login-orbit login-orbit-2"></div>
-        <div class="login-preview">
-          <div class="login-preview-bar"><span></span><span></span><span></span></div>
-          <div class="login-preview-body">
-            <div class="login-preview-sidebar"></div>
-            <div class="login-preview-main">
-              <div class="login-preview-chart"></div>
-              <div class="login-preview-cards"><span></span><span></span><span></span></div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
 
     <p class="login-copyright">{{ loginCopyright }}</p>

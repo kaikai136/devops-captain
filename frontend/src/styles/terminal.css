@@ -64,6 +64,10 @@ input {
   cursor: pointer;
 }
 
+.terminal-side-switch .el-button + .el-button {
+  margin-left: 0;
+}
+
 .terminal-side-switch button:hover {
   background: #eaf1ff;
   color: #1f63f1;
