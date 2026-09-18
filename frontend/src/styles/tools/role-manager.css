@@ -78,8 +78,8 @@
 }
 
 .role-search-button {
-  border: 1px solid #12b99f;
-  background: #12b99f;
+  border: 1px solid var(--ui-primary);
+  background: var(--ui-primary);
   color: #fff;
 }
 
@@ -136,7 +136,7 @@
 }
 
 .role-icon-button:hover {
-  color: #12b99f;
+  color: var(--ui-primary);
 }
 
 .role-column-menu {
@@ -243,7 +243,7 @@ button.role-user-count {
 }
 
 button.role-user-count:hover {
-  border-color: #12b99f;
+  border-color: var(--ui-primary);
   background: #e6fffb;
 }
 
@@ -296,7 +296,7 @@ button.role-user-count:hover {
 }
 
 .role-row-actions .edit {
-  background: #12b99f;
+  background: var(--ui-primary);
 }
 
 .role-row-actions .delete {
@@ -351,7 +351,7 @@ button.role-user-count:hover {
   height: 32px;
   place-items: center;
   border-radius: 2px;
-  background: #12b99f;
+  background: var(--ui-primary);
   color: #fff;
   font-weight: 700;
 }
@@ -463,7 +463,7 @@ button.role-user-count:hover {
 .role-user-option input {
   width: 17px;
   height: 17px;
-  accent-color: #12b99f;
+  accent-color: var(--ui-primary);
 }
 
 .role-user-option span {
@@ -600,12 +600,12 @@ button.role-user-count:hover {
   flex: 0 0 auto;
   width: 18px;
   height: 18px;
-  accent-color: #12b99f;
+  accent-color: var(--ui-primary);
 }
 
 .role-tree-node input[data-partial="true"]:not(:checked),
 .role-action-node input[data-partial="true"]:not(:checked) {
-  box-shadow: inset 0 0 0 4px #fff, inset 0 0 0 10px #12b99f;
+  box-shadow: inset 0 0 0 4px #fff, inset 0 0 0 10px var(--ui-primary);
 }
 
 .role-tree-node span {
@@ -670,8 +670,8 @@ button.role-user-count:hover {
 }
 
 .role-form-actions .role-primary-button {
-  border-color: #12b99f;
-  background: #12b99f;
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
   color: #fff;
 }
 

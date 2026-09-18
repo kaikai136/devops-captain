@@ -55,7 +55,7 @@
 .qr-button:hover {
   border-color: #8abfff;
   background: #eef7ff;
-  color: #0755d8;
+  color: var(--ui-primary);
 }
 
 .form-grid {

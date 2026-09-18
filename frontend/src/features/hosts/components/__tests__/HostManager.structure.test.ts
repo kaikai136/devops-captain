@@ -717,6 +717,16 @@ describe('HostManager component structure', () => {
     expect(staticAttribute(findElements(root, 'form')[0], 'class')).toContain('popup-body');
   });
 
+  it('keeps the host editor dialog connected to the global theme tokens', () => {
+    const styles = readStyle('src/styles/tools/host/layout-groups.css');
+
+    expect(styles).toMatch(/\.host-editor-heading-icon\s*\{[\s\S]*background:\s*var\(--ui-primary-soft\);[\s\S]*color:\s*var\(--ui-primary\);/);
+    expect(styles).toMatch(/\.host-editor-dialog \.el-input\.is-focus \.el-input__wrapper,[\s\S]*box-shadow:[^;]*var\(--ui-ring\)/);
+    expect(styles).toMatch(/\.host-editor-dialog \.el-select-dropdown__item\.is-selected\s*\{[\s\S]*color:\s*var\(--ui-primary\);/);
+    expect(styles).toMatch(/\.host-editor-button-primary\s*\{[\s\S]*background:\s*var\(--ui-primary\);[\s\S]*color:\s*var\(--ui-primary-foreground\);/);
+    expect(styles).toMatch(/\.workspace-dark \.host-editor-button-primary\s*\{[\s\S]*background:\s*var\(--ui-primary\);/);
+  });
+
   it('preserves the root-group add-host default argument semantics', () => {
     const root = templateRoot('src/features/hosts/components/HostGroupTree.vue');
     const addHostButton = findElements(root, 'el-button').find((element) =>

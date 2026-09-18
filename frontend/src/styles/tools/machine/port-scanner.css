@@ -32,7 +32,7 @@
 .port-summary strong {
   display: block;
   margin-top: 8px;
-  color: #008dff;
+  color: var(--ui-primary);
   font-size: 16px;
   word-break: break-all;
 }

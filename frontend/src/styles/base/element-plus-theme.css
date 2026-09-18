@@ -1,8 +1,8 @@
 /* Element Plus token bridge.
  *
  * Maps Element Plus's --el-* design tokens onto this app's brand palette so
- * el-* components render consistently with the existing workspace (blue #1e72ff,
- * 8px radii, workspace text/border/fill colors) instead of EP's default look.
+ * el-* components render consistently with the app theme and workspace shape
+ * instead of EP's default look.
  *
  * Imported after `element-plus/dist/index.css` (which is loaded first in
  * main.ts), so these overrides win. Dark mode uses both EP's `html.dark`
@@ -12,7 +12,7 @@
 
 :root {
   /* Brand primary */
-  --el-color-primary: #1e72ff;
+  --el-color-primary: var(--ui-primary);
   --el-color-primary-light-3: color-mix(in srgb, var(--el-color-primary) 70%, #ffffff);
   --el-color-primary-light-5: color-mix(in srgb, var(--el-color-primary) 50%, #ffffff);
   --el-color-primary-light-7: color-mix(in srgb, var(--el-color-primary) 30%, #ffffff);
@@ -61,33 +61,33 @@
   --el-color-info-dark-2: color-mix(in srgb, var(--el-color-info) 80%, #000000);
 
   /* Text */
-  --el-text-color-primary: #111827;
-  --el-text-color-regular: #303133;
-  --el-text-color-secondary: #606266;
-  --el-text-color-placeholder: #909399;
-  --el-text-color-disabled: #c0c4cc;
+  --el-text-color-primary: var(--ui-foreground);
+  --el-text-color-regular: var(--ui-foreground);
+  --el-text-color-secondary: var(--ui-muted-foreground);
+  --el-text-color-placeholder: var(--ui-muted-foreground);
+  --el-text-color-disabled: color-mix(in srgb, var(--ui-muted-foreground) 58%, var(--ui-background));
 
   /* Border */
-  --el-border-color: #d6e3f4;
-  --el-border-color-light: #dfe8f3;
-  --el-border-color-lighter: #ebeef5;
-  --el-border-color-extra-light: #f2f6fc;
-  --el-border-color-dark: #b8c7dd;
-  --el-border-color-darker: #9fb2cd;
+  --el-border-color: var(--ui-border);
+  --el-border-color-light: color-mix(in srgb, var(--ui-border) 72%, var(--ui-card));
+  --el-border-color-lighter: color-mix(in srgb, var(--ui-border) 48%, var(--ui-card));
+  --el-border-color-extra-light: color-mix(in srgb, var(--ui-border) 28%, var(--ui-card));
+  --el-border-color-dark: color-mix(in srgb, var(--ui-border) 78%, var(--ui-foreground));
+  --el-border-color-darker: color-mix(in srgb, var(--ui-border) 62%, var(--ui-foreground));
 
   /* Fill */
-  --el-fill-color: #eef2f7;
-  --el-fill-color-light: #f5f7fa;
-  --el-fill-color-lighter: #f8fbff;
-  --el-fill-color-extra-light: #fafcff;
-  --el-fill-color-dark: #e4e9f0;
-  --el-fill-color-darker: #d9dfe8;
-  --el-fill-color-blank: #ffffff;
+  --el-fill-color: var(--ui-muted);
+  --el-fill-color-light: color-mix(in srgb, var(--ui-muted) 66%, var(--ui-card));
+  --el-fill-color-lighter: color-mix(in srgb, var(--ui-muted) 42%, var(--ui-card));
+  --el-fill-color-extra-light: color-mix(in srgb, var(--ui-muted) 24%, var(--ui-card));
+  --el-fill-color-dark: color-mix(in srgb, var(--ui-muted) 78%, var(--ui-foreground));
+  --el-fill-color-darker: color-mix(in srgb, var(--ui-muted) 62%, var(--ui-foreground));
+  --el-fill-color-blank: var(--ui-card);
 
   /* Background */
-  --el-bg-color: #ffffff;
-  --el-bg-color-page: #edf3fb;
-  --el-bg-color-overlay: #ffffff;
+  --el-bg-color: var(--ui-card);
+  --el-bg-color-page: var(--ui-background);
+  --el-bg-color-overlay: var(--ui-popover);
 
   /* Shape */
   --el-border-radius-base: 8px;
@@ -114,7 +114,7 @@
  * The shell toggles `.workspace-dark`; keep both selectors in sync. */
 html.dark,
 .app-shell.workspace-dark {
-  --el-color-primary: #38bdf8;
+  --el-color-primary: var(--ui-primary);
   --el-color-primary-light-3: color-mix(in srgb, var(--el-color-primary) 70%, #0f172a);
   --el-color-primary-light-5: color-mix(in srgb, var(--el-color-primary) 50%, #0f172a);
   --el-color-primary-light-7: color-mix(in srgb, var(--el-color-primary) 30%, #0f172a);
@@ -128,30 +128,30 @@ html.dark,
   --el-color-error: #f87171;
   --el-color-info: #94a3b8;
 
-  --el-text-color-primary: #e5eaf3;
-  --el-text-color-regular: #cbd5e1;
-  --el-text-color-secondary: #94a3b8;
-  --el-text-color-placeholder: #64748b;
-  --el-text-color-disabled: #475569;
+  --el-text-color-primary: var(--ui-foreground);
+  --el-text-color-regular: var(--ui-foreground);
+  --el-text-color-secondary: var(--ui-muted-foreground);
+  --el-text-color-placeholder: var(--ui-muted-foreground);
+  --el-text-color-disabled: color-mix(in srgb, var(--ui-muted-foreground) 58%, var(--ui-background));
 
-  --el-border-color: #2b3d5c;
-  --el-border-color-light: #334155;
-  --el-border-color-lighter: #2f3d52;
-  --el-border-color-extra-light: #263447;
-  --el-border-color-dark: #475569;
-  --el-border-color-darker: #64748b;
+  --el-border-color: var(--ui-border);
+  --el-border-color-light: color-mix(in srgb, var(--ui-border) 78%, var(--ui-card));
+  --el-border-color-lighter: color-mix(in srgb, var(--ui-border) 58%, var(--ui-card));
+  --el-border-color-extra-light: color-mix(in srgb, var(--ui-border) 38%, var(--ui-card));
+  --el-border-color-dark: color-mix(in srgb, var(--ui-border) 78%, var(--ui-foreground));
+  --el-border-color-darker: color-mix(in srgb, var(--ui-border) 62%, var(--ui-foreground));
 
-  --el-fill-color: #1e293b;
-  --el-fill-color-light: #1b2637;
-  --el-fill-color-lighter: #16213a;
-  --el-fill-color-extra-light: #131c2e;
-  --el-fill-color-dark: #243044;
-  --el-fill-color-darker: #2b3d5c;
-  --el-fill-color-blank: #0b1425;
+  --el-fill-color: var(--ui-muted);
+  --el-fill-color-light: color-mix(in srgb, var(--ui-muted) 78%, var(--ui-card));
+  --el-fill-color-lighter: color-mix(in srgb, var(--ui-muted) 58%, var(--ui-card));
+  --el-fill-color-extra-light: color-mix(in srgb, var(--ui-muted) 38%, var(--ui-card));
+  --el-fill-color-dark: color-mix(in srgb, var(--ui-muted) 78%, var(--ui-foreground));
+  --el-fill-color-darker: color-mix(in srgb, var(--ui-muted) 62%, var(--ui-foreground));
+  --el-fill-color-blank: var(--ui-background);
 
-  --el-bg-color: #111827;
-  --el-bg-color-page: #0f172a;
-  --el-bg-color-overlay: #1a2537;
+  --el-bg-color: var(--ui-card);
+  --el-bg-color-page: var(--ui-background);
+  --el-bg-color-overlay: var(--ui-popover);
 
   --el-box-shadow: 0 12px 28px rgba(0, 0, 0, 0.4);
   --el-box-shadow-light: 0 8px 20px rgba(0, 0, 0, 0.34);

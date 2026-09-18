@@ -13,10 +13,12 @@ from .constants import (
     DEFAULT_LOGIN_CONTENT,
     DEFAULT_SITE_IDENTITY,
     DEFAULT_TERMINAL_SETTINGS,
+    DEFAULT_UI_THEME,
     DEFAULT_WATERMARK_TEXT,
     FONT_WEIGHT_CHOICES,
     HEX_COLOR_RE,
     TERMINAL_SETTINGS_FIELD_LIMITS,
+    UI_THEME_PRESET_CHOICES,
     WATERMARK_ALLOWED_PAGES,
 )
 
@@ -182,6 +184,17 @@ def validate_login_content_value(value):
         "title": _clean_text(raw.get("title"), defaults["title"], 80),
         "description": _clean_text(raw.get("description"), defaults["description"], 260),
         "copyrightTemplate": _clean_text(raw.get("copyrightTemplate"), defaults["copyrightTemplate"], 160),
+    }
+
+
+def validate_ui_theme_value(value):
+    raw = _require_setting_object(value, "界面主题")
+    preset = str(raw.get("preset", DEFAULT_UI_THEME["preset"])).strip().lower()
+    if preset not in UI_THEME_PRESET_CHOICES:
+        raise serializers.ValidationError({"value": "主题预设无效"})
+    return {
+        "preset": preset,
+        "customPrimary": _clean_color(raw.get("customPrimary"), DEFAULT_UI_THEME["customPrimary"]),
     }
 
 

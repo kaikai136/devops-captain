@@ -67,7 +67,7 @@
   min-height: 36px;
   border: 1px solid #2c65ff;
   border-radius: 0;
-  background: #2364f5;
+  background: var(--ui-primary);
   color: #fff;
   padding: 0;
   font-size: 21px;
@@ -289,7 +289,7 @@
   position: fixed;
   z-index: 2100;
   inset: 0;
-  background: rgba(9, 9, 11, 0.62);
+  background: rgb(15 23 42 / 0.58);
   backdrop-filter: blur(2px);
 }
 
@@ -303,11 +303,11 @@
   max-height: calc(100vh - 32px);
   overflow: hidden;
   flex-direction: column;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--ui-border);
   border-radius: 12px;
-  background: #fff;
-  color: #18181b;
-  box-shadow: 0 24px 48px -12px rgba(0, 0, 0, 0.28);
+  background: var(--ui-card);
+  color: var(--ui-card-foreground);
+  box-shadow: 0 24px 48px -12px rgb(15 23 42 / 0.28);
   transform: translate(-50%, -50%);
 }
 
@@ -334,8 +334,8 @@
   justify-content: space-between;
   gap: 16px;
   padding: 20px 24px;
-  border-bottom: 1px solid #f4f4f5;
-  background: #fff;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-card);
 }
 
 .host-editor-heading {
@@ -351,15 +351,15 @@
   height: 38px;
   flex: none;
   place-items: center;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--ui-primary-border);
   border-radius: 9px;
-  background: #fafafa;
-  color: #18181b;
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
 }
 
 .host-editor-title {
   margin: 0;
-  color: #18181b;
+  color: var(--ui-card-foreground);
   font-size: 18px;
   font-weight: 650;
   letter-spacing: -0.02em;
@@ -368,7 +368,7 @@
 
 .host-editor-description {
   margin: 3px 0 0;
-  color: #71717a;
+  color: var(--ui-muted-foreground);
   font-size: 13px;
   font-weight: 400;
   line-height: 1.4;
@@ -383,19 +383,19 @@
   border: 0;
   border-radius: 6px;
   background: transparent;
-  color: #71717a;
+  color: var(--ui-muted-foreground);
   cursor: pointer;
   transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .host-editor-icon-button:hover {
-  background: #f4f4f5;
-  color: #18181b;
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
 }
 
 .host-editor-icon-button:focus-visible {
   outline: 0;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #a1a1aa;
+  box-shadow: 0 0 0 2px var(--ui-card), 0 0 0 4px var(--ui-ring);
 }
 
 .host-editor-dialog .el-input__wrapper,
@@ -405,8 +405,8 @@
   min-height: 40px;
   border: 0;
   border-radius: 6px;
-  background: #fff;
-  box-shadow: 0 0 0 1px #e4e4e7;
+  background: var(--ui-card);
+  box-shadow: 0 0 0 1px var(--ui-input);
   transition: box-shadow 0.15s ease, background 0.15s ease;
 }
 
@@ -414,28 +414,28 @@
 .host-editor-dialog .el-textarea__inner {
   border: 0;
   background: transparent;
-  color: #18181b;
+  color: var(--ui-card-foreground);
   font-size: 14px;
   box-shadow: none;
 }
 
 .host-editor-dialog .el-input__inner::placeholder,
 .host-editor-dialog .el-textarea__inner::placeholder {
-  color: #a1a1aa;
+  color: var(--ui-muted-foreground);
 }
 
 .host-editor-dialog .el-input__wrapper:hover,
 .host-editor-dialog .el-select__wrapper:hover,
 .host-editor-dialog .el-input-number__wrapper:hover {
-  box-shadow: 0 0 0 1px #a1a1aa;
+  box-shadow: 0 0 0 1px var(--ui-primary-border);
 }
 
 .host-editor-dialog .el-input.is-focus .el-input__wrapper,
 .host-editor-dialog .el-select.is-focused .el-select__wrapper,
 .host-editor-dialog .el-input-number.is-focus .el-input-number__wrapper,
 .host-editor-dialog .el-textarea__inner:focus {
-  background: #fff;
-  box-shadow: 0 0 0 1px #18181b, 0 0 0 3px rgba(24, 24, 27, 0.1);
+  background: var(--ui-card);
+  box-shadow: 0 0 0 1px var(--ui-ring), 0 0 0 3px rgb(var(--ui-primary-rgb) / 0.14);
 }
 
 .host-editor-dialog .invalid .el-input__wrapper,
@@ -453,14 +453,14 @@
 .host-editor-dialog .el-input-number__decrease,
 .host-editor-dialog .el-input-number__increase {
   width: 30px;
-  border-left-color: #e4e4e7;
-  background: #fafafa;
-  color: #71717a;
+  border-left-color: var(--ui-border);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
 }
 
 .host-editor-dialog .el-input-number__decrease:hover,
 .host-editor-dialog .el-input-number__increase:hover {
-  color: #18181b;
+  color: var(--ui-primary);
 }
 
 .host-editor-dialog .el-textarea__inner {
@@ -472,10 +472,10 @@
 
 .host-editor-dialog .el-select__popper {
   overflow: hidden;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.12);
+  background: var(--ui-popover);
+  box-shadow: 0 10px 24px rgb(15 23 42 / 0.16);
 }
 
 .host-editor-dialog .el-select-dropdown__list {
@@ -485,17 +485,17 @@
 .host-editor-dialog .el-select-dropdown__item {
   min-height: 34px;
   border-radius: 5px;
-  color: #27272a;
+  color: var(--ui-popover-foreground);
   font-size: 14px;
   font-weight: 400;
 }
 
 .host-editor-dialog .el-select-dropdown__item.is-hovering {
-  background: #f4f4f5;
+  background: var(--ui-accent);
 }
 
 .host-editor-dialog .el-select-dropdown__item.is-selected {
-  color: #18181b;
+  color: var(--ui-primary);
   font-weight: 600;
 }
 
@@ -518,7 +518,7 @@
   overflow-y: auto;
   border: 0;
   border-radius: 0;
-  background: #fff;
+  background: var(--ui-card);
   box-shadow: none;
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -539,7 +539,7 @@
 }
 
 .host-editor-section + .host-editor-section {
-  border-top: 1px solid #f4f4f5;
+  border-top: 1px solid var(--ui-border);
 }
 
 .host-editor-section-head {
@@ -557,15 +557,15 @@
   height: 30px;
   flex: none;
   place-items: center;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--ui-primary-border);
   border-radius: 7px;
-  background: #fafafa;
-  color: #3f3f46;
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
 }
 
 .host-editor-section-head h3 {
   margin: 0;
-  color: #18181b;
+  color: var(--ui-card-foreground);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.3;
@@ -573,7 +573,7 @@
 
 .host-editor-section-head p {
   margin: 3px 0 0;
-  color: #71717a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 400;
   line-height: 1.4;
@@ -595,14 +595,14 @@
   grid-template-columns: minmax(0, 1fr);
   align-items: start;
   gap: 7px;
-  color: #27272a;
+  color: var(--ui-card-foreground);
   font-size: 13px;
   font-weight: 500;
 }
 
 .host-editor-form .host-horizontal-field > span {
   justify-self: start;
-  color: #27272a;
+  color: var(--ui-card-foreground);
 }
 
 .host-editor-form .host-field-error {
@@ -614,7 +614,7 @@
 
 .host-form-modal h2 {
   margin: 0;
-  color: #0b2446;
+  color: var(--ui-card-foreground);
   font-size: 18px;
 }
 
@@ -628,7 +628,7 @@
 .host-form-modal label {
   display: grid;
   gap: 7px;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 900;
 }
@@ -736,15 +736,15 @@
   align-items: center;
   gap: 12px;
   padding: 12px 14px;
-  border: 1px dashed #d4d4d8;
+  border: 1px dashed var(--ui-border);
   border-radius: 8px;
-  background: #fafafa;
+  background: var(--ui-muted);
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .host-editor-form .host-key-upload:hover {
-  border-color: #a1a1aa;
-  background: #f4f4f5;
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
 }
 
 .host-editor-form .host-key-upload .host-key-button {
@@ -756,10 +756,10 @@
   width: 36px;
   height: 36px;
   place-items: center;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--ui-border);
   border-radius: 7px;
-  background: #fff;
-  color: #3f3f46;
+  background: var(--ui-card);
+  color: var(--ui-primary);
 }
 
 .host-key-upload-copy {
@@ -770,7 +770,7 @@
 
 .host-key-upload-copy strong {
   overflow: hidden;
-  color: #27272a;
+  color: var(--ui-card-foreground);
   font-size: 13px;
   font-weight: 600;
   text-overflow: ellipsis;
@@ -778,7 +778,7 @@
 }
 
 .host-editor-form .host-key-upload-copy em {
-  color: #71717a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 400;
   line-height: 1.45;
@@ -817,8 +817,8 @@
   justify-content: flex-end;
   gap: 8px;
   padding: 16px 24px;
-  border-top: 1px solid #f4f4f5;
-  background: #fff;
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-card);
 }
 
 .host-editor-button {
@@ -842,7 +842,7 @@
 
 .host-editor-button:focus-visible {
   outline: 0;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #a1a1aa;
+  box-shadow: 0 0 0 2px var(--ui-card), 0 0 0 4px var(--ui-ring);
 }
 
 .host-editor-button:disabled {
@@ -851,27 +851,27 @@
 }
 
 .host-editor-button-outline {
-  border-color: #e4e4e7;
-  background: #fff;
-  color: #18181b;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-card-foreground);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
 }
 
 .host-editor-button-outline:hover {
-  border-color: #d4d4d8;
-  background: #f4f4f5;
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
 }
 
 .host-editor-button-primary {
-  border-color: #18181b;
-  background: #18181b;
-  color: #fafafa;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-primary-foreground);
+  box-shadow: 0 1px 2px var(--ui-primary-shadow);
 }
 
 .host-editor-button-primary:hover {
-  border-color: #27272a;
-  background: #27272a;
+  border-color: var(--ui-primary-hover);
+  background: var(--ui-primary-hover);
 }
 
 .host-editor-actions .host-editor-button + .host-editor-button {
@@ -879,145 +879,145 @@
 }
 
 .workspace-dark .host-editor-overlay {
-  background: rgba(0, 0, 0, 0.72);
+  background: rgb(2 6 23 / 0.72);
 }
 
 .workspace-dark .host-editor-dialog {
-  border-color: #27272a;
-  background: #09090b;
-  color: #fafafa;
-  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.62);
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-card-foreground);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 0.62);
 }
 
 .workspace-dark .host-editor-header,
 .workspace-dark .host-editor-actions {
-  border-color: #27272a;
-  background: #09090b;
+  border-color: var(--ui-border);
+  background: var(--ui-card);
 }
 
 .workspace-dark .host-editor-title,
 .workspace-dark .host-editor-section-head h3 {
-  color: #fafafa;
+  color: var(--ui-card-foreground);
 }
 
 .workspace-dark .host-editor-description,
 .workspace-dark .host-editor-section-head p,
 .workspace-dark .host-editor-form .host-key-upload-copy em {
-  color: #a1a1aa;
+  color: var(--ui-muted-foreground);
 }
 
 .workspace-dark .host-editor-heading-icon,
 .workspace-dark .host-editor-section-icon {
-  border-color: #27272a;
-  background: #18181b;
-  color: #e4e4e7;
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
 }
 
 .workspace-dark .host-editor-icon-button {
-  color: #a1a1aa;
+  color: var(--ui-muted-foreground);
 }
 
 .workspace-dark .host-editor-icon-button:hover {
-  background: #27272a;
-  color: #fafafa;
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
 }
 
 .workspace-dark .host-editor-form {
-  background: #09090b;
+  background: var(--ui-card);
 }
 
 .workspace-dark .host-editor-section {
-  border-color: #27272a;
+  border-color: var(--ui-border);
   background: transparent;
 }
 
 .workspace-dark .host-editor-form .host-horizontal-field,
 .workspace-dark .host-editor-form .host-horizontal-field > span,
 .workspace-dark .host-key-upload-copy strong {
-  color: #e4e4e7;
+  color: var(--ui-card-foreground);
 }
 
 .workspace-dark .host-editor-dialog .el-input__wrapper,
 .workspace-dark .host-editor-dialog .el-select__wrapper,
 .workspace-dark .host-editor-dialog .el-input-number__wrapper,
 .workspace-dark .host-editor-dialog .el-textarea__inner {
-  background: #09090b;
-  box-shadow: 0 0 0 1px #3f3f46;
+  background: var(--ui-card);
+  box-shadow: 0 0 0 1px var(--ui-input);
 }
 
 .workspace-dark .host-editor-dialog .el-input__inner,
 .workspace-dark .host-editor-dialog .el-textarea__inner {
-  color: #fafafa;
+  color: var(--ui-card-foreground);
 }
 
 .workspace-dark .host-editor-dialog .el-input.is-focus .el-input__wrapper,
 .workspace-dark .host-editor-dialog .el-select.is-focused .el-select__wrapper,
 .workspace-dark .host-editor-dialog .el-input-number.is-focus .el-input-number__wrapper,
 .workspace-dark .host-editor-dialog .el-textarea__inner:focus {
-  background: #09090b;
-  box-shadow: 0 0 0 1px #fafafa, 0 0 0 3px rgba(250, 250, 250, 0.12);
+  background: var(--ui-card);
+  box-shadow: 0 0 0 1px var(--ui-ring), 0 0 0 3px rgb(var(--ui-primary-rgb) / 0.2);
 }
 
 .workspace-dark .host-editor-form .host-key-upload {
-  border-color: #3f3f46;
-  background: #18181b;
+  border-color: var(--ui-border);
+  background: var(--ui-muted);
 }
 
 .workspace-dark .host-editor-form .host-key-upload:hover {
-  border-color: #52525b;
-  background: #27272a;
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
 }
 
 .workspace-dark .host-key-upload-icon {
-  border-color: #3f3f46;
-  background: #09090b;
-  color: #e4e4e7;
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-primary);
 }
 
 .workspace-dark .host-editor-button-outline {
-  border-color: #3f3f46;
-  background: #09090b;
-  color: #fafafa;
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-card-foreground);
 }
 
 .workspace-dark .host-editor-button-outline:hover {
-  border-color: #52525b;
-  background: #27272a;
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
 }
 
 .workspace-dark .host-editor-button-primary {
-  border-color: #fafafa;
-  background: #fafafa;
-  color: #18181b;
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-primary-foreground);
 }
 
 .workspace-dark .host-editor-button-primary:hover {
-  border-color: #e4e4e7;
-  background: #e4e4e7;
+  border-color: var(--ui-primary-hover);
+  background: var(--ui-primary-hover);
 }
 
 .workspace-dark .host-editor-dialog .el-input-number__decrease,
 .workspace-dark .host-editor-dialog .el-input-number__increase {
-  border-left-color: #3f3f46;
-  background: #18181b;
-  color: #a1a1aa;
+  border-left-color: var(--ui-border);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
 }
 
 .workspace-dark .host-editor-dialog .el-select__popper {
-  border-color: #27272a;
-  background: #18181b;
+  border-color: var(--ui-border);
+  background: var(--ui-popover);
 }
 
 .workspace-dark .host-editor-dialog .el-select-dropdown__item {
-  color: #e4e4e7;
+  color: var(--ui-popover-foreground);
 }
 
 .workspace-dark .host-editor-dialog .el-select-dropdown__item.is-hovering {
-  background: #27272a;
+  background: var(--ui-accent);
 }
 
 .workspace-dark .host-editor-dialog .el-select-dropdown__item.is-selected {
-  color: #fafafa;
+  color: var(--ui-primary);
 }
 
 @keyframes host-editor-overlay-in {

@@ -93,8 +93,8 @@ button {
 }
 
 .simple-host-terminal-header button:hover:not(:disabled) {
-  border-color: #0755d8;
-  color: #0755d8;
+  border-color: var(--ui-primary);
+  color: var(--ui-primary);
 }
 
 .simple-host-terminal-header button:disabled {
@@ -376,12 +376,12 @@ button {
 
 .simple-host-terminal-context-item:hover:not(:disabled) {
   background: #eaf1ff;
-  color: #1f63f1;
+  color: var(--ui-primary);
 }
 
 .simple-host-terminal-context-item:hover:not(:disabled) .app-icon,
 .simple-host-terminal-context-item:hover:not(:disabled) kbd {
-  color: #1f63f1;
+  color: var(--ui-primary);
 }
 
 .simple-host-terminal-context-item.danger {

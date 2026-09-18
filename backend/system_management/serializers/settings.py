@@ -10,6 +10,7 @@ from .constants import (
     SECURITY_SCAN_SETTING_KEY,
     SITE_IDENTITY_SETTING_KEY,
     TERMINAL_SETTINGS_SETTING_KEY,
+    UI_THEME_SETTING_KEY,
     WATERMARK_SETTING_KEY,
 )
 from .settings_validators import (
@@ -21,6 +22,7 @@ from .settings_validators import (
     validate_security_scan_value,
     validate_site_identity_value,
     validate_terminal_settings_value,
+    validate_ui_theme_value,
     validate_watermark_value,
 )
 
@@ -49,6 +51,8 @@ class SystemSettingSerializer(serializers.ModelSerializer):
             attrs["value"] = validate_layout_footer_value(value)
         elif key == LOGIN_CONTENT_SETTING_KEY:
             attrs["value"] = validate_login_content_value(value)
+        elif key == UI_THEME_SETTING_KEY:
+            attrs["value"] = validate_ui_theme_value(value)
         elif key == WATERMARK_SETTING_KEY:
             attrs["value"] = validate_watermark_value(value)
         elif key == SECURITY_SCAN_SETTING_KEY:

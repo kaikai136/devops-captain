@@ -49,7 +49,7 @@ textarea:not(.el-textarea__inner) {
 input:not(.el-input__inner):not(.el-select__input):not(.el-range-input):focus,
 select:focus,
 textarea:not(.el-textarea__inner):focus {
-  border-color: #1e73ff;
+  border-color: var(--ui-primary);
   box-shadow: 0 0 0 3px rgba(30, 115, 255, 0.12);
 }
 
@@ -73,7 +73,7 @@ button:not(.el-button):not(.icon-only):not(.modal-close):not(.qr-button):not(.wo
 button.primary {
   border: 0;
   color: #fff;
-  background: linear-gradient(135deg, #1e72ff, #13e398);
+  background: linear-gradient(135deg, var(--ui-primary), var(--ui-chart-5));
   box-shadow: 0 12px 22px rgba(20, 110, 230, 0.18);
 }
 

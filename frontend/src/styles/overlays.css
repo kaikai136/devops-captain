@@ -241,7 +241,7 @@
 }
 
 .export-scope-card.active {
-  border-color: #1677ff;
+  border-color: var(--ui-primary);
   background: #eaf4ff;
 }
 
@@ -253,7 +253,7 @@
   width: 16px;
   height: 16px;
   margin: 2px 0 0;
-  accent-color: #1677ff;
+  accent-color: var(--ui-primary);
 }
 
 .export-scope-card span {
@@ -290,7 +290,7 @@
   height: 15px;
   margin: 0;
   border-radius: 0;
-  accent-color: #1677ff;
+  accent-color: var(--ui-primary);
 }
 
 .export-column-option.muted {
@@ -355,7 +355,7 @@
 }
 
 .host-export-modal .export-scope-card.active {
-  border-color: #1677ff;
+  border-color: var(--ui-primary);
   background: #edf5ff;
 }
 

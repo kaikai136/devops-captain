@@ -30,14 +30,13 @@ describe('login page Element Plus structure', () => {
   it('keeps login popovers and form fields inside viewport-safe bounds', () => {
     const loginPage = readSource('components/auth/LoginPage.vue');
     const styles = readSource('styles/auth-login.css');
-    const colorOptionsLine = loginPage.match(/const colorOptions = \[(.*?)\];/s)?.[1] ?? '';
-
-    expect(loginPage).toContain("color: '#2563EB'");
-    expect(colorOptionsLine).not.toContain('#8B5CF6');
-    expect(styles).toContain('--login-accent: #2563eb');
+    expect(loginPage).not.toContain('colorOptions');
+    expect(loginPage).not.toContain('customColor');
+    expect(loginPage).not.toContain('login-custom-color');
+    expect(styles).not.toContain('--login-accent: #2563eb');
     expect(styles).toContain('max-height: calc(100dvh - 76px)');
     expect(styles).toContain('.login-field .el-input__wrapper');
-    expect(styles).toContain('.login-custom-color .el-input__wrapper');
+    expect(styles).not.toContain('.login-custom-color .el-input__wrapper');
     expect(styles).not.toContain('.login-input-wrapper input');
     expect(styles).not.toContain('.login-password-toggle');
   });

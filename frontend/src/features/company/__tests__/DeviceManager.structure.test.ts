@@ -200,7 +200,7 @@ describe('DeviceManager page structure', () => {
     expect(source).toContain("categoryClass(row.category)");
     expect(source).toContain("function categoryClass(category: string)");
     expect(source).toContain("category === '耗材' ? 'consumable' : 'fixed'");
-    expect(styles).toMatch(/\.device-category-badge\.fixed\s*\{[^}]*background:\s*#4f46e5;/s);
-    expect(styles).toMatch(/\.device-category-badge\.consumable\s*\{[^}]*background:\s*#0f766e;/s);
+    expect(styles).toMatch(/\.device-category-badge\.fixed\s*\{[^}]*background:\s*var\(--ui-chart-2\);/s);
+    expect(styles).toMatch(/\.device-category-badge\.consumable\s*\{[^}]*background:\s*var\(--ui-chart-5\);/s);
   });
 });

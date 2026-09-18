@@ -48,7 +48,7 @@
   --toast-bg: #eef7ff;
   --toast-border: #bddcff;
   --toast-icon-bg: #dcedff;
-  --toast-title: #0755d8;
+  --toast-title: var(--ui-primary);
 }
 
 .top-toast.leaving {

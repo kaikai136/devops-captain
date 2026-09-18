@@ -198,7 +198,7 @@
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: #2364f5;
+  accent-color: var(--ui-primary);
 }
 
 .login-log-column-option input:disabled {
@@ -216,7 +216,7 @@
   min-height: auto;
   border: 0;
   background: transparent;
-  color: #1359f2;
+  color: var(--ui-primary);
   cursor: pointer;
   padding: 0;
   font-size: 13px;

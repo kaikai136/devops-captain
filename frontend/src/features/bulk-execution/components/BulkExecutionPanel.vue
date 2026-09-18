@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { Button as AButton } from 'ant-design-vue';
 
 import { useAppContext } from '@app/context';
 import AppIcon from '@shared/components/AppIcon.vue';
@@ -1074,12 +1073,12 @@ function formatFileSize(value: number) {
           <h2>批量执行</h2>
           <p>面向已验证 Linux SSH 主机执行命令、Playbook 和文件分发任务。</p>
         </div>
-        <div class="bulk-execution-actions">
-          <AButton v-if="canRefresh || canExecute" :type="activeBulkView === 'history' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'history' }" @click="switchBulkView('history')"><AppIcon name="rows" :size="16" />执行记录</AButton>
-          <AButton v-if="canExecute" :type="activeBulkView === 'execute' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'execute' }" @click="openCreateDialog"><AppIcon name="terminal" :size="16" />新建执行</AButton>
-          <AButton v-if="canExecute" :type="activeBulkView === 'upload' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'upload' }" @click="openUploadDialog"><AppIcon name="upload" :size="16" />批量上传</AButton>
-          <AButton v-if="canRefresh" :loading="isLoading" @click="refreshAll"><AppIcon name="refresh" :size="16" />刷新</AButton>
-        </div>
+        <el-button-group class="bulk-execution-actions">
+          <el-button v-if="canRefresh || canExecute" :type="activeBulkView === 'history' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'history' }" @click="switchBulkView('history')"><AppIcon name="rows" :size="16" />执行记录</el-button>
+          <el-button v-if="canExecute" :type="activeBulkView === 'execute' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'execute' }" @click="openCreateDialog"><AppIcon name="terminal" :size="16" />新建执行</el-button>
+          <el-button v-if="canExecute" :type="activeBulkView === 'upload' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'upload' }" @click="openUploadDialog"><AppIcon name="upload" :size="16" />批量上传</el-button>
+          <el-button v-if="canRefresh" :loading="isLoading" @click="refreshAll"><AppIcon name="refresh" :size="16" />刷新</el-button>
+        </el-button-group>
       </header>
 
       <section v-show="activeBulkView === 'history'" class="bulk-history-view">
@@ -1389,14 +1388,14 @@ function formatFileSize(value: number) {
         </footer>
       </section>
 
-      <el-dialog v-model="isTargetPickerOpen" class="bulk-target-picker-modal" title="选择机器" width="920px" @close="closeTargetPicker">
+      <el-dialog v-model="isTargetPickerOpen" class="bulk-target-picker-modal" title="选择机器" width="920px" :close-on-click-modal="false" @close="closeTargetPicker">
           <header class="bulk-target-picker-title">
             <div>
               <h3>选择机器</h3>
               <p>已选 {{ draftTargetIds.size }} / {{ targets.length }}</p>
             </div>
           </header>
-          <div class="bulk-target-picker-body">
+          <div class="bulk-target-picker-body popup-body">
             <aside class="bulk-target-group-tree" aria-label="目标分组树">
               <el-button class="bulk-target-group-row bulk-target-group-root" :class="{ active: targetGroupFilter === null }" text @click="selectTargetGroup(null)">
                 <span class="folder-caret"><AppIcon name="chevronDown" :size="15" /></span>
@@ -1447,12 +1446,14 @@ function formatFileSize(value: number) {
             </section>
           </div>
           <template #footer>
-            <el-button @click="closeTargetPicker">取消</el-button>
-            <el-button type="primary" @click="confirmTargetSelection">确定选择</el-button>
+            <div class="popup-footer popup-actions">
+              <el-button @click="closeTargetPicker">取消</el-button>
+              <el-button type="primary" @click="confirmTargetSelection">确定选择</el-button>
+            </div>
           </template>
       </el-dialog>
 
-      <el-drawer v-model="isTaskDetailOpen" class="bulk-task-detail bulk-task-detail-modal" title="执行详情" size="760px" @close="closeTaskDetail">
+      <el-drawer v-model="isTaskDetailOpen" class="bulk-task-detail bulk-task-detail-modal" title="执行详情" size="760px" :close-on-click-modal="false" @close="closeTaskDetail">
           <template v-if="selectedTask">
             <header>
               <div>

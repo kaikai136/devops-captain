@@ -5,6 +5,7 @@ import { apiGet } from '../../api';
 import { useAppContext } from '@app/context';
 import { buildReadmeTypingSvgUrl, buildTemplateVariables, renderTemplate } from '../../composables/features/useSiteSettings';
 import type { DashboardDistributionItem, DashboardSummary } from '../../types';
+import { buildUiThemePalette } from '../../utils/uiTheme';
 import { errorMessage } from '@shared/utils/errors';
 import AppIcon from '@shared/components/AppIcon.vue';
 
@@ -13,7 +14,7 @@ const DashboardChart = defineAsyncComponent(() => import('./dashboard/DashboardC
 type DashboardChartOption = Record<string, unknown>;
 type DistributionWithPercent = DashboardDistributionItem & { percent: number };
 
-const { currentUser, isWorkspaceDark, localIp, siteIdentity, dashboardHero } = useAppContext();
+const { currentUser, isWorkspaceDark, localIp, siteIdentity, dashboardHero, uiTheme } = useAppContext();
 
 const summary = ref<DashboardSummary | null>(null);
 const isLoading = ref(false);
@@ -60,8 +61,10 @@ const groupRankingList = computed(() => {
     percent: group.value ? Math.max(8, Math.round((group.value / max) * 100)) : 0,
   }));
 });
+const dashboardThemePalette = computed(() => buildUiThemePalette(uiTheme.value));
 const chartColors = computed(() => {
   const dark = isWorkspaceDark.value;
+  const charts = dark ? dashboardThemePalette.value.darkCharts : dashboardThemePalette.value.lightCharts;
   return {
     text: dark ? '#e5edf8' : '#0f2742',
     muted: dark ? '#9fb0c6' : '#64748b',
@@ -70,18 +73,20 @@ const chartColors = computed(() => {
     track: dark ? 'rgba(71, 85, 105, 0.42)' : '#e8eff6',
     panel: dark ? '#111827' : '#ffffff',
     tooltipBg: dark ? 'rgba(15, 23, 42, 0.94)' : 'rgba(255, 255, 255, 0.96)',
-    tooltipBorder: dark ? 'rgba(94, 234, 212, 0.28)' : 'rgba(20, 184, 166, 0.22)',
-    teal: '#14b8a6',
-    blue: '#2563eb',
+    tooltipBorder: hexToRgba(charts[0], dark ? 0.28 : 0.22),
+    teal: charts[0],
+    blue: charts[1],
     yellow: '#f2b84b',
     red: '#e86f6f',
-    tealAreaTop: 'rgba(20, 184, 166, 0.28)',
-    tealAreaBottom: 'rgba(20, 184, 166, 0.03)',
+    tealAreaTop: hexToRgba(charts[0], 0.28),
+    tealAreaBottom: hexToRgba(charts[0], 0.03),
     redAreaTop: 'rgba(232, 111, 111, 0.18)',
     redAreaBottom: 'rgba(232, 111, 111, 0.02)',
   };
 });
-const chartPalette = computed(() => [chartColors.value.teal, chartColors.value.blue, chartColors.value.yellow, chartColors.value.red]);
+const chartPalette = computed(() =>
+  isWorkspaceDark.value ? dashboardThemePalette.value.darkCharts : dashboardThemePalette.value.lightCharts,
+);
 
 const userGaugeOption = computed<DashboardChartOption>(() =>
   buildGaugeOption({
@@ -407,6 +412,11 @@ function linearGradient(top: string, bottom: string) {
       { offset: 1, color: bottom },
     ],
   };
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${(value >> 16) & 255}, ${(value >> 8) & 255}, ${value & 255}, ${alpha})`;
 }
 
 function emptyGraphic(text: string) {

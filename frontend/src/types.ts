@@ -302,6 +302,13 @@ export interface AuthSessionConfig {
   loginExpiryMinutes: number;
 }
 
+export type UiThemePreset = 'neutral' | 'slate' | 'blue' | 'cyan' | 'teal' | 'emerald' | 'custom';
+
+export interface UiThemeConfig {
+  preset: UiThemePreset;
+  customPrimary: string;
+}
+
 export interface SiteIdentityConfig {
   appName: string;
   appShortName: string;

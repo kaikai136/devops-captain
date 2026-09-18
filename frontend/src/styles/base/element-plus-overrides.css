@@ -29,7 +29,7 @@
 .el-select.is-focused .el-select__wrapper,
 .el-input-number.is-focus .el-input-number__wrapper,
 .el-textarea.is-focus .el-textarea__inner {
-  box-shadow: 0 0 0 3px rgba(30, 114, 255, 0.12);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-ring) 12%, transparent);
 }
 
 .el-input.invalid .el-input__wrapper,

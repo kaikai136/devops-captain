@@ -56,7 +56,7 @@
 }
 
 .result-grid strong {
-  color: #00a8ff;
+  color: var(--ui-primary);
   text-align: right;
 }
 

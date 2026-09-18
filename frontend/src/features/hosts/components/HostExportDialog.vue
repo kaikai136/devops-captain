@@ -38,7 +38,7 @@ const selectedFormat = computed({
 
 <template>
   <el-dialog class="host-transfer-modal host-export-modal" :model-value="true" title="导出实例数据" width="748px" align-center :close-on-click-modal="false" @close="emit('close')">
-        <div class="host-export-body">
+        <div class="host-export-body popup-body">
           <section class="export-section">
           <span class="export-section-title">需要导出的实例</span>
           <el-radio-group v-model="selectedScope" class="export-scope-grid">
@@ -76,8 +76,10 @@ const selectedFormat = computed({
           </section>
         </div>
       <template #footer>
+        <div class="popup-footer popup-actions">
           <el-button @click="emit('close')">取消</el-button>
           <el-button type="primary" @click="emit('confirm')">确定</el-button>
+        </div>
       </template>
   </el-dialog>
 </template>

@@ -13,6 +13,7 @@ SITE_IDENTITY_SETTING_KEY = "site_identity"
 DASHBOARD_HERO_SETTING_KEY = "dashboard_hero"
 LAYOUT_FOOTER_SETTING_KEY = "layout_footer"
 LOGIN_CONTENT_SETTING_KEY = "login_content"
+UI_THEME_SETTING_KEY = "ui_theme"
 WATERMARK_SETTING_KEY = "watermark"
 SECURITY_SCAN_SETTING_KEY = "security_scan"
 LOG_RETENTION_SETTING_KEY = "log_retention"
@@ -23,6 +24,7 @@ DISPLAY_SETTING_KEYS = {
     DASHBOARD_HERO_SETTING_KEY,
     LAYOUT_FOOTER_SETTING_KEY,
     LOGIN_CONTENT_SETTING_KEY,
+    UI_THEME_SETTING_KEY,
     WATERMARK_SETTING_KEY,
     SECURITY_SCAN_SETTING_KEY,
     TERMINAL_SETTINGS_SETTING_KEY,
@@ -31,6 +33,7 @@ DISPLAY_SETTING_KEYS = {
 PUBLIC_DISPLAY_SETTING_KEYS = {
     SITE_IDENTITY_SETTING_KEY,
     LOGIN_CONTENT_SETTING_KEY,
+    UI_THEME_SETTING_KEY,
 }
 DEFAULT_SITE_IDENTITY = {
     "appName": "运维船长",
@@ -77,6 +80,11 @@ DEFAULT_LOGIN_CONTENT = {
     "description": "登录管理平台，继续处理网络、主机和系统管理任务。",
     "copyrightTemplate": "© {year} {appName} Team",
 }
+DEFAULT_UI_THEME = {
+    "preset": "blue",
+    "customPrimary": "#2563EB",
+}
+UI_THEME_PRESET_CHOICES = {"neutral", "slate", "blue", "cyan", "teal", "emerald", "custom"}
 DEFAULT_WATERMARK_TEXT = "{username}"
 DASHBOARD_HERO_FONT_CHOICES = {"Noto Sans SC", "Noto Serif SC", "Noto Sans TC", "Noto Serif TC"}
 FONT_WEIGHT_CHOICES = {400, 500, 600, 700, 800, 900}

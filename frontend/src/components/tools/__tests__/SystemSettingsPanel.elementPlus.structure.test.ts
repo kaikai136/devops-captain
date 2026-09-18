@@ -31,4 +31,16 @@ describe('SystemSettingsPanel Element Plus migration', () => {
     expect(template).toContain('type="primary"');
     expect(template).toContain('@click="saveCurrentTab"');
   });
+
+  it('provides global theme presets, custom HEX input, and light/dark previews', () => {
+    const source = panelSource();
+    const template = parseSfc(source, { filename: 'SystemSettingsPanel.vue' }).descriptor.template?.content ?? '';
+
+    expect(source).toContain('uiThemePresetOptions');
+    expect(source).toContain('saveUiThemeSetting');
+    expect(template).toContain('class="theme-preset-grid"');
+    expect(template).toContain('v-model="uiThemeDraft.customPrimary"');
+    expect(template).toContain('class="theme-preview theme-preview-light"');
+    expect(template).toContain('class="theme-preview theme-preview-dark"');
+  });
 });

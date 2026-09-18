@@ -208,7 +208,7 @@
 }
 
 .lock-screen-logout:hover {
-  color: #0f766e;
+  color: var(--ui-primary);
 }
 
 @keyframes lock-panel-shake {

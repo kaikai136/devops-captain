@@ -5,7 +5,7 @@
   --bulk-soft-line: #e7edf5;
   --bulk-panel: #ffffff;
   --bulk-page: #f5f7fb;
-  --bulk-primary: #1f6feb;
+  --bulk-primary: var(--ui-primary);
   --bulk-success: #0f8f6b;
   --bulk-warning: #b7791f;
   --bulk-danger: #c24132;
@@ -98,7 +98,7 @@
   border: 1px solid #9eb4d0;
   border-radius: 8px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
   font: inherit;
   font-weight: 700;
@@ -147,7 +147,7 @@
 .bulk-execution-actions button.active {
   border-color: var(--bulk-primary);
   background: #eaf2ff;
-  color: #174ea6;
+  color: var(--ui-primary-hover);
 }
 
 .bulk-task-detail header .danger,
@@ -213,7 +213,7 @@
   border: 1px solid #b7c6d9;
   border-radius: 5px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
@@ -322,7 +322,7 @@
   border: 1px solid #b7c6d9;
   border-radius: 4px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   font: inherit;
   font-weight: 800;
   line-height: normal;
@@ -356,7 +356,7 @@
   border: 1px solid #b7c6d9;
   border-radius: 4px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
@@ -628,7 +628,7 @@
 }
 
 .bulk-task-list span {
-  color: #1e4f8f;
+  color: var(--ui-primary);
   font-size: 13px;
   font-weight: 700;
 }
@@ -707,14 +707,14 @@
 }
 
 .bulk-upload-detail-switch button {
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
 }
 
 .bulk-upload-detail-switch button.active {
   border-color: var(--bulk-primary);
   background: #eaf2ff;
-  color: #174ea6;
+  color: var(--ui-primary-hover);
 }
 
 .bulk-upload-detail-size {
@@ -979,7 +979,7 @@
   border: 1px solid #b7c6d9;
   border-radius: 4px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
 }
 
@@ -1034,7 +1034,7 @@
 .bulk-status.status-running,
 .bulk-status.status-queued {
   background: #dbeafe;
-  color: #1d4ed8;
+  color: var(--ui-primary);
 }
 
 .bulk-status.status-failed {
@@ -1148,7 +1148,7 @@
   border: 1px solid #b7c6d9;
   border-radius: 6px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
   font: inherit;
   font-weight: 800;
@@ -1162,8 +1162,8 @@
 .bulk-mode-tabs button.active {
   border-color: var(--bulk-primary);
   background: #eaf2ff;
-  color: #174ea6;
-  box-shadow: inset 0 0 0 1px rgba(31, 111, 235, 0.1);
+  color: var(--ui-primary-hover);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ui-primary) 10%, transparent);
 }
 
 .bulk-script-presets {
@@ -1204,7 +1204,7 @@
 .bulk-script-upload-button {
   min-height: 30px;
   padding: 0 10px;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   font-size: 12px;
   white-space: nowrap;
 }
@@ -1601,7 +1601,7 @@
 
 .bulk-target-group-row.active {
   background: #eaf2ff;
-  color: #174ea6;
+  color: var(--ui-primary-hover);
 }
 
 .bulk-target-group-row em {
@@ -1617,7 +1617,7 @@
 
 .bulk-target-group-row.active em {
   background: #dbeafe;
-  color: #174ea6;
+  color: var(--ui-primary-hover);
 }
 
 .bulk-target-group-row .folder-caret,
@@ -1753,7 +1753,7 @@
   border: 1px solid #b7c6d9;
   border-radius: 5px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -1807,7 +1807,7 @@
   border: 1px solid #b7c6d9;
   border-radius: 4px;
   background: #fff;
-  color: #1e4f8f;
+  color: var(--ui-primary);
   cursor: pointer;
   font: inherit;
   font-size: 12px;
@@ -1815,7 +1815,7 @@
 }
 
 .bulk-upload-clear-files {
-  color: #1e4f8f;
+  color: var(--ui-primary);
 }
 
 .bulk-upload-file-list-scroll {
@@ -2026,12 +2026,12 @@
 }
 
 .workspace-dark :where(.bulk-mode-tabs button.active, .bulk-upload-detail-switch button.active) {
-  border-color: rgba(56, 189, 248, 0.55);
+  border-color: color-mix(in srgb, var(--ui-primary) 55%, transparent);
   background: #183052;
 }
 
 .workspace-dark .bulk-task-list > button.active {
-  border-color: rgba(56, 189, 248, 0.55);
+  border-color: color-mix(in srgb, var(--ui-primary) 55%, transparent);
   background: #183052;
 }
 

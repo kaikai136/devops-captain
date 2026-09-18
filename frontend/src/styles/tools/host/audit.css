@@ -193,7 +193,7 @@
   border: 0;
   background: transparent;
   padding: 0;
-  color: #0755d8;
+  color: var(--ui-primary);
   cursor: pointer;
   font-size: 15px;
   font-weight: 900;

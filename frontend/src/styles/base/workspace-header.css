@@ -176,11 +176,11 @@
 }
 
 .workspace-dashboard-refresh {
-  color: #0f766e;
+  color: var(--ui-primary);
 }
 
 .workspace-dashboard-refresh:hover:not(:disabled) {
-  border-color: rgba(20, 184, 166, 0.42);
+  border-color: color-mix(in srgb, var(--ui-primary) 42%, transparent);
   background: #ecfeff;
 }
 
@@ -194,7 +194,7 @@
 }
 
 .workspace-dark .workspace-dashboard-refresh {
-  color: #5eead4;
+  color: var(--ui-primary);
 }
 
 @keyframes workspace-dashboard-spin {
@@ -440,7 +440,7 @@
 
 .workspace-dark .header-action.el-button:hover,
 .workspace-dark .header-action.el-button:focus-visible {
-  border-color: #3b82f6;
+  border-color: var(--ui-ring);
   background: #162a45;
   color: #dbeafe;
 }
@@ -481,7 +481,7 @@ label span {
 }
 
 .workspace-dark .header-action:hover {
-  border-color: #3b82f6;
+  border-color: var(--ui-ring);
   background: #162a45;
 }
 
@@ -525,7 +525,7 @@ label span {
 }
 
 .workspace-dark .modal-close:hover {
-  border-color: #3b82f6;
+  border-color: var(--ui-ring);
   background: #162a45;
   color: #bfdbfe;
 }
@@ -564,8 +564,8 @@ label span {
 }
 
 .workspace-dark .export-scope-card.active {
-  border-color: #3b82f6;
-  background: rgba(37, 99, 235, 0.18);
+  border-color: var(--ui-ring);
+  background: color-mix(in srgb, var(--ui-primary) 18%, transparent);
 }
 
 .workspace-dark .export-section-title,

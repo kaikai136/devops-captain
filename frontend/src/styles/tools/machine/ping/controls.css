@@ -30,9 +30,9 @@
 
 .ping-presets button {
   min-height: 32px;
-  border-color: #9ed5ff;
-  background: #f2fbff;
-  color: #008cf0;
+  border-color: var(--ui-primary-border);
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
   border-radius: 8px;
   padding: 0 14px;
   font-size: 13px;

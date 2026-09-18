@@ -6,6 +6,7 @@ import { buildTemplateVariables, renderTemplate, useSiteSettings } from '../../c
 import type { HostTransferFormat, useHostManager } from '../../composables/features/useHostManager';
 import type { AccountUser, ToolKey } from '../../types';
 import { setupClickWords, setupPointerTrail } from '../../utils/effects';
+import { applyUiTheme } from '../../utils/uiTheme';
 
 type HostManager = ReturnType<typeof useHostManager>;
 
@@ -50,7 +51,7 @@ export function useAppShell({
   const imageInput = ref<HTMLInputElement | null>(null);
 
   const siteSettings = useSiteSettings({ showToast });
-  const { siteIdentity, loadPublicSiteSettings } = siteSettings;
+  const { siteIdentity, uiTheme, loadPublicSiteSettings } = siteSettings;
   const hostImportAccept = computed(() =>
     hostTransferFormat.value === 'excel' ? `${xlsxMimeType},.xlsx` : 'application/json,.json,.enc.json',
   );
@@ -118,6 +119,16 @@ export function useAppShell({
       document.title = title || siteIdentity.value.appName;
     },
     { immediate: true },
+  );
+
+  watch(
+    uiTheme,
+    (theme) => {
+      if (typeof document !== 'undefined' && document.documentElement) {
+        applyUiTheme(document.documentElement, theme);
+      }
+    },
+    { deep: true, immediate: true },
   );
 
   let cleanupClickWords: (() => void) | undefined;

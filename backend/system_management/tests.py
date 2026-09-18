@@ -955,6 +955,46 @@ class SystemSettingsApiTests(TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["value"]["title"], "Hello")
 
+    def test_ui_theme_is_public_and_only_staff_can_update_it(self):
+        SystemSetting.objects.create(key="ui_theme", value={"preset": "teal", "customPrimary": "#0F766E"})
+        self.client.logout()
+
+        public_response = self.client.get("/api/system/settings/ui_theme/")
+
+        self.assertEqual(public_response.status_code, 200)
+        self.assertEqual(public_response.json()["value"]["preset"], "teal")
+
+        self.client.force_login(self.user)
+        forbidden_response = self.client.put(
+            "/api/system/settings/ui_theme/",
+            data={"value": {"preset": "emerald", "customPrimary": "#059669"}},
+            content_type="application/json",
+        )
+
+        self.assertEqual(forbidden_response.status_code, 403)
+
+    def test_ui_theme_validation_accepts_presets_and_rejects_invalid_values(self):
+        valid_response = self.client.post(
+            "/api/system/settings/",
+            data={"key": "ui_theme", "value": {"preset": "custom", "customPrimary": "#123ABC"}},
+            content_type="application/json",
+        )
+        invalid_preset = self.client.put(
+            "/api/system/settings/ui_theme/",
+            data={"value": {"preset": "rainbow", "customPrimary": "#123ABC"}},
+            content_type="application/json",
+        )
+        invalid_color = self.client.put(
+            "/api/system/settings/ui_theme/",
+            data={"value": {"preset": "custom", "customPrimary": "blue"}},
+            content_type="application/json",
+        )
+
+        self.assertEqual(valid_response.status_code, 201)
+        self.assertEqual(valid_response.json()["value"], {"preset": "custom", "customPrimary": "#123ABC"})
+        self.assertEqual(invalid_preset.status_code, 400)
+        self.assertEqual(invalid_color.status_code, 400)
+
     def test_watermark_validation_defaults_empty_text_when_enabled(self):
         response = self.client.post(
             "/api/system/settings/",

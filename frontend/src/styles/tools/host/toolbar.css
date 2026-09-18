@@ -68,7 +68,7 @@
 .host-more-menu button:hover:not(:disabled),
 .host-more-menu button.active {
   background: #f3f7ff;
-  color: #1359f2;
+  color: var(--ui-primary);
 }
 
 .host-more-menu button:disabled {
@@ -90,7 +90,7 @@
 
 .terminal-action {
   min-width: 112px;
-  background: #2364f5;
+  background: var(--ui-primary);
   color: #fff;
 }
 
@@ -99,7 +99,7 @@
   min-width: 34px;
   border-color: transparent;
   background: transparent;
-  color: #2364f5;
+  color: var(--ui-primary);
   padding: 0;
 }
 
@@ -109,7 +109,7 @@
 }
 
 .secondary-blue {
-  background: #2364f5;
+  background: var(--ui-primary);
 }
 
 .status-tabs {
@@ -125,7 +125,7 @@
 }
 
 .status-tabs button.active {
-  color: #1359f2;
+  color: var(--ui-primary);
   background: #eef5ff;
 }
 
@@ -183,7 +183,7 @@
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: #2364f5;
+  accent-color: var(--ui-primary);
 }
 
 .host-column-option input:disabled {
@@ -201,7 +201,7 @@
   min-height: auto;
   border: 0;
   background: transparent;
-  color: #1359f2;
+  color: var(--ui-primary);
   padding: 0;
   font-size: 13px;
 }

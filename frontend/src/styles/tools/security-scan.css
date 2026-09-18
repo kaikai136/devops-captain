@@ -476,7 +476,7 @@
 }
 
 .severity-low {
-  color: #1d4ed8;
+  color: var(--ui-primary);
   background: #dbeafe;
 }
 

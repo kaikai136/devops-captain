@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, type CSSProperties } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useLoginForm } from '../../composables/auth/useLoginForm';
 import type { LoginPayload, LoginResult } from '../../types';
@@ -15,30 +15,18 @@ const props = defineProps<{
 
 type LoginLayoutKey = 'koi' | 'glass';
 type LoginModeKey = 'light' | 'dark';
-type LoginPanelKey = 'color' | null;
 
 interface LoginAppearance {
   layout: LoginLayoutKey;
   mode: LoginModeKey;
-  color: string;
-  customColor: string;
 }
 
 const APPEARANCE_KEY = 'ops-login-appearance';
-const defaultAppearance: LoginAppearance = {
-  layout: 'koi',
-  mode: 'light',
-  color: '#2563EB',
-  customColor: '#2563EB',
-};
-
+const defaultAppearance: LoginAppearance = { layout: 'koi', mode: 'light' };
 const layoutOptions: Array<{ key: LoginLayoutKey; title: string; subtitle: string }> = [
-  { key: 'koi', title: 'Koi UI', subtitle: '清透分屏 + 科技插画' },
+  { key: 'koi', title: 'Koi UI', subtitle: '清透分层 + 科技插画' },
   { key: 'glass', title: '动感玻璃', subtitle: '光斑动效与仪表盘装饰' },
 ];
-
-const colorOptions = ['#2563EB', '#1D4ED8', '#3B82F6', '#60A5FA', '#0EA5E9', '#0891B2', '#0F766E', '#14B8A6', '#475569', '#64748B', '#1E40AF', '#22C55E'];
-const legacyAccentColors = new Set(['#FF6B35', '#EF4444', '#8B5CF6', '#EC4899']);
 
 const {
   account,
@@ -61,26 +49,15 @@ const {
 } = useLoginForm(props.login, props.verifyTwoFactorLogin, props.verifyTwoFactorSetupLogin);
 
 const appearance = ref<LoginAppearance>(readStoredAppearance());
-const activePanel = ref<LoginPanelKey>(null);
-
-const activeColor = computed(() => (appearance.value.color === 'custom' ? normalizeHex(appearance.value.customColor) : appearance.value.color));
 const effectiveDark = computed(() => appearance.value.mode === 'dark');
 const modeButtonIcon = computed(() => (effectiveDark.value ? 'sun' : 'moon'));
 const modeButtonLabel = computed(() => (effectiveDark.value ? '切换明亮模式' : '切换暗黑模式'));
-const shellStyle = computed<CSSProperties>(() => {
-  const rgb = hexToRgb(activeColor.value);
-  return {
-    '--login-accent': activeColor.value,
-    '--login-accent-rgb': rgb,
-  } as CSSProperties;
-});
 
 function readStoredAppearance(): LoginAppearance {
   if (typeof window === 'undefined') return { ...defaultAppearance };
   try {
     const stored = window.localStorage.getItem(APPEARANCE_KEY);
-    if (!stored) return { ...defaultAppearance };
-    return normalizeAppearance(JSON.parse(stored));
+    return stored ? normalizeAppearance(JSON.parse(stored)) : { ...defaultAppearance };
   } catch {
     return { ...defaultAppearance };
   }
@@ -89,88 +66,33 @@ function readStoredAppearance(): LoginAppearance {
 function normalizeAppearance(value: unknown): LoginAppearance {
   const layoutKeys = new Set(layoutOptions.map((item) => item.key));
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const legacyLayout = raw.layout === 'glass' || raw.layout === 'koi' ? raw.layout : defaultAppearance.layout;
-  const color = typeof raw.color === 'string' ? raw.color : '';
-  const normalizedColor = color === 'custom' ? 'custom' : color.toUpperCase();
-  const customColor = typeof raw.customColor === 'string' ? raw.customColor : defaultAppearance.customColor;
-  const normalizedCustomColor = normalizeHex(customColor);
-  const mode = typeof raw.mode === 'string' ? raw.mode : '';
-  const customColorWasLegacy = legacyAccentColors.has(normalizedCustomColor);
+  const layout = raw.layout === 'glass' || raw.layout === 'koi' ? raw.layout : defaultAppearance.layout;
   return {
-    layout: typeof legacyLayout === 'string' && layoutKeys.has(legacyLayout as LoginLayoutKey) ? (legacyLayout as LoginLayoutKey) : defaultAppearance.layout,
-    mode: mode === 'dark' ? 'dark' : defaultAppearance.mode,
-    color:
-      normalizedColor === 'custom'
-        ? customColorWasLegacy
-          ? defaultAppearance.color
-          : 'custom'
-        : colorOptions.includes(normalizedColor)
-          ? normalizedColor
-          : defaultAppearance.color,
-    customColor: customColorWasLegacy ? defaultAppearance.customColor : normalizedCustomColor,
+    layout: layoutKeys.has(layout) ? layout : defaultAppearance.layout,
+    mode: raw.mode === 'dark' ? 'dark' : defaultAppearance.mode,
   };
-}
-
-function normalizeHex(value: string) {
-  return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : defaultAppearance.customColor;
-}
-
-function hexToRgb(hex: string) {
-  const value = normalizeHex(hex).slice(1);
-  const number = Number.parseInt(value, 16);
-  return `${(number >> 16) & 255}, ${(number >> 8) & 255}, ${number & 255}`;
-}
-
-function togglePanel(panel: Exclude<LoginPanelKey, null>) {
-  activePanel.value = activePanel.value === panel ? null : panel;
 }
 
 function toggleLayout() {
   appearance.value.layout = appearance.value.layout === 'koi' ? 'glass' : 'koi';
-  activePanel.value = null;
-}
-
-function selectColor(color: string) {
-  appearance.value.color = color;
-}
-
-function updateCustomHex(eventOrValue: Event | string) {
-  const value = (typeof eventOrValue === 'string' ? eventOrValue : (eventOrValue.target as HTMLInputElement).value).trim();
-  if (/^#[0-9a-fA-F]{6}$/.test(value)) {
-    appearance.value.customColor = value.toUpperCase();
-    appearance.value.color = 'custom';
-  }
-}
-
-function updateCustomColorValue(value: string | null) {
-  if (!value) return;
-  appearance.value.customColor = normalizeHex(value);
-  appearance.value.color = 'custom';
 }
 
 function toggleMode() {
   appearance.value.mode = effectiveDark.value ? 'light' : 'dark';
-  activePanel.value = null;
 }
 
+watch(effectiveDark, (dark) => document.documentElement.classList.toggle('dark', dark), { immediate: true });
 watch(
   appearance,
   (value) => {
-    if (typeof window === 'undefined') return;
-    window.localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value));
+    if (typeof window !== 'undefined') window.localStorage.setItem(APPEARANCE_KEY, JSON.stringify(value));
   },
-  { deep: true }
+  { deep: true },
 );
-
 </script>
 
 <template>
-  <main
-    class="login-shell"
-    :class="[`login-layout-${appearance.layout}`, { 'login-dark': effectiveDark }]"
-    :style="shellStyle"
-    @click="activePanel = null"
-  >
+  <main class="login-shell" :class="[`login-layout-${appearance.layout}`, { 'login-dark': effectiveDark }]">
     <div class="login-bg" aria-hidden="true">
       <div class="login-bg-grid"></div>
       <div class="login-bg-vignette"></div>
@@ -180,10 +102,7 @@ watch(
       <div class="login-bg-shape login-bg-shape-4"></div>
     </div>
 
-    <nav class="login-toolbar" aria-label="登录页外观设置" @click.stop>
-      <el-button circle :class="{ active: activePanel === 'color' }" title="主题颜色" aria-label="主题颜色" @click="togglePanel('color')">
-        <AppIcon name="brush" :size="18" />
-      </el-button>
+    <nav class="login-toolbar" aria-label="登录页外观设置">
       <el-button circle :class="{ active: appearance.layout === 'glass' }" title="切换登录页模式" aria-label="切换登录页模式" @click="toggleLayout">
         <AppIcon name="dashboard" :size="18" />
       </el-button>
@@ -195,7 +114,7 @@ watch(
       </el-button>
     </nav>
 
-    <section class="login-card-shell" @click.stop>
+    <section class="login-card-shell">
       <div class="login-card-border" aria-hidden="true"></div>
       <div class="login-card">
         <LoginVisualPanel />
@@ -220,33 +139,5 @@ watch(
         />
       </div>
     </section>
-
-    <aside v-if="activePanel === 'color'" class="login-popover login-color-panel" @click.stop>
-      <header>
-        <h2>主题颜色</h2>
-        <p>与主题配置项同步</p>
-      </header>
-      <div class="login-color-grid">
-        <el-button
-          v-for="color in colorOptions"
-          :key="color"
-          circle
-          :class="{ active: appearance.color === color }"
-          :style="{ backgroundColor: color }"
-          :aria-label="`选择颜色 ${color}`"
-          @click="selectColor(color)"
-        >
-          <AppIcon v-if="appearance.color === color" name="check" :size="16" />
-        </el-button>
-      </div>
-      <div class="login-custom-color">
-        <el-color-picker v-model="appearance.customColor" aria-label="自定义颜色" @change="updateCustomColorValue" />
-        <div>
-          <strong>自定义颜色</strong>
-          <span>色盘或输入 HEX</span>
-          <el-input :model-value="appearance.customColor" maxlength="7" spellcheck="false" @input="updateCustomHex" />
-        </div>
-      </div>
-    </aside>
   </main>
 </template>

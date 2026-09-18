@@ -9,6 +9,7 @@ from .constants import (
     DEFAULT_LOGIN_CONTENT,
     DEFAULT_SITE_IDENTITY,
     DEFAULT_TERMINAL_SETTINGS,
+    DEFAULT_UI_THEME,
     DEFAULT_WATERMARK_TEXT,
     DISPLAY_SETTING_KEYS,
     LAYOUT_FOOTER_SETTING_KEY,
@@ -19,6 +20,8 @@ from .constants import (
     SITE_IDENTITY_SETTING_KEY,
     TERMINAL_SETTINGS_FIELD_LIMITS,
     TERMINAL_SETTINGS_SETTING_KEY,
+    UI_THEME_PRESET_CHOICES,
+    UI_THEME_SETTING_KEY,
     WATERMARK_SETTING_KEY,
 )
 from .logs import LoginLogSerializer, OperationLogSerializer
@@ -38,6 +41,7 @@ from .settings_validators import (
     validate_security_scan_value,
     validate_site_identity_value,
     validate_terminal_settings_value,
+    validate_ui_theme_value,
     validate_watermark_value,
 )
 
@@ -52,6 +56,7 @@ __all__ = [
     "DEFAULT_LOGIN_CONTENT",
     "DEFAULT_SITE_IDENTITY",
     "DEFAULT_TERMINAL_SETTINGS",
+    "DEFAULT_UI_THEME",
     "DEFAULT_WATERMARK_TEXT",
     "DISPLAY_SETTING_KEYS",
     "LAYOUT_FOOTER_SETTING_KEY",
@@ -62,6 +67,8 @@ __all__ = [
     "SITE_IDENTITY_SETTING_KEY",
     "TERMINAL_SETTINGS_FIELD_LIMITS",
     "TERMINAL_SETTINGS_SETTING_KEY",
+    "UI_THEME_PRESET_CHOICES",
+    "UI_THEME_SETTING_KEY",
     "WATERMARK_SETTING_KEY",
     "LoginLogSerializer",
     "OperationLogSerializer",
@@ -78,5 +85,6 @@ __all__ = [
     "validate_security_scan_value",
     "validate_site_identity_value",
     "validate_terminal_settings_value",
+    "validate_ui_theme_value",
     "validate_watermark_value",
 ]

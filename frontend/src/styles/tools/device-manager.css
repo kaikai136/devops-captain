@@ -147,15 +147,15 @@
 }
 
 .device-category-badge.fixed {
-  background: #4f46e5;
+  background: var(--ui-chart-2);
 }
 
 .device-category-badge.consumable {
-  background: #0f766e;
+  background: var(--ui-chart-5);
 }
 
 .device-status-badge.using {
-  background: #2563eb;
+  background: var(--ui-primary);
 }
 
 .device-status-badge.idle {

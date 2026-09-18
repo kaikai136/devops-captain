@@ -9,12 +9,15 @@ import type {
   SiteIdentityConfig,
   SystemSetting,
   TemplateVariables,
+  UiThemeConfig,
 } from '../../types';
+import { defaultUiTheme, normalizeUiThemeConfig } from '../../utils/uiTheme';
 
 export const SITE_IDENTITY_SETTING_KEY = 'site_identity';
 export const DASHBOARD_HERO_SETTING_KEY = 'dashboard_hero';
 export const LAYOUT_FOOTER_SETTING_KEY = 'layout_footer';
 export const LOGIN_CONTENT_SETTING_KEY = 'login_content';
+export const UI_THEME_SETTING_KEY = 'ui_theme';
 export const README_TYPING_SVG_URL = 'https://readme-typing-svg.demolab.com';
 
 export const dashboardHeroFontOptions = ['Noto Sans SC', 'Noto Serif SC', 'Noto Sans TC', 'Noto Serif TC'];
@@ -299,11 +302,13 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
   const dashboardHero = ref<DashboardHeroConfig>(cloneConfig(defaultDashboardHero));
   const layoutFooter = ref<LayoutFooterConfig>(cloneConfig(defaultLayoutFooter));
   const loginContent = ref<LoginContentConfig>(cloneConfig(defaultLoginContent));
+  const uiTheme = ref<UiThemeConfig>(cloneConfig(defaultUiTheme));
 
   const siteIdentityDraft = ref<SiteIdentityConfig>(cloneConfig(defaultSiteIdentity));
   const dashboardHeroDraft = ref<DashboardHeroConfig>(cloneConfig(defaultDashboardHero));
   const layoutFooterDraft = ref<LayoutFooterConfig>(cloneConfig(defaultLayoutFooter));
   const loginContentDraft = ref<LoginContentConfig>(cloneConfig(defaultLoginContent));
+  const uiThemeDraft = ref<UiThemeConfig>(cloneConfig(defaultUiTheme));
 
   const siteSettingsLoading = ref(false);
   const siteSettingsSaving = ref(false);
@@ -313,6 +318,7 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
     [DASHBOARD_HERO_SETTING_KEY]: false,
     [LAYOUT_FOOTER_SETTING_KEY]: false,
     [LOGIN_CONTENT_SETTING_KEY]: false,
+    [UI_THEME_SETTING_KEY]: false,
   });
 
   function applySetting(setting: SystemSetting | null, key: string) {
@@ -329,6 +335,9 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
     } else if (key === LOGIN_CONTENT_SETTING_KEY) {
       loginContent.value = normalizeLoginContent(setting?.value);
       loginContentDraft.value = cloneConfig(loginContent.value);
+    } else if (key === UI_THEME_SETTING_KEY) {
+      uiTheme.value = normalizeUiThemeConfig(setting?.value);
+      uiThemeDraft.value = cloneConfig(uiTheme.value);
     }
   }
 
@@ -347,7 +356,7 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
   }
 
   async function loadPublicSiteSettings() {
-    await loadKeys([SITE_IDENTITY_SETTING_KEY, LOGIN_CONTENT_SETTING_KEY]);
+    await loadKeys([SITE_IDENTITY_SETTING_KEY, LOGIN_CONTENT_SETTING_KEY, UI_THEME_SETTING_KEY]);
   }
 
   async function loadSiteIdentitySetting() {
@@ -366,8 +375,12 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
     await loadKeys([LOGIN_CONTENT_SETTING_KEY]);
   }
 
+  async function loadUiThemeSetting() {
+    await loadKeys([UI_THEME_SETTING_KEY]);
+  }
+
   async function loadSiteSettings() {
-    await loadKeys([SITE_IDENTITY_SETTING_KEY, DASHBOARD_HERO_SETTING_KEY, LAYOUT_FOOTER_SETTING_KEY, LOGIN_CONTENT_SETTING_KEY]);
+    await loadKeys([SITE_IDENTITY_SETTING_KEY, DASHBOARD_HERO_SETTING_KEY, LAYOUT_FOOTER_SETTING_KEY, LOGIN_CONTENT_SETTING_KEY, UI_THEME_SETTING_KEY]);
   }
 
   async function upsertSetting(key: string, payload: SystemSettingPayload) {
@@ -403,6 +416,12 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
         label: '登录页文案',
         description: '登录页欢迎文案与版权',
         value: normalizeLoginContent(loginContentDraft.value),
+      });
+      await upsertSetting(UI_THEME_SETTING_KEY, {
+        key: UI_THEME_SETTING_KEY,
+        label: '界面主题',
+        description: '登录页与工作区共享的全站专业主题配色',
+        value: normalizeUiThemeConfig(uiThemeDraft.value),
       });
       feedback.showToast?.('界面变量已保存', '', 'success');
     } catch (error) {
@@ -484,11 +503,30 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
     }
   }
 
+  async function saveUiThemeSetting() {
+    siteSettingsSaving.value = true;
+    siteSettingsMessage.value = '';
+    try {
+      await upsertSetting(UI_THEME_SETTING_KEY, {
+        key: UI_THEME_SETTING_KEY,
+        label: '界面主题',
+        description: '登录页与工作区共享的全站专业主题配色',
+        value: normalizeUiThemeConfig(uiThemeDraft.value),
+      });
+      feedback.showToast?.('界面主题已保存', '', 'success');
+    } catch (error) {
+      siteSettingsMessage.value = error instanceof Error ? error.message : '界面主题保存失败';
+    } finally {
+      siteSettingsSaving.value = false;
+    }
+  }
+
   function resetSiteSettingsDraft() {
     siteIdentityDraft.value = cloneConfig(siteIdentity.value);
     dashboardHeroDraft.value = cloneConfig(dashboardHero.value);
     layoutFooterDraft.value = cloneConfig(layoutFooter.value);
     loginContentDraft.value = cloneConfig(loginContent.value);
+    uiThemeDraft.value = cloneConfig(uiTheme.value);
     siteSettingsMessage.value = '';
   }
 
@@ -512,15 +550,22 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
     siteSettingsMessage.value = '';
   }
 
+  function resetUiThemeDraft() {
+    uiThemeDraft.value = cloneConfig(uiTheme.value);
+    siteSettingsMessage.value = '';
+  }
+
   return {
     siteIdentity,
     dashboardHero,
     layoutFooter,
     loginContent,
+    uiTheme,
     siteIdentityDraft,
     dashboardHeroDraft,
     layoutFooterDraft,
     loginContentDraft,
+    uiThemeDraft,
     siteSettingsLoading,
     siteSettingsSaving,
     siteSettingsMessage,
@@ -529,16 +574,19 @@ export function useSiteSettings(feedback: SiteSettingsFeedback = {}) {
     loadDashboardHeroSetting,
     loadLayoutFooterSetting,
     loadLoginContentSetting,
+    loadUiThemeSetting,
     loadSiteSettings,
     saveSiteIdentitySetting,
     saveDashboardHeroSetting,
     saveLayoutFooterSetting,
     saveLoginContentSetting,
+    saveUiThemeSetting,
     saveSiteSettings,
     resetSiteIdentityDraft,
     resetDashboardHeroDraft,
     resetLayoutFooterDraft,
     resetLoginContentDraft,
+    resetUiThemeDraft,
     resetSiteSettingsDraft,
   };
 }

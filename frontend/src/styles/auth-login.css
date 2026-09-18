@@ -24,15 +24,15 @@
 .auth-loading span {
   width: 18px;
   height: 18px;
-  border: 3px solid rgba(37, 99, 235, 0.2);
-  border-top-color: #2563eb;
+  border: 3px solid color-mix(in srgb, var(--ui-primary) 20%, transparent);
+  border-top-color: var(--ui-primary);
   border-radius: 999px;
   animation: authSpin 0.8s linear infinite;
 }
 
 .login-shell {
-  --login-accent: #2563eb;
-  --login-accent-rgb: 37, 99, 235;
+  --login-accent: var(--ui-primary);
+  --login-accent-rgb: var(--ui-primary-rgb);
   --login-primary-light-3: color-mix(in srgb, var(--login-accent) 62%, #fff);
   --login-primary-light-5: color-mix(in srgb, var(--login-accent) 44%, #fff);
   --login-primary-light-7: color-mix(in srgb, var(--login-accent) 26%, #fff);
@@ -1093,99 +1093,6 @@
   font-weight: 600;
 }
 
-.login-color-panel {
-  width: 300px;
-}
-
-.login-color-grid {
-  display: grid;
-  grid-template-columns: repeat(6, 1fr);
-  gap: 12px;
-  margin: 16px 0 14px;
-}
-
-.login-color-grid button {
-  display: grid;
-  place-items: center;
-  width: 31px;
-  min-width: 31px;
-  height: 31px;
-  min-height: 31px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  color: #fff;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
-}
-
-.login-color-grid button.active {
-  outline: 3px solid rgba(var(--login-accent-rgb), 0.2);
-  box-shadow: 0 0 0 2px var(--login-panel), 0 10px 18px rgba(24, 52, 58, 0.14);
-}
-
-.login-custom-color {
-  display: grid;
-  grid-template-columns: 42px 1fr;
-  gap: 10px;
-  padding: 10px;
-  border: 1px solid var(--login-border);
-  border-radius: 10px;
-  background: var(--login-panel);
-}
-
-.login-custom-color .el-color-picker {
-  width: 36px;
-  min-width: 36px;
-  height: 36px;
-}
-
-.login-custom-color .el-color-picker__trigger {
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  border: 1px solid var(--login-border);
-  border-radius: 10px;
-}
-
-.login-custom-color strong,
-.login-custom-color span {
-  display: block;
-  text-align: left;
-}
-
-.login-custom-color strong {
-  color: var(--login-text);
-  font-size: 13px;
-}
-
-.login-custom-color span {
-  margin: 2px 0;
-  color: var(--login-muted);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.login-custom-color .el-input {
-  width: 100%;
-}
-
-.login-custom-color .el-input__wrapper {
-  min-height: 24px;
-  padding: 0 8px;
-  border: 1px solid transparent;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--login-surface-strong) 72%, transparent);
-  box-shadow: none;
-}
-
-.login-custom-color .el-input__inner {
-  height: 22px;
-  color: var(--login-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  font-size: 11px;
-  font-weight: 700;
-}
-
 .login-layout-glass .login-card-shell {
   width: min(960px, 95vw, calc((100dvh - 96px) * 1.62));
 }
@@ -1363,8 +1270,7 @@
     display: flex;
   }
 
-  .login-popover,
-  .login-color-panel {
+  .login-popover {
     top: 58px;
     right: 12px;
     left: 12px;
@@ -1395,10 +1301,6 @@
 
   .login-form h2 {
     font-size: 28px;
-  }
-
-  .login-color-grid {
-    grid-template-columns: repeat(4, 1fr);
   }
 
   .login-2fa-setup-box {
@@ -1487,7 +1389,7 @@
   left: 50%;
   width: 200px;
   height: 200px;
-  background: color-mix(in srgb, var(--login-accent) 40%, #06b6d4 60%);
+  background: color-mix(in srgb, var(--login-accent) 40%, var(--ui-chart-2) 60%);
   animation-delay: -12s;
 }
 

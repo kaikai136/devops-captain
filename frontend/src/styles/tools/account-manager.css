@@ -175,7 +175,7 @@
   min-height: auto;
   border: 0;
   background: transparent;
-  color: #0755d8;
+  color: var(--ui-primary);
   padding: 0;
   font-size: 13px;
 }

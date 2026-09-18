@@ -124,9 +124,9 @@
   gap: 6px;
   min-width: 82px;
   height: 32px;
-  border: 1px solid #2f5cff;
+  border: 1px solid var(--ui-primary);
   border-radius: 0;
-  background: #2f5cff;
+  background: var(--ui-primary);
   color: #fff;
   padding: 0 14px;
   cursor: pointer;
@@ -170,8 +170,8 @@
 .user-status-tabs button.active {
   position: relative;
   z-index: 1;
-  border-color: #2f5cff;
-  color: #2f5cff;
+  border-color: var(--ui-primary);
+  color: var(--ui-primary);
 }
 
 .user-toolbar-divider {
@@ -192,7 +192,7 @@
 
 .user-icon-button:hover {
   border-color: #d5d9e0;
-  color: #1f55ff;
+  color: var(--ui-primary);
 }
 
 .user-column-settings {
@@ -240,7 +240,7 @@
   width: 14px;
   height: 14px;
   margin: 0;
-  accent-color: #2364f5;
+  accent-color: var(--ui-primary);
 }
 
 .user-column-option input:disabled {
@@ -258,7 +258,7 @@
   min-height: auto;
   border: 0;
   background: transparent;
-  color: #1359f2;
+  color: var(--ui-primary);
   cursor: pointer;
   padding: 0;
   font-size: 13px;
@@ -350,7 +350,7 @@
   border: 1px solid #bfd3ff;
   border-radius: 999px;
   background: #eef4ff;
-  color: #1f55ff;
+  color: var(--ui-primary);
   padding: 2px 7px;
   font-size: 12px;
   font-style: normal;
@@ -435,8 +435,8 @@
 }
 
 .user-2fa-switch.required {
-  border-color: #3b82f6;
-  background: #3b82f6;
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
 }
 
 .user-2fa-pending {
@@ -452,7 +452,7 @@
   border: 1px solid #bfdbfe;
   border-radius: 999px;
   background: #eff6ff;
-  color: #1d4ed8;
+  color: var(--ui-primary);
   font-size: 12px;
   font-weight: 800;
   line-height: 1;
@@ -462,7 +462,7 @@
 .user-2fa-reset {
   border: 0;
   background: transparent;
-  color: #1f55ff;
+  color: var(--ui-primary);
   cursor: pointer;
   padding: 0;
   font-size: 13px;
@@ -488,7 +488,7 @@
 .user-row-actions button {
   border: 0;
   background: transparent;
-  color: #1f55ff;
+  color: var(--ui-primary);
   padding: 0;
   cursor: pointer;
   font-size: 14px;
@@ -553,9 +553,9 @@
   width: 32px;
   height: 32px;
   place-items: center;
-  border: 1px solid #2f5cff;
+  border: 1px solid var(--ui-primary);
   background: #fff;
-  color: #1f55ff;
+  color: var(--ui-primary);
   font-weight: 500;
 }
 
@@ -654,7 +654,7 @@
 }
 
 .user-modal-close:hover {
-  color: #1f55ff;
+  color: var(--ui-primary);
 }
 
 .user-form-body {
@@ -707,7 +707,7 @@
 .user-form-row input:focus,
 .user-form-row select:focus,
 .user-password-input:focus-within {
-  border-color: #2f5cff;
+  border-color: var(--ui-primary);
   box-shadow: 0 0 0 1px rgba(47, 92, 255, 0.08);
 }
 
@@ -751,7 +751,7 @@
 }
 
 .user-password-input button:hover {
-  color: #1f55ff;
+  color: var(--ui-primary);
 }
 
 .user-role-line {
@@ -774,7 +774,7 @@
 .user-link-button {
   border: 0;
   background: transparent;
-  color: #1f55ff;
+  color: var(--ui-primary);
   cursor: pointer;
   padding: 0;
   font-size: 14px;
@@ -886,7 +886,7 @@
 .user-form-note button {
   border: 0;
   background: transparent;
-  color: #1f55ff;
+  color: var(--ui-primary);
   cursor: pointer;
   padding: 0;
   font: inherit;
@@ -957,8 +957,8 @@
 }
 
 .user-form-actions .user-primary-button {
-  border-color: #2f5cff;
-  background: #2f5cff;
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
   color: #fff;
 }
 

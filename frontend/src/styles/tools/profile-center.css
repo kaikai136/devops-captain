@@ -74,7 +74,7 @@
   position: absolute;
   inset: 0 0 auto;
   height: 4px;
-  background: linear-gradient(90deg, #14b8a6, #2563eb);
+  background: linear-gradient(90deg, var(--ui-chart-1), var(--ui-primary));
 }
 
 .profile-avatar-frame {
@@ -101,11 +101,11 @@
   place-items: center;
   width: 34px;
   height: 34px;
-  border: 1px solid rgba(20, 184, 166, 0.35);
+  border: 1px solid color-mix(in srgb, var(--ui-primary) 35%, transparent);
   border-radius: 8px;
-  background: #0f766e;
-  color: #fff;
-  box-shadow: 0 10px 20px rgba(15, 118, 110, 0.26);
+  background: var(--ui-primary);
+  color: var(--ui-primary-foreground);
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--ui-primary) 26%, transparent);
 }
 
 .profile-avatar-frame button:disabled {
@@ -166,8 +166,8 @@
   min-height: 26px;
   padding: 0 10px;
   border-radius: 7px;
-  background: rgba(20, 184, 166, 0.12);
-  color: #0f766e;
+  background: color-mix(in srgb, var(--ui-primary) 12%, transparent);
+  color: var(--ui-primary);
   font-size: 12px;
   font-style: normal;
   font-weight: 900;
@@ -291,7 +291,7 @@
 }
 
 .profile-panel header > .app-icon {
-  color: #0f766e;
+  color: var(--ui-primary);
 }
 
 .profile-basic-grid {
@@ -392,8 +392,8 @@
 
 .profile-form-grid input:focus,
 .profile-2fa-form input:focus {
-  border-color: #14b8a6;
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.13);
+  border-color: var(--ui-ring);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-ring) 13%, transparent);
 }
 
 .profile-actions {
@@ -405,17 +405,17 @@
 }
 
 .profile-primary-button {
-  border: 1px solid #0f766e;
-  background: linear-gradient(135deg, #0f766e, #14b8a6);
-  color: #fff;
-  box-shadow: 0 10px 20px rgba(20, 184, 166, 0.22);
+  border: 1px solid var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-primary-foreground);
+  box-shadow: 0 10px 20px color-mix(in srgb, var(--ui-primary) 22%, transparent);
 }
 
 .profile-secondary-button {
   justify-self: start;
-  border: 1px solid rgba(20, 184, 166, 0.26);
-  background: rgba(20, 184, 166, 0.12);
-  color: #0f766e;
+  border: 1px solid color-mix(in srgb, var(--ui-primary) 26%, transparent);
+  background: color-mix(in srgb, var(--ui-primary) 12%, transparent);
+  color: var(--ui-primary);
 }
 
 .profile-primary-button:disabled,
@@ -479,7 +479,7 @@
 
 .profile-password-meter.strong strong,
 .profile-password-meter.strong i.active {
-  background: #14b8a6;
+  background: var(--ui-primary);
 }
 
 .profile-inline-error {
@@ -495,8 +495,8 @@
 }
 
 .profile-status-pill.enabled {
-  background: rgba(20, 184, 166, 0.14);
-  color: #0f766e;
+  background: color-mix(in srgb, var(--ui-primary) 14%, transparent);
+  color: var(--ui-primary);
 }
 
 .profile-2fa-setup {
@@ -542,10 +542,10 @@
   max-width: 100%;
   margin: 10px 0;
   overflow-wrap: anywhere;
-  border: 1px solid rgba(20, 184, 166, 0.18);
+  border: 1px solid color-mix(in srgb, var(--ui-primary) 18%, transparent);
   border-radius: 8px;
-  background: rgba(20, 184, 166, 0.08);
-  color: #0f766e;
+  background: color-mix(in srgb, var(--ui-primary) 8%, transparent);
+  color: var(--ui-primary);
   padding: 9px 10px;
   font-size: 13px;
   font-weight: 900;

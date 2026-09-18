@@ -12,6 +12,7 @@ import {
 import { watermarkPageGroups } from '../../composables/features/useWatermarkSettings';
 import { createSystemSetting, getSystemSettingOrNull, updateSystemSetting } from '../../services/system';
 import { createDefaultTerminalSettings, normalizeTerminalSettings } from '../../utils/terminalSettings';
+import { buildUiThemePalette, normalizeHexColor, normalizeUiThemeConfig, uiThemePresetOptions } from '../../utils/uiTheme';
 import AppIcon from '@shared/components/AppIcon.vue';
 import WatermarkOverlay from '@shared/components/WatermarkOverlay.vue';
 import type { AuthSessionConfig, LogRetentionConfig, TerminalSettingsConfig } from '../../types';
@@ -40,6 +41,7 @@ const {
   dashboardHeroDraft,
   layoutFooterDraft,
   loginContentDraft,
+  uiThemeDraft,
   siteSettingsLoading,
   siteSettingsSaving,
   siteSettingsMessage,
@@ -47,14 +49,17 @@ const {
   loadDashboardHeroSetting,
   loadLayoutFooterSetting,
   loadLoginContentSetting,
+  loadUiThemeSetting,
   saveSiteIdentitySetting,
   saveDashboardHeroSetting,
   saveLayoutFooterSetting,
   saveLoginContentSetting,
+  saveUiThemeSetting,
   resetSiteIdentityDraft,
   resetDashboardHeroDraft,
   resetLayoutFooterDraft,
   resetLoginContentDraft,
+  resetUiThemeDraft,
   watermarkDraft,
   watermarkPreviewText,
   watermarkLoading,
@@ -167,6 +172,13 @@ const previewLoginBadge = computed(() => renderTemplate(loginContentDraft.value.
 const previewLoginTitle = computed(() => renderTemplate(loginContentDraft.value.title, previewVariables.value));
 const previewLoginDescription = computed(() => renderTemplate(loginContentDraft.value.description, previewVariables.value));
 const previewLoginCopyright = computed(() => renderTemplate(loginContentDraft.value.copyrightTemplate, previewVariables.value));
+const themePreviewPalette = computed(() => buildUiThemePalette(normalizeUiThemeConfig(uiThemeDraft.value)));
+const themePreviewStyle = computed(() => ({
+  '--theme-preview-primary-light': themePreviewPalette.value.lightPrimary,
+  '--theme-preview-primary-dark': themePreviewPalette.value.darkPrimary,
+  '--theme-preview-primary-foreground-light': themePreviewPalette.value.lightPrimaryForeground,
+  '--theme-preview-primary-foreground-dark': themePreviewPalette.value.darkPrimaryForeground,
+}));
 const loginExpiryInputMax = computed(() => {
   if (loginExpiryUnit.value === 'days') return 30;
   if (loginExpiryUnit.value === 'hours') return 720;
@@ -221,6 +233,7 @@ async function loadSystemSettings() {
   await Promise.all([
     loadSiteIdentitySetting(),
     loadLoginContentSetting(),
+    loadUiThemeSetting(),
     loadLayoutFooterSetting(),
     loadAuthSessionSetting(),
   ]);
@@ -256,6 +269,7 @@ async function saveSystemSettings() {
   await saveSiteIdentitySetting();
   await saveLoginContentSetting();
   await saveLayoutFooterSetting();
+  await saveUiThemeSetting();
   await saveAuthSessionSetting();
 }
 
@@ -269,7 +283,17 @@ function resetSystemSettingsDraft() {
   resetSiteIdentityDraft();
   resetLoginContentDraft();
   resetLayoutFooterDraft();
+  resetUiThemeDraft();
   resetAuthSessionDraft();
+}
+
+function selectThemePreset(preset: typeof uiThemeDraft.value.preset) {
+  if (!canSave.value) return;
+  uiThemeDraft.value.preset = preset;
+}
+
+function normalizeCustomPrimary() {
+  uiThemeDraft.value.customPrimary = normalizeHexColor(uiThemeDraft.value.customPrimary);
 }
 
 async function refreshCurrentTab() {
@@ -519,6 +543,53 @@ onMounted(() => {
         <p v-if="currentMessage" class="system-settings-message">{{ currentMessage }}</p>
 
         <section v-if="activeTab === 'system'" class="settings-section single merged-system-settings">
+          <section class="theme-settings-card">
+            <header>
+              <h3>专业主题配色</h3>
+              <span>登录页、工作区和弹层共享同一套语义色</span>
+            </header>
+            <div class="theme-preset-grid">
+              <el-button
+                v-for="option in uiThemePresetOptions"
+                :key="option.value"
+                type="button"
+                class="theme-preset-card"
+                :class="{ active: uiThemeDraft.preset === option.value }"
+                :disabled="!canSave"
+                @click="selectThemePreset(option.value)"
+              >
+                <span class="theme-preset-swatch" :style="{ backgroundColor: option.value === 'custom' ? uiThemeDraft.customPrimary : option.color }"></span>
+                <strong>{{ option.label }}</strong>
+                <small>{{ option.value === 'custom' ? uiThemeDraft.customPrimary : option.color }}</small>
+                <AppIcon v-if="uiThemeDraft.preset === option.value" name="check" :size="15" />
+              </el-button>
+            </div>
+            <div v-if="uiThemeDraft.preset === 'custom'" class="theme-custom-field">
+              <el-color-picker v-model="uiThemeDraft.customPrimary" :disabled="!canSave" />
+              <el-input
+                v-model="uiThemeDraft.customPrimary"
+                :disabled="!canSave"
+                maxlength="7"
+                placeholder="#2563EB"
+                @blur="normalizeCustomPrimary"
+              />
+            </div>
+            <div class="theme-preview-grid" :style="themePreviewStyle">
+              <article class="theme-preview theme-preview-light">
+                <span>Light</span>
+                <strong>专业工作台</strong>
+                <p>卡片、输入框、主按钮与焦点环预览</p>
+                <div><i></i><el-button type="primary" size="small">主要操作</el-button></div>
+              </article>
+              <article class="theme-preview theme-preview-dark">
+                <span>Dark</span>
+                <strong>专业工作台</strong>
+                <p>深色界面自动生成高对比主色</p>
+                <div><i></i><el-button type="primary" size="small">主要操作</el-button></div>
+              </article>
+            </div>
+          </section>
+
           <section>
             <header>
               <h3>品牌信息</h3>

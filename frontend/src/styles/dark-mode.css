@@ -1,7 +1,7 @@
 .app-shell.workspace-dark {
   --dark-page-bg:
-    radial-gradient(circle at 12% 0%, rgba(20, 184, 166, 0.08), transparent 28%),
-    radial-gradient(circle at 88% 8%, rgba(37, 99, 235, 0.1), transparent 30%),
+    radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--ui-chart-1) 8%, transparent), transparent 28%),
+    radial-gradient(circle at 88% 8%, color-mix(in srgb, var(--ui-primary) 10%, transparent), transparent 30%),
     linear-gradient(180deg, #0b1220 0%, #0d1524 54%, #08111f 100%);
   --dark-panel-bg:
     linear-gradient(180deg, rgba(18, 28, 47, 0.96), rgba(13, 21, 36, 0.94));
@@ -9,8 +9,8 @@
     linear-gradient(180deg, rgba(22, 34, 57, 0.94), rgba(15, 25, 43, 0.92));
   --dark-field-bg: #0b1425;
   --dark-field-border: #2b3d5c;
-  --dark-accent: #38bdf8;
-  --dark-accent-strong: #5eead4;
+  --dark-accent: var(--ui-primary);
+  --dark-accent-strong: var(--ui-chart-5);
   --dark-danger-bg: rgba(127, 29, 29, 0.22);
   --dark-warning-bg: rgba(120, 81, 25, 0.22);
   --dark-success-bg: rgba(20, 83, 75, 0.28);
@@ -128,7 +128,7 @@
 
 .workspace-dark :where(input, select, textarea):focus {
   border-color: var(--dark-accent);
-  box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.14);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ui-ring) 14%, transparent);
 }
 
 .workspace-dark :where(input::placeholder, textarea::placeholder) {
@@ -142,16 +142,16 @@
 }
 
 .workspace-dark :where(button:not(.primary):not(.danger):not(:disabled)):hover {
-  border-color: rgba(56, 189, 248, 0.48);
+  border-color: color-mix(in srgb, var(--ui-primary) 48%, transparent);
   background: #1d2f4d;
   color: #dbeafe;
 }
 
 .workspace-dark :where(.primary, .role-primary-button, .user-primary-button, .profile-primary-button) {
   border-color: transparent;
-  background: linear-gradient(135deg, #2563eb, #14b8a6);
-  color: #fff;
-  box-shadow: 0 16px 28px rgba(20, 184, 166, 0.16);
+  background: var(--ui-primary);
+  color: var(--ui-primary-foreground);
+  box-shadow: 0 16px 28px color-mix(in srgb, var(--ui-primary) 16%, transparent);
 }
 
 .workspace-dark :where(
@@ -295,7 +295,7 @@
 
 .workspace-dark :where(.watermark-preview-box) {
   background:
-    radial-gradient(circle at 50% 36%, rgba(56, 189, 248, 0.12), transparent 32%),
+    radial-gradient(circle at 50% 36%, color-mix(in srgb, var(--ui-primary) 12%, transparent), transparent 32%),
     linear-gradient(180deg, #101a2d 0%, #0d1627 100%);
 }
 
@@ -304,9 +304,9 @@
 }
 
 .workspace-dark :where(.watermark-page-group button.active, .watermark-readonly-page.active) {
-  border-color: rgba(56, 189, 248, 0.52);
-  background: rgba(37, 99, 235, 0.2);
-  color: #bfdbfe;
+  border-color: color-mix(in srgb, var(--ui-primary) 52%, transparent);
+  background: color-mix(in srgb, var(--ui-primary) 20%, transparent);
+  color: var(--ui-primary);
 }
 
 .workspace-dark :where(.watermark-preview-content strong) {
@@ -320,9 +320,9 @@
 }
 
 .workspace-dark :where(.account-role, .account-status, .role-status, .user-status, .login-log-status) {
-  border-color: rgba(56, 189, 248, 0.26);
-  background: rgba(56, 189, 248, 0.12);
-  color: #bae6fd;
+  border-color: color-mix(in srgb, var(--ui-primary) 26%, transparent);
+  background: color-mix(in srgb, var(--ui-primary) 12%, transparent);
+  color: var(--ui-primary);
 }
 
 .workspace-dark :where(.account-status.active, .role-status.enabled, .user-status.enabled, .login-log-status.success) {

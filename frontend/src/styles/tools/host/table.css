@@ -34,7 +34,7 @@
   height: 14px;
   margin: 0;
   border-radius: 0;
-  accent-color: #2364f5;
+  accent-color: var(--ui-primary);
   cursor: pointer;
 }
 
@@ -113,7 +113,7 @@
 
 .host-column-resize-handle:hover::after,
 .host-column-resizing .host-column-resize-handle::after {
-  background: #2364f5;
+  background: var(--ui-primary);
 }
 
 .host-column-resizing,
@@ -146,7 +146,7 @@
 }
 
 .host-sort-button.active {
-  color: #0755d8;
+  color: var(--ui-primary);
 }
 
 .host-name-link {
@@ -156,7 +156,7 @@
   justify-content: flex-start;
   border: 0;
   background: transparent !important;
-  color: #0645b5 !important;
+  color: var(--ui-primary-hover) !important;
   padding: 0;
   text-align: left;
   font-size: 15px;
@@ -167,7 +167,7 @@
 }
 
 .host-name-text {
-  color: #0645b5;
+  color: var(--ui-primary-hover);
   font-weight: 800;
 }
 
@@ -223,7 +223,7 @@
 
 .host-platform-type.windows {
   background: #e8f0ff;
-  color: #1f63f1;
+  color: var(--ui-primary);
 }
 
 .host-ip-stack {
@@ -350,7 +350,7 @@
   min-height: auto;
   border: 0;
   background: transparent;
-  color: #0755d8;
+  color: var(--ui-primary);
   padding: 0;
   font-size: 13px;
 }
@@ -456,7 +456,7 @@
   height: 18px;
   place-items: center;
   border-radius: 50%;
-  background: #1677ff;
+  background: var(--ui-primary);
   color: #fff;
 }
 
@@ -492,11 +492,11 @@
 }
 
 .host-bulk-action-bar .host-bulk-button-verify {
-  background: #0078f0;
+  background: var(--ui-primary);
 }
 
 .host-bulk-action-bar .host-bulk-button-update {
-  background: #008bd6;
+  background: var(--ui-primary);
 }
 
 .host-bulk-action-bar .host-bulk-button-execute {
@@ -504,7 +504,7 @@
 }
 
 .host-bulk-action-bar .host-bulk-button-upload {
-  background: #1677ff;
+  background: var(--ui-primary);
 }
 
 .host-bulk-action-bar .host-bulk-button-delete {
@@ -588,8 +588,8 @@
 }
 
 .host-pagination-controls button.active {
-  border-color: #2364f5;
-  background: #2364f5;
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
   color: #fff;
 }
 

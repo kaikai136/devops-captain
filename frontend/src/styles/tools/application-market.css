@@ -210,7 +210,7 @@
 }
 
 .capabilityStrip article.ok strong {
-  color: #047857;
+  color: var(--ui-primary);
 }
 
 .capabilityStrip article.warn strong {

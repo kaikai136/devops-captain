@@ -176,6 +176,14 @@ watch(hostTransferDialog, (mode) => {
   selectedHostExportColumns.value = new Set(hostExportColumnOptions.map((column) => column.field));
 });
 
+watch(
+  [isAuthenticated, isWorkspaceDark],
+  ([authenticated, dark]) => {
+    if (authenticated) document.documentElement.classList.toggle('dark', dark);
+  },
+  { immediate: true },
+);
+
 function toggleHostExportColumn(column: HostExportColumnKey, event: Event) {
   const checked = (event.target as HTMLInputElement).checked;
   const next = new Set(selectedHostExportColumns.value);
