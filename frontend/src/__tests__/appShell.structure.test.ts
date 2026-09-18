@@ -18,7 +18,8 @@ describe('app shell upgrade contract', () => {
     expect(packageJson).toContain('"element-plus"');
     expect(packageJson).not.toContain('"ant-design-vue"');
     expect(main).toContain("import 'element-plus/dist/index.css';");
-    expect(main).toContain('app.use(ElementPlus)');
+    expect(main).toContain("import zhCn from 'element-plus/es/locale/lang/zh-cn';");
+    expect(main).toContain('app.use(ElementPlus, { locale: zhCn })');
     expect(main).not.toContain('ant-design-vue');
     expect(main).not.toContain('app.use(Antd)');
   });

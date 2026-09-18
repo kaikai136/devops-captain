@@ -68,7 +68,8 @@ function hasRowActions() {
 
 <template>
   <div class="user-table" :style="tableStyle">
-    <el-table :data="users" row-key="id" :empty-text="isLoading ? '加载中...' : '暂无匹配账户'">
+    <div class="user-table-scroll">
+      <el-table :data="users" row-key="id" :empty-text="isLoading ? '加载中...' : '暂无匹配账户'">
       <el-table-column v-if="isColumnVisible('username')" label="登录名" min-width="150">
         <template #default="{ row }">
           <div class="user-login-name">
@@ -153,19 +154,17 @@ function hasRowActions() {
           </div>
         </template>
       </el-table-column>
-    </el-table>
+      </el-table>
+    </div>
 
-    <div class="host-pagination" aria-label="用户列表分页">
-      <div class="host-pagination-summary">
-        <span>共 {{ filteredCount }} 条</span>
-        <span>{{ filteredCount ? (page - 1) * pageSize + 1 : 0 }}-{{ Math.min(page * pageSize, filteredCount) }}</span>
-      </div>
+    <div v-show="filteredCount > 0" class="user-table-pagination" aria-label="用户列表分页">
       <el-pagination
+        class="user-koi-pagination"
         background
-        layout="prev, pager, next, sizes"
+        layout="total, sizes, prev, pager, next, jumper"
         :current-page="page"
         :page-size="pageSize"
-        :page-sizes="[10, 20, 50]"
+        :page-sizes="[10, 20, 50, 100, 200]"
         :total="filteredCount"
         @current-change="$emit('updatePage', $event)"
         @size-change="$emit('updatePageSize', $event)"

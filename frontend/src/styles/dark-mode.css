@@ -159,7 +159,7 @@
   .host-table,
   .host-session-audit-table,
   .login-log-table,
-  .role-permission-tree,
+  .role-permission-table-wrap,
   .role-table,
   .subnet-table,
   .user-table
@@ -173,7 +173,8 @@
   .host-session-audit-row,
   .host-session-audit-detail,
   .login-log-table-row,
-  .role-permission-row,
+  .role-permission-table th,
+  .role-permission-table td,
   .role-table-row,
   .subnet-table-row,
   .user-table-row
@@ -187,7 +188,7 @@
   .host-table-row.head,
   .host-session-audit-row.head,
   .login-log-table-row.head,
-  .role-permission-row.head,
+  .role-permission-table thead th,
   .role-table-row.head,
   .subnet-table-head,
   .user-table-row.head
@@ -202,8 +203,8 @@
   .host-actions-cell,
   .host-status-cell,
   .role-table-row > *,
-  .role-permission-row.head span,
-  .role-tree-node,
+  .role-permission-table th,
+  .role-permission-table td,
   .user-table-row > span,
   .user-table-row > strong,
   .user-table-row > div

@@ -635,14 +635,14 @@
 }
 
 .workspace-nav-menu .el-menu-item:hover {
-  background: #f2f7ff;
+  background: var(--ui-primary-soft);
   color: var(--ui-primary);
 }
 
 .workspace-nav-menu .el-menu-item.is-active {
-  color: #fff;
+  color: var(--ui-primary-foreground);
   background: linear-gradient(135deg, var(--ui-primary), var(--ui-primary-hover));
-  box-shadow: 0 10px 18px rgba(104, 48, 222, 0.26);
+  box-shadow: 0 10px 18px var(--ui-primary-shadow);
 }
 
 .workspace-nav-menu .el-sub-menu .el-menu {

@@ -105,6 +105,8 @@ function readSfc(relativePath: string) {
 function readStyle(relativePath: string) {
   const sourceUrl = relativePath === 'src/styles/tools/host/layout-groups.css'
     ? new URL('../../../../styles/tools/host/layout-groups.css', import.meta.url)
+    : relativePath === 'src/styles/tools/host/quick-commands.css'
+      ? new URL('../../../../styles/tools/host/quick-commands.css', import.meta.url)
     : new URL(relativePath, import.meta.url);
   return readFileSync(fileURLToPath(sourceUrl), 'utf8');
 }
@@ -404,12 +406,24 @@ describe('HostManager component structure', () => {
     });
   });
 
-  it('keeps the quick command manager as an Element Plus command library surface', () => {
+  it('keeps the quick command manager on the shared Reka dialog surface', () => {
     const root = templateRoot('src/features/hosts/components/HostManager.vue');
 
-    expect(findByClass(root, 'el-dialog', 'host-quick-command-dialog')).toHaveLength(1);
+    expect(findElements(root, 'DialogRoot')).toHaveLength(2);
+    expect(findElements(root, 'DialogPortal')).toHaveLength(2);
+    expect(findByClass(root, 'DialogOverlay', 'host-quick-command-manager-overlay')).toHaveLength(1);
+    expect(findByClass(root, 'DialogContent', 'host-quick-command-dialog')).toHaveLength(1);
+    expect(findElements(root, 'DialogTitle')).toHaveLength(2);
+    expect(findElements(root, 'DialogDescription')).toHaveLength(2);
+    expect(findElements(root, 'DialogClose')).toHaveLength(3);
     expect(findByClass(root, 'span', 'host-quick-command-head-icon')).toHaveLength(1);
+    expect(findByClass(root, 'aside', 'host-quick-command-sidebar')).toHaveLength(1);
+    expect(findByClass(root, 'nav', 'host-quick-command-categories')).toHaveLength(1);
     expect(findByClass(root, 'div', 'host-quick-command-category-title')).toHaveLength(1);
+    expect(findByClass(root, 'el-menu', 'host-quick-command-category-list')).toHaveLength(1);
+    expect(findByClass(root, 'el-menu-item', 'host-quick-command-category-item')).toHaveLength(2);
+    expect(findByClass(root, 'span', 'host-quick-command-category-name')).toHaveLength(2);
+    expect(findByClass(root, 'span', 'host-quick-command-category-count')).toHaveLength(2);
     expect(findByClass(root, 'span', 'host-quick-command-count')).toHaveLength(1);
     expect(findByClass(root, 'el-empty', 'host-quick-command-empty')).toHaveLength(2);
     expect(findByClass(root, 'span', 'host-quick-command-empty-glyph')).toHaveLength(1);
@@ -419,6 +433,20 @@ describe('HostManager component structure', () => {
 
     const emptyAction = findByClass(root, 'el-button', 'host-quick-command-empty-action')[0];
     expectDirective(emptyAction, 'on', 'click', 'openHostQuickCommandDialog()');
+
+    const categoryMenu = findByClass(root, 'el-menu', 'host-quick-command-category-list')[0];
+    expect(hasStaticClass(categoryMenu, 'workspace-nav-menu')).toBe(true);
+    expectDirective(categoryMenu, 'bind', 'default-active', 'hostQuickCommandCategory');
+    expectDirective(categoryMenu, 'on', 'select', 'hostQuickCommandCategory = $event');
+  });
+
+  it('keeps the quick command toolbar, alert, and list in separate vertical flow regions', () => {
+    const styles = readStyle('src/styles/tools/host/quick-commands.css');
+
+    expect(styles).toMatch(/\.host-quick-command-content\s*\{[\s\S]*display:\s*flex;[\s\S]*flex-direction:\s*column;/);
+    expect(styles).toMatch(/\.host-quick-command-toolbar\s*\{[\s\S]*flex:\s*0 0 52px;/);
+    expect(styles).toMatch(/\.host-quick-command-list\s*\{[\s\S]*flex:\s*1 1 auto;/);
+    expect(styles).toMatch(/\.host-quick-command-error\s*\{[\s\S]*flex:\s*0 0 auto;/);
   });
 
   it('keeps the host group sidebar compact without letting long names distort the row', () => {
@@ -452,6 +480,24 @@ describe('HostManager component structure', () => {
     expect(script).toMatch(/function closeHostQuickCommandDialog\(options: \{ force\?: boolean \} = \{\}\)/);
     expect(script).toMatch(/if \(hostQuickCommandDialog\.value\.saving && !options\.force\) return;/);
     expect(script).toMatch(/closeHostQuickCommandDialog\(\{ force: true \}\)/);
+  });
+
+  it('uses the host editor Reka shell for the quick command form', () => {
+    const root = templateRoot('src/features/hosts/components/HostManager.vue');
+    const dialog = findByClass(root, 'DialogContent', 'host-quick-command-editor-dialog')[0];
+
+    expect(dialog).toBeTruthy();
+    expect(findByClass(root, 'DialogOverlay', 'host-quick-command-editor-overlay')).toHaveLength(1);
+    expect(findElements(root, 'DialogTitle')).toHaveLength(2);
+    expect(findElements(root, 'DialogDescription')).toHaveLength(2);
+    expect(findElements(root, 'DialogClose')).toHaveLength(3);
+    expect(findByClass(root, 'form', 'host-quick-command-form')).toHaveLength(1);
+    expect(findByClass(root, 'section', 'host-quick-command-status')).toHaveLength(1);
+
+    const select = findElements(root, 'el-select').find((element) =>
+      directiveExpression(element, 'bind', 'teleported') === 'false',
+    );
+    expect(select).toBeTruthy();
   });
 
   it('preserves stop/self/key modifiers plus group pointer and drag payload order', () => {

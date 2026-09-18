@@ -482,31 +482,31 @@ function emptyRoleForm(): RoleForm {
 <template>
   <section v-if="activeTool === 'roles'" class="role-manager-page" @click="columnsOpen = false">
     <template v-if="canUseAnyPageAction('roles', ['create', 'edit', 'permissions', 'delete'])">
-      <article class="role-filter-panel">
-        <el-form inline label-position="left" @submit.prevent="runSearch">
-          <el-form-item label="角色名称">
-            <el-input v-model="searchDraft" placeholder="请输入角色名称" clearable @keyup.enter="runSearch" />
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" @click="runSearch">
-              <AppIcon name="search" :size="15" />
-              <span>搜索</span>
-            </el-button>
-            <el-button @click="resetSearch">
-              <AppIcon name="reset" :size="15" />
-              <span>重置</span>
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </article>
-
       <article class="role-list-panel">
         <div class="role-list-toolbar">
-          <el-button v-if="canUsePageAction('roles', 'create')" type="primary" @click="openCreateDialog">
-            <AppIcon name="circlePlus" :size="15" />
-            <span>新增</span>
-          </el-button>
+          <div class="role-list-heading">
+            <h2>角色与权限</h2>
+            <span>共 {{ filteredRoles.length }} 个角色</span>
+          </div>
           <div class="role-toolbar-actions">
+            <el-input
+              v-model="searchDraft"
+              class="role-toolbar-search"
+              placeholder="搜索角色名称或标识"
+              clearable
+              @input="runSearch"
+              @clear="resetSearch"
+              @keyup.enter="runSearch"
+            >
+              <template #prefix>
+                <AppIcon name="search" :size="15" />
+              </template>
+            </el-input>
+            <el-button v-if="canUsePageAction('roles', 'create')" type="primary" @click="openCreateDialog">
+              <AppIcon name="circlePlus" :size="15" />
+              <span>新增角色</span>
+            </el-button>
+            <span class="role-toolbar-divider"></span>
             <el-tooltip content="刷新" placement="top">
               <el-button circle @click="loadRoles"><AppIcon name="refresh" :size="18" /></el-button>
             </el-tooltip>
@@ -588,6 +588,7 @@ function emptyRoleForm(): RoleForm {
       :title="dialogTitle()"
       :width="dialog?.mode === 'permissions' || dialog?.mode === 'view' ? '880px' : '520px'"
       class="role-form-dialog role-popup-dialog"
+      :class="{ 'role-permission-dialog': dialog?.mode === 'permissions' || dialog?.mode === 'view' }"
       :close-on-click-modal="false"
       @update:model-value="(visible) => { if (!visible) closeDialog(); }"
     >
@@ -604,6 +605,16 @@ function emptyRoleForm(): RoleForm {
           </el-form-item>
 
           <div v-if="dialog.mode === 'permissions' || dialog.mode === 'view'" class="role-feature-permissions">
+            <div class="role-permission-summary">
+              <span class="role-permission-summary-icon" aria-hidden="true">
+                <AppIcon name="shield" :size="19" />
+              </span>
+              <div>
+                <strong>{{ dialog.mode === 'view' ? '角色权限详情' : '配置角色权限' }}</strong>
+                <span>{{ dialog.role?.name || form.name }}</span>
+              </div>
+              <em>已选择 {{ form.permissionIds.length }} 项</em>
+            </div>
             <el-alert
               type="info"
               :closable="false"
@@ -611,54 +622,59 @@ function emptyRoleForm(): RoleForm {
               title="页面权限控制左侧菜单入口，功能权限控制页面内可用操作。权限变更后，属于该角色的账号重新登录后生效。"
             />
 
-            <div class="role-permission-tree">
-              <div class="role-permission-row head">
-                <span>模块</span>
-                <span>页面</span>
-                <span>功能</span>
-              </div>
-
-              <template v-for="group in permissionGroups" :key="group.key">
-                <div
-                  v-for="(item, itemIndex) in group.items"
-                  :key="item.key"
-                  class="role-permission-row"
-                  :class="{ first: itemIndex === 0 }"
-                >
-                  <label v-if="itemIndex === 0" class="role-tree-node module" :style="{ gridRow: `span ${group.items.length}` }">
-                    <el-checkbox
-                      :model-value="isGroupChecked(group.key)"
-                      :indeterminate="isGroupPartial(group.key)"
-                      :disabled="dialog.mode === 'view'"
-                      @change="toggleGroup(group.key, $event)"
-                    >
-                      {{ group.label }}
-                    </el-checkbox>
-                  </label>
-                  <label class="role-tree-node page">
-                    <el-checkbox
-                      :model-value="isFeatureChecked(item.key)"
-                      :indeterminate="isFeaturePartial(item.key)"
-                      :disabled="dialog.mode === 'view'"
-                      @change="toggleFeature(item.key, $event)"
-                    >
-                      {{ item.label }}
-                    </el-checkbox>
-                  </label>
-                  <div class="role-tree-node feature">
-                    <el-checkbox
-                      v-for="permission in pageActionPermissions(item.key)"
-                      :key="permission.id"
-                      :model-value="isActionChecked(permission.id)"
-                      :disabled="dialog.mode === 'view'"
-                      @change="toggleAction(item.key, permission.id, $event)"
-                    >
-                      {{ displayPermissionLabel(permission) }}
-                    </el-checkbox>
-                    <span v-if="!pageActionPermissions(item.key).length" class="role-action-empty">暂无可配置功能</span>
-                  </div>
-                </div>
-              </template>
+            <div class="role-permission-table-wrap">
+              <table class="role-permission-table">
+                <colgroup>
+                  <col class="role-permission-module-column" />
+                  <col class="role-permission-page-column" />
+                  <col />
+                </colgroup>
+                <thead>
+                  <tr>
+                    <th scope="col">模块</th>
+                    <th scope="col">页面</th>
+                    <th scope="col">功能权限</th>
+                  </tr>
+                </thead>
+                <tbody v-for="group in permissionGroups" :key="group.key">
+                  <tr v-for="(item, itemIndex) in group.items" :key="item.key">
+                    <th v-if="itemIndex === 0" class="role-permission-module-cell" scope="rowgroup" :rowspan="group.items.length">
+                      <el-checkbox
+                        :model-value="isGroupChecked(group.key)"
+                        :indeterminate="isGroupPartial(group.key)"
+                        :disabled="dialog.mode === 'view'"
+                        @change="toggleGroup(group.key, $event)"
+                      >
+                        {{ group.label }}
+                      </el-checkbox>
+                    </th>
+                    <td class="role-permission-page-cell">
+                      <el-checkbox
+                        :model-value="isFeatureChecked(item.key)"
+                        :indeterminate="isFeaturePartial(item.key)"
+                        :disabled="dialog.mode === 'view'"
+                        @change="toggleFeature(item.key, $event)"
+                      >
+                        {{ item.label }}
+                      </el-checkbox>
+                    </td>
+                    <td class="role-permission-actions-cell">
+                      <div class="role-permission-actions">
+                        <el-checkbox
+                          v-for="permission in pageActionPermissions(item.key)"
+                          :key="permission.id"
+                          :model-value="isActionChecked(permission.id)"
+                          :disabled="dialog.mode === 'view'"
+                          @change="toggleAction(item.key, permission.id, $event)"
+                        >
+                          {{ displayPermissionLabel(permission) }}
+                        </el-checkbox>
+                        <span v-if="!pageActionPermissions(item.key).length" class="role-action-empty">暂无可配置功能</span>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </template>

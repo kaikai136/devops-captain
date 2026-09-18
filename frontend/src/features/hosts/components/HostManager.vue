@@ -1,4 +1,13 @@
 ﻿<script setup lang="ts">
+import {
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogOverlay,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+} from 'reka-ui';
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 
 import { useAppContext } from '@app/context';
@@ -449,6 +458,10 @@ async function openHostQuickCommandManager() {
   }
 }
 
+function handleHostQuickCommandManagerOpenChange(open: boolean) {
+  if (!open) closeHostQuickCommandManager();
+}
+
 function closeHostQuickCommandManager() {
   if (hostQuickCommandDialog.value.saving) return;
   hostQuickCommandManagerOpen.value = false;
@@ -487,6 +500,10 @@ function hostQuickCommandPayload(draft: QuickCommandPayload): QuickCommandPayloa
     enabled: draft.enabled,
     sortOrder: draft.sortOrder,
   };
+}
+
+function handleHostQuickCommandDialogOpenChange(open: boolean) {
+  if (!open) closeHostQuickCommandDialog();
 }
 
 async function saveHostQuickCommandDialog() {
@@ -794,53 +811,74 @@ function hostPlatformType(value: string | null | undefined) {
     </template>
     <div v-else class="permission-empty">暂无可用功能</div>
 
-    <el-dialog
-      :model-value="hostQuickCommandManagerOpen"
-      class="host-quick-command-dialog"
-      width="920px"
-      :show-close="false"
-      :close-on-click-modal="false"
-      @close="closeHostQuickCommandManager"
+    <DialogRoot
+      v-if="hostQuickCommandManagerOpen"
+      :open="hostQuickCommandManagerOpen"
+      @update:open="handleHostQuickCommandManagerOpenChange"
     >
-      <article class="host-quick-command-modal">
-        <header class="host-quick-command-head popup-header">
-          <div>
-            <span class="host-quick-command-head-icon" aria-hidden="true">
-              <AppIcon name="zap" :size="17" />
-            </span>
-            <span>
-              <strong>快捷命令</strong>
-              <small>管理 Web 终端中可用的快捷命令模板</small>
-            </span>
-          </div>
-          <el-button circle title="关闭" aria-label="关闭" @click="closeHostQuickCommandManager">
-            <AppIcon name="x" :size="16" />
-          </el-button>
-        </header>
+      <DialogPortal disabled>
+        <DialogOverlay class="host-editor-overlay host-quick-command-manager-overlay" />
+        <DialogContent
+          class="host-editor-dialog host-quick-command-dialog"
+          aria-describedby="host-quick-command-description"
+          @interact-outside.prevent
+        >
+          <article class="host-quick-command-modal">
+            <header class="host-quick-command-head popup-header">
+              <div>
+                <span class="host-quick-command-head-icon" aria-hidden="true">
+                  <AppIcon name="zap" :size="17" />
+                </span>
+                <span>
+                  <DialogTitle class="host-quick-command-title">快捷命令</DialogTitle>
+                  <DialogDescription id="host-quick-command-description" class="host-quick-command-description">
+                    管理 Web 终端中可用的快捷命令模板
+                  </DialogDescription>
+                </span>
+              </div>
+              <DialogClose as-child>
+                <el-button class="host-quick-command-close" text title="关闭" aria-label="关闭">
+                  <AppIcon name="x" :size="16" />
+                </el-button>
+              </DialogClose>
+            </header>
         <div class="host-quick-command-layout popup-body">
-          <aside class="host-quick-command-categories">
-            <div class="host-quick-command-category-title">
-              <span>分类</span>
-              <em>{{ hostQuickCommandCategories.length + 1 }} 组</em>
-            </div>
-            <el-button
-              text
-              :class="{ active: hostQuickCommandCategory === 'all' }"
-              @click="hostQuickCommandCategory = 'all'"
-            >
-              全部
-              <span>{{ hostQuickCommands.length }}</span>
-            </el-button>
-            <el-button
-              v-for="category in hostQuickCommandCategories"
-              :key="category"
-              text
-              :class="{ active: hostQuickCommandCategory === category }"
-              @click="hostQuickCommandCategory = category"
-            >
-              {{ category }}
-              <span>{{ hostQuickCommands.filter((command) => command.category === category).length }}</span>
-            </el-button>
+          <aside class="host-quick-command-sidebar">
+            <nav class="host-quick-command-categories" aria-label="快捷命令分类">
+              <div class="host-quick-command-category-title">
+                <AppIcon name="rows" :size="17" />
+                <span>命令分类</span>
+                <em>{{ hostQuickCommandCategories.length + 1 }} 组</em>
+              </div>
+              <el-menu
+                class="workspace-nav-menu host-quick-command-category-list"
+                :default-active="hostQuickCommandCategory"
+                @select="hostQuickCommandCategory = $event"
+              >
+                <el-menu-item
+                  index="all"
+                  class="host-quick-command-category-item"
+                  :aria-current="hostQuickCommandCategory === 'all' ? 'page' : undefined"
+                >
+                  <AppIcon name="rows" :size="17" />
+                  <span class="host-quick-command-category-name">全部</span>
+                  <span class="host-quick-command-category-count">{{ hostQuickCommands.length }}</span>
+                </el-menu-item>
+                <el-menu-item
+                  v-for="category in hostQuickCommandCategories"
+                  :key="category"
+                  :index="category"
+                  class="host-quick-command-category-item"
+                  :aria-current="hostQuickCommandCategory === category ? 'page' : undefined"
+                >
+                  <AppIcon name="folder" :size="17" />
+                  <span class="host-quick-command-category-name">{{ category }}</span>
+                  <span class="host-quick-command-category-count">
+                    {{ hostQuickCommands.filter((command) => command.category === category).length }}
+                  </span>
+                </el-menu-item>
+              </el-menu>
+            </nav>
           </aside>
           <section class="host-quick-command-content">
             <div class="host-quick-command-toolbar">
@@ -930,54 +968,154 @@ function hostPlatformType(value: string | null | undefined) {
             </div>
           </section>
         </div>
-      </article>
-    </el-dialog>
+          </article>
+        </DialogContent>
+      </DialogPortal>
+    </DialogRoot>
 
-    <el-dialog
-      :model-value="hostQuickCommandDialog.visible"
-      class="host-quick-command-form-dialog"
-      :title="hostQuickCommandDialog.mode === 'edit' ? '编辑快捷命令' : '新增快捷命令'"
-      width="560px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="!hostQuickCommandDialog.saving"
-      @close="closeHostQuickCommandDialog"
+    <DialogRoot
+      v-if="hostQuickCommandDialog.visible"
+      :open="hostQuickCommandDialog.visible"
+      @update:open="handleHostQuickCommandDialogOpenChange"
     >
-      <form class="host-form-modal host-quick-command-form popup-body popup-form-grid" @submit.prevent="saveHostQuickCommandDialog">
-        <h2>{{ hostQuickCommandDialog.mode === 'edit' ? '编辑快捷命令' : '新增快捷命令' }}</h2>
-        <el-alert v-if="hostQuickCommandDialog.error" class="host-quick-command-error" type="error" :title="hostQuickCommandDialog.error" :closable="false" />
-        <label>
-          <span>名称</span>
-          <el-input v-model="hostQuickCommandDialog.draft.name" autofocus :disabled="hostQuickCommandDialog.saving" />
-        </label>
-        <label>
-          <span>分类</span>
-          <el-select
-            v-model="hostQuickCommandDialog.draft.category"
-            filterable
-            allow-create
-            default-first-option
-            :disabled="hostQuickCommandDialog.saving"
+      <DialogPortal disabled>
+        <DialogOverlay class="host-editor-overlay host-quick-command-editor-overlay" />
+        <DialogContent
+          class="host-editor-dialog host-quick-command-editor-dialog"
+          aria-describedby="host-quick-command-editor-description"
+          @interact-outside.prevent
+          @escape-key-down="hostQuickCommandDialog.saving && $event.preventDefault()"
+        >
+          <header class="host-editor-header">
+            <div class="host-editor-heading">
+              <span class="host-editor-heading-icon">
+                <AppIcon name="terminal" :size="20" />
+              </span>
+              <div>
+                <DialogTitle class="host-editor-title">
+                  {{ hostQuickCommandDialog.mode === 'edit' ? '编辑快捷命令' : '新增快捷命令' }}
+                </DialogTitle>
+                <DialogDescription id="host-quick-command-editor-description" class="host-editor-description">
+                  配置终端中可快速填充或直接执行的命令模板。
+                </DialogDescription>
+              </div>
+            </div>
+            <DialogClose as-child>
+              <el-button
+                class="host-editor-icon-button"
+                text
+                title="关闭"
+                aria-label="关闭"
+                :disabled="hostQuickCommandDialog.saving"
+              >
+                <AppIcon name="x" :size="18" />
+              </el-button>
+            </DialogClose>
+          </header>
+
+          <form
+            id="host-quick-command-editor-form"
+            class="host-form-modal host-editor-form host-quick-command-form popup-body popup-form-grid"
+            @submit.prevent="saveHostQuickCommandDialog"
           >
-            <el-option v-for="category in hostQuickCommandCategories" :key="category" :value="category" :label="category" />
-          </el-select>
-        </label>
-        <label>
-          <span>命令</span>
-          <el-input v-model="hostQuickCommandDialog.draft.command" type="textarea" :rows="4" :disabled="hostQuickCommandDialog.saving" />
-        </label>
-        <label>
-          <span>说明</span>
-          <el-input v-model="hostQuickCommandDialog.draft.description" :disabled="hostQuickCommandDialog.saving" />
-        </label>
-        <el-checkbox v-model="hostQuickCommandDialog.draft.enabled" class="host-quick-command-enabled" :disabled="hostQuickCommandDialog.saving">启用</el-checkbox>
-        <div class="host-form-actions popup-footer popup-actions">
-          <el-button :disabled="hostQuickCommandDialog.saving" @click="closeHostQuickCommandDialog">取消</el-button>
-          <el-button type="primary" native-type="submit" :loading="hostQuickCommandDialog.saving" :disabled="hostQuickCommandDialog.saving">
-            {{ hostQuickCommandDialog.saving ? '保存中...' : '保存' }}
-          </el-button>
-        </div>
-      </form>
-    </el-dialog>
+            <el-alert
+              v-if="hostQuickCommandDialog.error"
+              class="host-quick-command-error"
+              type="error"
+              :title="hostQuickCommandDialog.error"
+              :closable="false"
+            />
+            <section class="host-editor-section host-quick-command-editor-section">
+              <div class="host-editor-section-head">
+                <span class="host-editor-section-icon">
+                  <AppIcon name="zap" :size="17" />
+                </span>
+                <div>
+                  <h3>命令信息</h3>
+                  <p>设置易于识别的名称和分类，便于在终端中快速查找。</p>
+                </div>
+              </div>
+              <div class="host-editor-section-grid host-quick-command-editor-grid">
+                <label class="host-horizontal-field required">
+                  <span>名称</span>
+                  <el-input
+                    v-model="hostQuickCommandDialog.draft.name"
+                    autofocus
+                    placeholder="例如：查看系统负载"
+                    :disabled="hostQuickCommandDialog.saving"
+                  />
+                </label>
+                <div class="host-horizontal-field required">
+                  <span>分类</span>
+                  <el-select
+                    v-model="hostQuickCommandDialog.draft.category"
+                    filterable
+                    allow-create
+                    default-first-option
+                    placeholder="选择或输入分类"
+                    :teleported="false"
+                    :disabled="hostQuickCommandDialog.saving"
+                  >
+                    <el-option v-for="category in hostQuickCommandCategories" :key="category" :value="category" :label="category" />
+                  </el-select>
+                </div>
+                <label class="host-horizontal-field required host-editor-span-2">
+                  <span>命令</span>
+                  <el-input
+                    v-model="hostQuickCommandDialog.draft.command"
+                    type="textarea"
+                    :rows="5"
+                    placeholder="输入需要在终端中执行的命令"
+                    :disabled="hostQuickCommandDialog.saving"
+                  />
+                </label>
+                <label class="host-horizontal-field host-editor-span-2">
+                  <span>说明</span>
+                  <el-input
+                    v-model="hostQuickCommandDialog.draft.description"
+                    placeholder="补充命令用途或执行注意事项（可选）"
+                    :disabled="hostQuickCommandDialog.saving"
+                  />
+                </label>
+              </div>
+            </section>
+
+            <section class="host-quick-command-status">
+              <div>
+                <strong>启用快捷命令</strong>
+                <span>启用后，此命令会出现在 Web 终端快捷命令列表中。</span>
+              </div>
+              <el-switch
+                v-model="hostQuickCommandDialog.draft.enabled"
+                :disabled="hostQuickCommandDialog.saving"
+                aria-label="启用快捷命令"
+              />
+            </section>
+          </form>
+
+          <footer class="host-form-actions host-editor-actions popup-footer popup-actions">
+            <DialogClose as-child>
+              <el-button
+                class="host-editor-button host-editor-button-outline"
+                native-type="button"
+                :disabled="hostQuickCommandDialog.saving"
+              >
+                取消
+              </el-button>
+            </DialogClose>
+            <el-button
+              form="host-quick-command-editor-form"
+              class="host-editor-button host-editor-button-primary"
+              native-type="submit"
+              :loading="hostQuickCommandDialog.saving"
+              :disabled="hostQuickCommandDialog.saving"
+            >
+              {{ hostQuickCommandDialog.saving ? '保存中...' : '保存命令' }}
+            </el-button>
+          </footer>
+        </DialogContent>
+      </DialogPortal>
+    </DialogRoot>
 
     <HostEditorDialog
       :dialog="hostDialog"

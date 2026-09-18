@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import ElementPlus from 'element-plus';
+import zhCn from 'element-plus/es/locale/lang/zh-cn';
 import 'element-plus/dist/index.css';
 
 import WatermarkOverlay from '@shared/components/WatermarkOverlay.vue';
@@ -13,7 +14,7 @@ import './styles/base/element-plus-theme.css';
 import './styles/base/element-plus-overrides.css';
 
 const app = createApp(WebTerminalPage);
-app.use(ElementPlus);
+app.use(ElementPlus, { locale: zhCn });
 app.mount('#terminal-app');
 
 void mountTerminalWatermark();

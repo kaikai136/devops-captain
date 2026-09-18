@@ -86,18 +86,18 @@ const {
 <template>
   <section v-if="activeTool === 'users'" class="user-manager-page" :class="{ fullscreen }" @click="columnsOpen = false">
     <template v-if="canAccessPage('users')">
-      <article class="user-filter-panel">
-        <el-form inline label-position="left">
-          <el-form-item label="账户名称">
-            <el-input v-model="search" placeholder="请输入" clearable />
-          </el-form-item>
-        </el-form>
-      </article>
-
       <article class="user-list-panel">
         <div class="user-list-toolbar">
-          <h2>账户列表</h2>
+          <div class="user-list-heading">
+            <h2>账户列表</h2>
+            <span>共 {{ filteredUsers.length }} 个账户</span>
+          </div>
           <div class="user-toolbar-actions">
+            <el-input v-model="search" class="user-toolbar-search" placeholder="搜索登录名或姓名" clearable>
+              <template #prefix>
+                <AppIcon name="search" :size="15" />
+              </template>
+            </el-input>
             <el-button v-if="canUsePageAction('users', 'create')" type="primary" @click="openCreateDialog">
               <AppIcon name="plus" :size="15" />
               <span>新建</span>

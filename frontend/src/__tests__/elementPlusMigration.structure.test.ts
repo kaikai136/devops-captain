@@ -18,7 +18,8 @@ describe('Element Plus migration contract', () => {
 
     for (const source of [terminal, hostTerminal]) {
       expect(source).toContain("import 'element-plus/dist/index.css';");
-      expect(source).toContain('app.use(ElementPlus)');
+      expect(source).toContain("import zhCn from 'element-plus/es/locale/lang/zh-cn';");
+      expect(source).toContain('app.use(ElementPlus, { locale: zhCn })');
     }
     expect(terminal).toContain('createApp(WebTerminalPage)');
     expect(hostTerminal).toContain('createApp(SimpleHostTerminalPage)');
