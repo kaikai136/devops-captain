@@ -20,7 +20,7 @@ const selectedCredential = computed({
 </script>
 
 <template>
-  <el-select v-model="selectedCredential" @change="emit('change', selectedCredential)">
+  <el-select v-model="selectedCredential" :teleported="false" @change="emit('change', selectedCredential)">
     <el-option :value="null" label="手动输入" />
     <el-option v-for="credential in props.credentials" :key="credential.id" :value="credential.id" :label="`${credential.name}（${credential.username}）`" />
   </el-select>

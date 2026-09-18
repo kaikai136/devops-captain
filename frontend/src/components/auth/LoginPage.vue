@@ -13,9 +13,9 @@ const props = defineProps<{
   verifyTwoFactorSetupLogin: (code: string) => Promise<unknown>;
 }>();
 
-type LoginLayoutKey = 'koi' | 'dual' | 'glass' | 'slide' | 'center' | 'immersive' | 'classic';
+type LoginLayoutKey = 'koi' | 'glass';
 type LoginModeKey = 'light' | 'dark';
-type LoginPanelKey = 'layout' | 'color' | null;
+type LoginPanelKey = 'color' | null;
 
 interface LoginAppearance {
   layout: LoginLayoutKey;
@@ -34,12 +34,7 @@ const defaultAppearance: LoginAppearance = {
 
 const layoutOptions: Array<{ key: LoginLayoutKey; title: string; subtitle: string }> = [
   { key: 'koi', title: 'Koi UI', subtitle: '清透分屏 + 科技插画' },
-  { key: 'dual', title: '臻享双栏', subtitle: '品牌展示 + 登录表单' },
   { key: 'glass', title: '动感玻璃', subtitle: '光斑动效与仪表盘装饰' },
-  { key: 'slide', title: '滑动登录', subtitle: '登录 / 注册滑动切换' },
-  { key: 'center', title: '气泡简约', subtitle: '气泡背景轻量卡片' },
-  { key: 'immersive', title: '分屏沉浸', subtitle: '大屏分栏沉浸布局' },
-  { key: 'classic', title: '经典点阵', subtitle: '蓝图网格 + 终端登录面板' },
 ];
 
 const colorOptions = ['#2563EB', '#1D4ED8', '#3B82F6', '#60A5FA', '#0EA5E9', '#0891B2', '#0F766E', '#14B8A6', '#475569', '#64748B', '#1E40AF', '#22C55E'];
@@ -94,7 +89,7 @@ function readStoredAppearance(): LoginAppearance {
 function normalizeAppearance(value: unknown): LoginAppearance {
   const layoutKeys = new Set(layoutOptions.map((item) => item.key));
   const raw = value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
-  const legacyLayout = raw.layout === 'duo' ? 'dual' : raw.layout === 'bubble' ? 'center' : raw.layout === 'split' ? 'immersive' : raw.layout;
+  const legacyLayout = raw.layout === 'glass' || raw.layout === 'koi' ? raw.layout : defaultAppearance.layout;
   const color = typeof raw.color === 'string' ? raw.color : '';
   const normalizedColor = color === 'custom' ? 'custom' : color.toUpperCase();
   const customColor = typeof raw.customColor === 'string' ? raw.customColor : defaultAppearance.customColor;
@@ -128,6 +123,11 @@ function hexToRgb(hex: string) {
 
 function togglePanel(panel: Exclude<LoginPanelKey, null>) {
   activePanel.value = activePanel.value === panel ? null : panel;
+}
+
+function toggleLayout() {
+  appearance.value.layout = appearance.value.layout === 'koi' ? 'glass' : 'koi';
+  activePanel.value = null;
 }
 
 function selectColor(color: string) {
@@ -184,7 +184,7 @@ watch(
       <el-button circle :class="{ active: activePanel === 'color' }" title="主题颜色" aria-label="主题颜色" @click="togglePanel('color')">
         <AppIcon name="brush" :size="18" />
       </el-button>
-      <el-button circle :class="{ active: activePanel === 'layout' }" title="登录页风格" aria-label="登录页风格" @click="togglePanel('layout')">
+      <el-button circle :class="{ active: appearance.layout === 'glass' }" title="切换登录页模式" aria-label="切换登录页模式" @click="toggleLayout">
         <AppIcon name="dashboard" :size="18" />
       </el-button>
       <el-button circle title="语言" aria-label="语言">
@@ -220,30 +220,6 @@ watch(
         />
       </div>
     </section>
-
-    <aside v-if="activePanel === 'layout'" class="login-popover login-layout-panel" @click.stop>
-      <header>
-        <h2>登录页风格</h2>
-        <p>切换不同布局与视觉样式</p>
-      </header>
-      <div class="login-layout-grid">
-        <el-button
-          v-for="layout in layoutOptions"
-          :key="layout.key"
-          class="login-layout-choice"
-          :class="{ active: appearance.layout === layout.key }"
-          @click="appearance.layout = layout.key"
-        >
-          <span class="login-style-preview" :class="`login-style-preview-${layout.key}`">
-            <i class="login-style-preview-brand"></i>
-            <span class="login-style-preview-form"><b></b><b></b><em></em></span>
-          </span>
-          <strong>{{ layout.title }}</strong>
-          <small>{{ layout.subtitle }}</small>
-          <span v-if="appearance.layout === layout.key" class="layout-check"><AppIcon name="check" :size="14" /></span>
-        </el-button>
-      </div>
-    </aside>
 
     <aside v-if="activePanel === 'color'" class="login-popover login-color-panel" @click.stop>
       <header>

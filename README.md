@@ -177,6 +177,13 @@ docker build -f deploy/Dockerfile -t devops-tools:latest .
 bash deploy/scripts/build-image.sh devops-tools:latest
 ```
 
+修改密码
+
+```
+docker exec -it devops-tools python manage.py changepassword admin
+```
+
+
 
 ### 拉取后配置并启动
 

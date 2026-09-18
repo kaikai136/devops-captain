@@ -113,7 +113,9 @@ function templateRoot(relativePath: string) {
   return parseTemplate(readSfc(relativePath).template?.content ?? '');
 }
 
-function findElements(root: RootNode, tag: string) {
+type TemplateContainer = Pick<RootNode, 'children'>;
+
+function findElements(root: TemplateContainer, tag: string) {
   const elements: Extract<RootNode['children'][number], { type: NodeTypes.ELEMENT }>[] = [];
   const visit = (node: RootNode['children'][number]) => {
     if (node.type === NodeTypes.ELEMENT) {
@@ -477,7 +479,11 @@ describe('HostManager component structure', () => {
       dragend: "emit('drag-end')",
     });
 
-    expect(findByClass(templateRoot('src/features/hosts/components/HostEditorDialog.vue'), 'el-dialog', 'host-editor-dialog')).toHaveLength(1);
+    const editorRoot = templateRoot('src/features/hosts/components/HostEditorDialog.vue');
+    expect(findElements(editorRoot, 'DialogRoot')).toHaveLength(1);
+    expect(findElements(editorRoot, 'DialogPortal')).toHaveLength(1);
+    expect(findByClass(editorRoot, 'DialogOverlay', 'host-editor-overlay')).toHaveLength(1);
+    expect(findByClass(editorRoot, 'DialogContent', 'host-editor-dialog')).toHaveLength(1);
     expect(findByClass(templateRoot('src/features/hosts/components/HostMoveDialog.vue'), 'el-dialog', 'host-form-modal')).toHaveLength(1);
   });
 
@@ -668,6 +674,7 @@ describe('HostManager component structure', () => {
   it('keeps CredentialSelector model update before change and preserves editor forwarding order', () => {
     const selector = findElements(templateRoot('src/features/hosts/components/CredentialSelector.vue'), 'el-select')[0];
     const selectorModel = expectDirective(selector, 'model', undefined, 'selectedCredential');
+    expectDirective(selector, 'bind', 'teleported', 'false');
     const selectorChange = expectDirective(selector, 'on', 'change', "emit('change', selectedCredential)");
     expect(selector.props.indexOf(selectorModel)).toBeLessThan(selector.props.indexOf(selectorChange));
 
@@ -695,9 +702,17 @@ describe('HostManager component structure', () => {
 
   it('keeps the host editor dialog shell separate from the form layout', () => {
     const root = templateRoot('src/features/hosts/components/HostEditorDialog.vue');
-    const dialog = findByClass(root, 'el-dialog', 'host-editor-dialog')[0];
+    const dialog = findByClass(root, 'DialogContent', 'host-editor-dialog')[0];
+    const selects = findElements(root, 'el-select');
+    const labels = findElements(root, 'label');
     expect(dialog).toBeTruthy();
-    expect(staticAttribute(dialog, 'width')).toBe('760px');
+    expect(selects).toHaveLength(2);
+    selects.forEach((select) => expectDirective(select, 'bind', 'teleported', 'false'));
+    expect(labels.flatMap((label) => findElements(label, 'el-select'))).toHaveLength(0);
+    expect(labels.flatMap((label) => findElements(label, 'CredentialSelector'))).toHaveLength(0);
+    expect(findElements(root, 'DialogRoot')).toHaveLength(1);
+    expect(findElements(root, 'DialogPortal')).toHaveLength(1);
+    expect(findByClass(root, 'DialogOverlay', 'host-editor-overlay')).toHaveLength(1);
     expect(findByClass(root, 'form', 'host-form-modal')).toHaveLength(1);
     expect(staticAttribute(findElements(root, 'form')[0], 'class')).toContain('popup-body');
   });
