@@ -574,33 +574,6 @@
   overflow-x: auto;
 }
 
-.user-koi-pagination {
-  flex: 0 0 auto;
-  justify-content: flex-start;
-  min-width: max-content;
-  color: var(--ui-muted-foreground);
-}
-
-.user-koi-pagination .el-pagination__total,
-.user-koi-pagination .el-pagination__jump {
-  color: var(--ui-muted-foreground);
-}
-
-.user-koi-pagination.is-background .btn-prev,
-.user-koi-pagination.is-background .btn-next,
-.user-koi-pagination.is-background .el-pager li {
-  border: 1px solid transparent;
-  border-radius: 2px;
-  background: var(--ui-muted);
-  color: var(--ui-foreground);
-}
-
-.user-koi-pagination.is-background .el-pager li.is-active {
-  border-color: var(--ui-primary);
-  background: var(--ui-primary);
-  color: var(--ui-primary-foreground);
-}
-
 .user-form-modal {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

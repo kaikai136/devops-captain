@@ -3,6 +3,7 @@
 @import "./styles/base/element-plus-theme.css";
 @import "./styles/base/element-plus-overrides.css";
 @import "./styles/base/popup-system.css";
+@import "./styles/base/pagination.css";
 @import "./styles/base/watermark.css";
 @import "./styles/lock-screen.css";
 @import "./styles/auth-login.css";

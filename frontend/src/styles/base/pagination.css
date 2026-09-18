@@ -1,0 +1,26 @@
+.app-pagination {
+  flex: 0 0 auto;
+  justify-content: flex-start;
+  min-width: max-content;
+  color: var(--ui-muted-foreground);
+}
+
+.app-pagination .el-pagination__total,
+.app-pagination .el-pagination__jump {
+  color: var(--ui-muted-foreground);
+}
+
+.app-pagination.is-background .btn-prev,
+.app-pagination.is-background .btn-next,
+.app-pagination.is-background .el-pager li {
+  border: 1px solid transparent;
+  border-radius: 2px;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
+}
+
+.app-pagination.is-background .el-pager li.is-active {
+  border-color: var(--ui-primary);
+  background: var(--ui-primary);
+  color: var(--ui-primary-foreground);
+}

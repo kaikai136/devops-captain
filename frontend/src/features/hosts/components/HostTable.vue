@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import AppIcon from '@shared/components/AppIcon.vue';
+import AppPagination from '@shared/components/AppPagination.vue';
 import type { ManagedHost } from '@features/hosts/types';
 import type { HostSortKey, SortDirection } from '@features/hosts/utils/groups';
 import type { HostColumnKey } from './HostToolbar.vue';
@@ -16,10 +17,6 @@ const props = defineProps<{
   sortDirection: SortDirection;
   page: number;
   pageSize: number;
-  totalPages: number;
-  pageNumbers: number[];
-  pageStart: number;
-  pageEnd: number;
   selectedCount: number;
   selectedVerifyingCount: number;
   stats: { total: number; verified: number; unverified: number };
@@ -218,21 +215,13 @@ function formatHostSystem(host: ManagedHost) {
     </div>
   </div>
   <div class="host-pagination" aria-label="主机列表分页">
-    <div class="host-pagination-summary">
-      <span>共 {{ props.visibleHostCount }} 条</span>
-      <span>{{ props.pageStart }}-{{ props.pageEnd }}</span>
-    </div>
     <div class="host-pagination-controls">
-      <el-pagination
-        background
-        small
-        :current-page="props.page"
+      <AppPagination
+        :page="props.page"
         :page-size="props.pageSize"
-        :page-sizes="[10, 20, 50]"
         :total="props.visibleHostCount"
-        layout="prev, pager, next, sizes"
-        @current-change="emit('page-change', $event)"
-        @size-change="emit('page-size-change', $event)"
+        @page-change="emit('page-change', $event)"
+        @page-size-change="emit('page-size-change', $event)"
       />
     </div>
     <div class="host-stats-line">

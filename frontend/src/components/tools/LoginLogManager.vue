@@ -5,6 +5,7 @@ import { apiGet } from '../../api';
 import { useAppContext } from '@app/context';
 import { errorMessage } from '@shared/utils/errors';
 import AppIcon from '@shared/components/AppIcon.vue';
+import AppPagination from '@shared/components/AppPagination.vue';
 
 type LoginLogStatus = 'success' | 'failed';
 type StatusFilter = 'all' | LoginLogStatus;
@@ -66,8 +67,6 @@ const visibleColumns = ref<Record<ColumnKey, boolean>>({
 let filterTimer: number | undefined;
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
-const pageStart = computed(() => (total.value ? (page.value - 1) * pageSize.value + 1 : 0));
-const pageEnd = computed(() => Math.min(page.value * pageSize.value, total.value));
 const visibleColumnCount = computed(() => Object.values(visibleColumns.value).filter(Boolean).length);
 const allColumnsVisible = computed(() => columnOptions.every((column) => visibleColumns.value[column.key]));
 const someColumnsVisible = computed(() => visibleColumnCount.value > 0);
@@ -268,19 +267,12 @@ function statusTagType(status: LoginLogStatus) {
         </div>
 
         <div class="host-pagination" aria-label="登录记录分页">
-          <div class="host-pagination-summary">
-            <span>共 {{ total }} 条</span>
-            <span>{{ pageStart }}-{{ pageEnd }}</span>
-          </div>
-          <el-pagination
-            background
-            layout="prev, pager, next, sizes"
-            :current-page="page"
+          <AppPagination
+            :page="page"
             :page-size="pageSize"
-            :page-sizes="[10, 20, 50]"
             :total="total"
-            @current-change="setPage"
-            @size-change="setPageSize"
+            @page-change="setPage"
+            @page-size-change="setPageSize"
           />
         </div>
       </article>

@@ -18,7 +18,7 @@ describe('DeviceManager Element Plus migration', () => {
     expect(template).toContain('<el-dialog');
     expect(template).toContain('<el-form');
     expect(template).toContain('<el-form-item');
-    expect(template).toContain('<el-pagination');
+    expect(template).toContain('<AppPagination');
     expect(template).toContain('<el-button');
     expect(template).toContain('<el-input');
     expect(template).toContain('<el-select');

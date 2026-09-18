@@ -560,56 +560,11 @@
   font-weight: 800;
 }
 
-.host-pagination-summary,
 .host-pagination-controls,
 .host-stats-line {
   display: flex;
   align-items: center;
   gap: 8px;
-}
-
-.host-pagination-summary span {
-  white-space: nowrap;
-}
-
-.host-pagination-controls button {
-  display: inline-grid;
-  place-items: center;
-  min-width: 30px;
-  width: 30px;
-  min-height: 30px;
-  border: 1px solid #d8e2ee;
-  border-radius: 0;
-  background: #fff;
-  color: #173252;
-  padding: 0;
-  font-size: 13px;
-  font-weight: 900;
-}
-
-.host-pagination-controls button.active {
-  border-color: var(--ui-primary);
-  background: var(--ui-primary);
-  color: #fff;
-}
-
-.host-pagination-controls button:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
-}
-
-.host-pagination-controls button.prev .app-icon {
-  transform: rotate(180deg);
-}
-
-.host-pagination-controls select {
-  min-height: 30px;
-  border: 1px solid #d8e2ee;
-  border-radius: 0;
-  background: #fff;
-  color: #173252;
-  padding: 0 8px;
-  font: inherit;
 }
 
 .host-stats-line {

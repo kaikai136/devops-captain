@@ -166,29 +166,25 @@ describe('DeviceManager page structure', () => {
     expect(styles).toMatch(/\.device-row-actions \.el-button \+ \.el-button\s*\{[^}]*margin-left:\s*0;/s);
   });
 
-  it('renders host-style pagination with category counts on the right', () => {
+  it('renders shared pagination with category counts on the right', () => {
     const source = readSource('features/company/components/DeviceManager.vue');
     const styles = readSource('styles/tools/device-manager.css');
 
     expect(source).toContain('const pageSize = ref(10);');
-    expect(source).toContain('const pageStart = computed(() => (filteredDevices.value.length ? (page.value - 1) * pageSize.value + 1 : 0));');
-    expect(source).toContain('const pageEnd = computed(() => Math.min(page.value * pageSize.value, filteredDevices.value.length));');
     expect(source).toContain("const fixedAssetCount = computed(() => filteredDevices.value.filter((device) => device.category === '固定资产').length);");
     expect(source).toContain("const consumableCount = computed(() => filteredDevices.value.filter((device) => device.category === '耗材').length);");
     expect(source).toContain('class="device-pagination-left"');
-    expect(source).toContain('共 {{ filteredDevices.length }} 条');
-    expect(source).toContain('{{ pageStart }}-{{ pageEnd }}');
-    expect(source).toContain('<el-pagination');
-    expect(source).toContain(':page-sizes="[10, 20, 50]"');
-    expect(source).toContain('@current-change="setPage"');
-    expect(source).toContain('@size-change="setPageSize"');
+    expect(source).toContain('<AppPagination');
+    expect(source).toContain(':page="page"');
+    expect(source).toContain('@page-change="setPage"');
+    expect(source).toContain('@page-size-change="setPageSize"');
     expect(source).toContain('class="device-category-summary"');
     expect(source).toContain('固定资产 {{ fixedAssetCount }}');
     expect(source).toContain('耗材 {{ consumableCount }}');
     expect(source).not.toContain('共{{ totalPages }}页 {{ filteredDevices.length }}条，已选 {{ selectedDeviceCount }} 条');
-    expect(styles).toMatch(/\.device-pagination-left,\s*\.device-pagination-summary,\s*\.device-category-summary\s*\{[^}]*display:\s*flex;/s);
+    expect(styles).toMatch(/\.device-pagination-left,\s*\.device-category-summary\s*\{[^}]*display:\s*flex;/s);
     expect(styles).toMatch(/\.device-pagination\s*\{[^}]*background:\s*#fbfdff;/s);
-    expect(styles).toMatch(/\.device-pagination \.el-pagination\s*\{[^}]*min-width:\s*0;/s);
+    expect(styles).toMatch(/\.device-pagination \.app-pagination\s*\{[^}]*min-width:\s*0;/s);
     expect(styles).toMatch(/\.device-category-summary\s*\{[^}]*justify-content:\s*flex-end;/s);
     expect(styles).toMatch(/\.device-summary-pill\s*\{[^}]*white-space:\s*nowrap;/s);
   });

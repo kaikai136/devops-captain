@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 
 import { useAppContext } from '@app/context';
 import AppIcon from '@shared/components/AppIcon.vue';
+import AppPagination from '@shared/components/AppPagination.vue';
 import { errorMessage } from '@shared/utils/errors';
 import {
   cancelBulkExecutionTask,
@@ -82,7 +83,6 @@ const scriptPresets: Array<{ key: string; label: string; type: Exclude<BulkExecu
   },
 ];
 
-const taskPageSizeOptions = [10, 20, 50];
 const MAX_SCRIPT_LENGTH = 200000;
 
 const { activeTool, canUsePageAction, showToast, requestConfirm } = useAppContext();
@@ -165,12 +165,6 @@ const canCheckUpload = computed(() => canExecute.value && !isCheckingUpload.valu
 const canCreateUpload = computed(() => canExecute.value && !isCheckingUpload.value && !isUploading.value);
 const taskTotalPages = computed(() => Math.max(1, Math.ceil(taskTotal.value / taskPageSize.value)));
 const taskPageStart = computed(() => (taskTotal.value ? (taskPage.value - 1) * taskPageSize.value + 1 : 0));
-const taskPageEnd = computed(() => Math.min(taskPage.value * taskPageSize.value, taskTotal.value));
-const pageNumbers = computed(() => {
-  const from = Math.max(1, taskPage.value - 2);
-  const to = Math.min(taskTotalPages.value, taskPage.value + 2);
-  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
-});
 const visibleRecordTaskIds = computed(() => taskHistory.value.map((task) => task.id));
 const allVisibleRecordsSelected = computed(() => visibleRecordTaskIds.value.length > 0 && visibleRecordTaskIds.value.every((id) => selectedRecordTaskIds.value.has(id)));
 const someVisibleRecordsSelected = computed(() => visibleRecordTaskIds.value.some((id) => selectedRecordTaskIds.value.has(id)));
@@ -1156,19 +1150,12 @@ function formatFileSize(value: number) {
           <footer class="bulk-record-footer">
             <div class="host-pagination bulk-record-pagination" aria-label="执行列表分页">
               <div class="bulk-record-pagination-left">
-                <div class="host-pagination-summary">
-                  <span>共 {{ taskTotal }} 条</span>
-                  <span>{{ taskPageStart }}-{{ taskPageEnd }}</span>
-                </div>
-                <el-pagination
-                  class="host-pagination-controls"
-                  layout="sizes, prev, pager, next"
-                  :current-page="taskPage"
+                <AppPagination
+                  :page="taskPage"
                   :page-size="taskPageSize"
-                  :page-sizes="taskPageSizeOptions"
                   :total="taskTotal"
-                  @current-change="setTaskPage"
-                  @size-change="setTaskPageSize"
+                  @page-change="setTaskPage"
+                  @page-size-change="setTaskPageSize"
                 />
               </div>
               <div class="bulk-record-stats">{{ taskTotal }} 个任务 · {{ targets.length }} 台可执行主机</div>

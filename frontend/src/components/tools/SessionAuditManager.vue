@@ -15,6 +15,7 @@ import {
 } from '../../services/sessionAudit';
 import { formatDateTime } from '../../utils/datetime';
 import AppIcon from '@shared/components/AppIcon.vue';
+import AppPagination from '@shared/components/AppPagination.vue';
 
 interface SessionRecordingDialogState {
   visible: boolean;
@@ -54,8 +55,6 @@ let rdpSessionRecordingPlayer: InstanceType<typeof Guacamole.SessionRecording> |
 let sessionAuditRequestId = 0;
 
 const sessionAuditTotalPages = computed(() => Math.max(1, Math.ceil(sessionAuditTotal.value / sessionAuditPageSize.value)));
-const sessionAuditPageStart = computed(() => (sessionAuditTotal.value ? (sessionAuditPage.value - 1) * sessionAuditPageSize.value + 1 : 0));
-const sessionAuditPageEnd = computed(() => Math.min(sessionAuditPage.value * sessionAuditPageSize.value, sessionAuditTotal.value));
 
 watch(
   [() => activeTool.value, canUseSessionAudit],
@@ -337,19 +336,12 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="host-pagination host-session-audit-pagination" aria-label="会话审计分页">
-        <div class="host-pagination-summary">
-          <span>共 {{ sessionAuditTotal }} 条</span>
-          <span>{{ sessionAuditPageStart }}-{{ sessionAuditPageEnd }}</span>
-        </div>
-        <el-pagination
-          background
-          layout="prev, pager, next, sizes"
-          :current-page="sessionAuditPage"
+        <AppPagination
+          :page="sessionAuditPage"
           :page-size="sessionAuditPageSize"
-          :page-sizes="[10, 20, 50]"
           :total="sessionAuditTotal"
-          @current-change="setSessionAuditPage"
-          @size-change="setSessionAuditPageSize"
+          @page-change="setSessionAuditPage"
+          @page-size-change="setSessionAuditPageSize"
         />
         <div class="host-stats-line host-session-audit-stats">
           <span>共 {{ sessionAuditTotal }} 条审计</span>

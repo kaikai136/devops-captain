@@ -253,18 +253,9 @@ const canUseHostRowActions = computed(() =>
   canUsePageAction('hosts', 'terminal') ||
   canUsePageAction('hosts', 'delete')
 );
-const hostPageStart = computed(() => (visibleManagedHosts.value.length ? (hostPage.value - 1) * hostPageSize.value + 1 : 0));
-const hostPageEnd = computed(() => Math.min(hostPage.value * hostPageSize.value, visibleManagedHosts.value.length));
 const selectedManagedHostVerifyingCount = computed(() =>
   [...selectedManagedHostIds.value].filter((hostId) => verifyingHostIds.value.has(hostId)).length,
 );
-const hostPageNumbers = computed(() => {
-  const total = hostTotalPages.value;
-  const current = hostPage.value;
-  const from = Math.max(1, current - 2);
-  const to = Math.min(total, current + 2);
-  return Array.from({ length: to - from + 1 }, (_, index) => from + index);
-});
 const hostQuickCommandCategories = computed(() => {
   const categories = hostQuickCommands.value.map((command) => command.category).filter(Boolean);
   return [...new Set(categories)].sort((left, right) => left.localeCompare(right, 'zh-Hans-CN'));
@@ -768,10 +759,6 @@ function hostPlatformType(value: string | null | undefined) {
         :sort-direction="hostSortDirection"
         :page="hostPage"
         :page-size="hostPageSize"
-        :total-pages="hostTotalPages"
-        :page-numbers="hostPageNumbers"
-        :page-start="hostPageStart"
-        :page-end="hostPageEnd"
         :selected-count="selectedManagedHostCount"
         :selected-verifying-count="selectedManagedHostVerifyingCount"
         :stats="managedHostStats"

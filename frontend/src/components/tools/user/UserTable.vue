@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AppPagination from '@shared/components/AppPagination.vue';
 import { formatDateTime } from '../../../utils/datetime';
 import type { SystemUser, UserColumnKey } from '../../../composables/features/useUserManager';
 
@@ -158,16 +159,12 @@ function hasRowActions() {
     </div>
 
     <div v-show="filteredCount > 0" class="user-table-pagination" aria-label="用户列表分页">
-      <el-pagination
-        class="user-koi-pagination"
-        background
-        layout="total, sizes, prev, pager, next, jumper"
-        :current-page="page"
+      <AppPagination
+        :page="page"
         :page-size="pageSize"
-        :page-sizes="[10, 20, 50, 100, 200]"
         :total="filteredCount"
-        @current-change="$emit('updatePage', $event)"
-        @size-change="$emit('updatePageSize', $event)"
+        @page-change="$emit('updatePage', $event)"
+        @page-size-change="$emit('updatePageSize', $event)"
       />
     </div>
   </div>

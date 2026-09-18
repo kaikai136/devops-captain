@@ -6,6 +6,7 @@ import { useAppContext } from '@app/context';
 import { dashboardNavItem, navGroups } from '@app/navigation';
 import { errorMessage } from '@shared/utils/errors';
 import AppIcon from '@shared/components/AppIcon.vue';
+import AppPagination from '@shared/components/AppPagination.vue';
 
 interface SystemRole {
   id: number;
@@ -61,7 +62,6 @@ const searchDraft = ref('');
 const search = ref('');
 const page = ref(1);
 const pageSize = ref(10);
-const pageSizeOptions = [10, 20, 50];
 const isLoading = ref(false);
 const message = ref('');
 const messageTone = ref<'error' | 'success'>('error');
@@ -103,8 +103,6 @@ const pagedRoles = computed(() => {
   const start = (page.value - 1) * pageSize.value;
   return filteredRoles.value.slice(start, start + pageSize.value);
 });
-const pageStart = computed(() => (filteredRoles.value.length ? (page.value - 1) * pageSize.value + 1 : 0));
-const pageEnd = computed(() => Math.min(page.value * pageSize.value, filteredRoles.value.length));
 
 onMounted(loadRoles);
 
@@ -564,19 +562,12 @@ function emptyRoleForm(): RoleForm {
         </el-table>
 
         <div class="host-pagination" aria-label="角色列表分页">
-          <div class="host-pagination-summary">
-            <span>共 {{ filteredRoles.length }} 条</span>
-            <span>{{ pageStart }}-{{ pageEnd }}</span>
-          </div>
-          <el-pagination
-            background
-            layout="prev, pager, next, sizes"
-            :current-page="page"
+          <AppPagination
+            :page="page"
             :page-size="pageSize"
-            :page-sizes="pageSizeOptions"
             :total="filteredRoles.length"
-            @current-change="setPage"
-            @size-change="setPageSize"
+            @page-change="setPage"
+            @page-size-change="setPageSize"
           />
         </div>
       </article>

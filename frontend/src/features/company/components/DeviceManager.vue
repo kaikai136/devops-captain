@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import { useAppContext } from '@app/context';
 import AppIcon from '@shared/components/AppIcon.vue';
+import AppPagination from '@shared/components/AppPagination.vue';
 import {
   createCompanyDevice,
   deleteCompanyDevice,
@@ -59,8 +60,6 @@ const pagedDevices = computed(() => {
   const start = (page.value - 1) * pageSize.value;
   return filteredDevices.value.slice(start, start + pageSize.value);
 });
-const pageStart = computed(() => (filteredDevices.value.length ? (page.value - 1) * pageSize.value + 1 : 0));
-const pageEnd = computed(() => Math.min(page.value * pageSize.value, filteredDevices.value.length));
 const fixedAssetCount = computed(() => filteredDevices.value.filter((device) => device.category === '固定资产').length);
 const consumableCount = computed(() => filteredDevices.value.filter((device) => device.category === '耗材').length);
 
@@ -392,20 +391,12 @@ function setPageSize(size: number) {
 
       <div class="device-pagination">
         <div class="device-pagination-left">
-          <div class="device-pagination-summary">
-            <span>共 {{ filteredDevices.length }} 条</span>
-            <span>{{ pageStart }}-{{ pageEnd }}</span>
-          </div>
-          <el-pagination
-            :current-page="page"
+          <AppPagination
+            :page="page"
             :page-size="pageSize"
             :total="filteredDevices.length"
-            :page-sizes="[10, 20, 50]"
-            layout="prev, pager, next, sizes"
-            small
-            background
-            @current-change="setPage"
-            @size-change="setPageSize"
+            @page-change="setPage"
+            @page-size-change="setPageSize"
           />
         </div>
         <div class="device-category-summary">

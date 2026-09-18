@@ -196,7 +196,6 @@
 }
 
 .device-pagination-left,
-.device-pagination-summary,
 .device-category-summary {
   display: flex;
   align-items: center;
@@ -208,17 +207,11 @@
   min-width: 0;
 }
 
-.device-pagination-summary {
-  flex: 0 0 auto;
-  color: #254263;
-}
-
-.device-pagination-summary span,
 .device-summary-pill {
   white-space: nowrap;
 }
 
-.device-pagination .el-pagination {
+.device-pagination .app-pagination {
   min-width: 0;
 }
 

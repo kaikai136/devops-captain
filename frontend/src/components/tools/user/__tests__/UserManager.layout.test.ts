@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 
 const template = readFileSync(fileURLToPath(new URL('../../UserManager.vue', import.meta.url)), 'utf8');
 const tableTemplate = readFileSync(fileURLToPath(new URL('../UserTable.vue', import.meta.url)), 'utf8');
+const paginationTemplate = readFileSync(fileURLToPath(new URL('../../../../shared/components/AppPagination.vue', import.meta.url)), 'utf8');
 const styles = readFileSync(fileURLToPath(new URL('../../../../styles/tools/user-manager.css', import.meta.url)), 'utf8');
 
 describe('UserManager layout', () => {
@@ -20,8 +21,9 @@ describe('UserManager layout', () => {
   it('uses the koi-ui pagination layout directly below the user table', () => {
     expect(tableTemplate).toContain('class="user-table-scroll"');
     expect(tableTemplate).toContain('class="user-table-pagination"');
-    expect(tableTemplate).toContain('layout="total, sizes, prev, pager, next, jumper"');
-    expect(tableTemplate).toContain(':page-sizes="[10, 20, 50, 100, 200]"');
+    expect(tableTemplate).toContain('<AppPagination');
+    expect(paginationTemplate).toContain('layout="total, sizes, prev, pager, next, jumper"');
+    expect(paginationTemplate).toContain(':page-sizes="[10, 20, 50, 100, 200]"');
     expect(styles).toMatch(/\.user-table-scroll\s*\{[\s\S]*overflow-x:\s*auto;/);
     expect(styles).toMatch(/\.user-table-pagination\s*\{[\s\S]*margin:\s*0 8px;/);
   });

@@ -72,7 +72,7 @@ const componentContracts: Record<string, { props: string[]; emits: string[] }> =
     emits: ['close', 'submit', 'update-form-field'],
   },
   'HostTable.vue': {
-    props: ['hosts', 'visibleHostCount', 'selectedIds', 'visibleIds', 'tableStyle', 'page', 'pageSize', 'totalPages'],
+    props: ['hosts', 'visibleHostCount', 'selectedIds', 'visibleIds', 'tableStyle', 'page', 'pageSize'],
     emits: ['toggle-all-visible', 'toggle-host', 'sort', 'open-simple-terminal', 'page-change', 'page-size-change', 'clear-selection', 'upload-file-selected'],
   },
   'HostToolbar.vue': {
@@ -347,7 +347,6 @@ describe('HostManager component structure', () => {
       'visible-ids': 'visibleHostIds',
       page: 'hostPage',
       'page-size': 'hostPageSize',
-      'total-pages': 'hostTotalPages',
       'selected-verifying-count': 'selectedManagedHostVerifyingCount',
       'can-open-terminal': "canUsePageAction('hosts', 'terminal')",
       'can-edit': "canUsePageAction('hosts', 'edit')",
@@ -545,11 +544,11 @@ describe('HostManager component structure', () => {
     expectDirective(checkboxes[1], 'on', 'change', "emit('toggle-host', host.id, $event)");
 
     const pagination = findByClass(tableRoot, 'div', 'host-pagination-controls')[0];
-    const paginationComponent = findElements({ ...tableRoot, children: pagination.children } as RootNode, 'el-pagination')[0];
-    expectDirective(paginationComponent, 'bind', 'current-page', 'props.page');
+    const paginationComponent = findElements({ ...tableRoot, children: pagination.children } as RootNode, 'AppPagination')[0];
+    expectDirective(paginationComponent, 'bind', 'page', 'props.page');
     expectDirective(paginationComponent, 'bind', 'page-size', 'props.pageSize');
-    expectDirective(paginationComponent, 'on', 'current-change', "emit('page-change', $event)");
-    expectDirective(paginationComponent, 'on', 'size-change', "emit('page-size-change', $event)");
+    expectDirective(paginationComponent, 'on', 'page-change', "emit('page-change', $event)");
+    expectDirective(paginationComponent, 'on', 'page-size-change', "emit('page-size-change', $event)");
 
     const toolbarRoot = templateRoot('src/features/hosts/components/HostToolbar.vue');
     const columnCheckboxes = findByClass(toolbarRoot, 'el-checkbox', 'host-column-all');

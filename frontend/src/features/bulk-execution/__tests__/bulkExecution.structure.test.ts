@@ -353,11 +353,10 @@ describe('bulk execution frontend contract', () => {
     expect(panel).toContain('page: taskPage.value');
     expect(panel).toContain('pageSize: taskPageSize.value');
     expect(panel).toContain('taskTotal.value = page.count');
-    expect(panel).toContain('pageNumbers');
     expect(panel).toContain('setTaskPage');
     expect(panel).toContain('setTaskPageSize');
+    expect(footer).toContain('<AppPagination');
     expect(footer).toContain('host-pagination');
-    expect(footer).toContain('host-pagination-controls');
     expect(footer).toContain('bulk-record-stats');
     expect(footer).toContain('{{ taskTotal }} 个任务 · {{ targets.length }} 台可执行主机');
   });
