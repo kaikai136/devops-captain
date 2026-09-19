@@ -70,7 +70,7 @@ function hasRowActions() {
 <template>
   <div class="user-table" :style="tableStyle">
     <div class="user-table-scroll">
-      <el-table :data="users" row-key="id" :empty-text="isLoading ? '加载中...' : '暂无匹配账户'">
+      <el-table :data="users" row-key="id" class="app-data-table" :empty-text="isLoading ? '加载中...' : '暂无匹配账户'">
       <el-table-column v-if="isColumnVisible('username')" label="登录名" min-width="150">
         <template #default="{ row }">
           <div class="user-login-name">

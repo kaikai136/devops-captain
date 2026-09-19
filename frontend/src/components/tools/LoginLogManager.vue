@@ -248,7 +248,7 @@ function statusTagType(status: LoginLogStatus) {
         <p v-if="message" class="login-log-message">{{ message }}</p>
 
         <div class="login-log-table-wrap">
-          <el-table :data="logs" row-key="id" class="login-log-table" v-loading="isLoading" empty-text="暂无登录记录">
+          <el-table :data="logs" row-key="id" class="login-log-table app-data-table" v-loading="isLoading" empty-text="暂无登录记录">
             <el-table-column v-if="isColumnVisible('createdAt')" label="时间" min-width="170">
               <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
             </el-table-column>

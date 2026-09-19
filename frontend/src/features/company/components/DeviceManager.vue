@@ -323,7 +323,7 @@ function setPageSize(size: number) {
         <el-table
           :data="pagedDevices"
           row-key="id"
-          class="device-table"
+          class="device-table app-data-table"
           height="100%"
           border
           stripe

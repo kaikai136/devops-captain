@@ -628,7 +628,7 @@ function downloadBlob(blob: Blob, filename: string) {
 
         <section v-else-if="activeReportTab === 'assets'" class="security-report-section">
           <h3>资产风险统计</h3>
-          <el-table :data="assetRiskRows" class="asset-report-table" row-key="id" empty-text="暂无资产风险统计">
+          <el-table :data="assetRiskRows" class="asset-report-table app-data-table" row-key="id" empty-text="暂无资产风险统计">
             <el-table-column prop="index" label="序号" width="80" />
             <el-table-column prop="hostIp" label="IP/URL地址" min-width="150" />
             <el-table-column prop="hostName" label="资产名称" min-width="150" />
@@ -647,7 +647,7 @@ function downloadBlob(blob: Blob, filename: string) {
 
         <section v-else-if="activeReportTab === 'impact'" class="security-report-section">
           <h3>漏洞影响统计</h3>
-          <el-table :data="impactRows" class="impact-report-table" row-key="key" empty-text="当前筛选条件下没有漏洞影响统计">
+          <el-table :data="impactRows" class="impact-report-table app-data-table" row-key="key" empty-text="当前筛选条件下没有漏洞影响统计">
             <el-table-column prop="index" label="序号" width="80" />
             <el-table-column prop="title" label="漏洞名称" min-width="220" class-name="report-text-cell" />
             <el-table-column label="风险等级" width="110">
@@ -662,7 +662,7 @@ function downloadBlob(blob: Blob, filename: string) {
 
         <section v-else-if="activeReportTab === 'details'" class="security-report-section">
           <h3>漏洞详情</h3>
-          <el-table :data="findings" class="finding-detail-table" row-key="id" empty-text="当前筛选条件下没有漏洞详情">
+          <el-table :data="findings" class="finding-detail-table app-data-table" row-key="id" empty-text="当前筛选条件下没有漏洞详情">
             <el-table-column label="序号" width="80">
               <template #default="{ $index }">{{ $index + 1 }}</template>
             </el-table-column>

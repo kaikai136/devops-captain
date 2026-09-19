@@ -202,15 +202,11 @@ const {
 });
 const hostTableStyle = computed<Record<string, string>>(() => {
   const columns = visibleHostTableColumns.value;
-  const tableGapWidth = 6;
-  const tableHorizontalPadding = 20;
   const selectColumnWidth = 32;
   const minimumWidth = columns.reduce((total, column) => {
     const width = hostColumnWidths.value[column.key];
     return total + (width ?? column.minWidth ?? 0);
   }, 0)
-    + columns.length * tableGapWidth
-    + tableHorizontalPadding
     + selectColumnWidth;
   const actionsVisible = columns.some((column) => column.key === 'actions');
   const templateColumns = columns.map((column) => {
@@ -227,7 +223,7 @@ const hostTableStyle = computed<Record<string, string>>(() => {
     '--host-select-column-width': '32px',
     '--host-status-column-width': '86px',
     '--host-actions-column-width': '132px',
-    '--host-status-sticky-right': actionsVisible ? 'calc(var(--host-actions-column-width) + 6px)' : '0px',
+    '--host-status-sticky-right': actionsVisible ? 'var(--host-actions-column-width)' : '0px',
   };
 });
 const hostTotalPages = computed(() => Math.max(1, Math.ceil(visibleManagedHosts.value.length / hostPageSize.value)));

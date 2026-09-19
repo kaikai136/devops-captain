@@ -286,7 +286,7 @@ onBeforeUnmount(() => {
       <p v-if="sessionAuditError" class="host-session-audit-message">{{ sessionAuditError }}</p>
 
       <div class="host-session-audit-table-wrap">
-        <el-table :data="sessionAuditRecords" row-key="id" class="host-session-audit-table" v-loading="isSessionAuditLoading" empty-text="暂无会话审计记录">
+        <el-table :data="sessionAuditRecords" row-key="id" class="host-session-audit-table app-data-table" v-loading="isSessionAuditLoading" empty-text="暂无会话审计记录">
           <el-table-column type="expand" width="48">
             <template #default="{ row }">
               <div class="host-session-audit-detail">

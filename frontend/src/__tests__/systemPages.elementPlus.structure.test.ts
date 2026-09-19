@@ -89,4 +89,35 @@ describe('system pages use Element Plus widgets', () => {
     expect(bulkExecution).not.toMatch(/<(button|select|textarea)\b/);
     expect(bulkExecution).not.toMatch(/<input(?![^>]*hidden)/);
   });
+
+  it('uses the shared user-management table style on every data table', () => {
+    const tableComponents = [
+      'components/tools/AccountManager.vue',
+      'components/tools/LoginLogManager.vue',
+      'components/tools/OperationLogManager.vue',
+      'components/tools/PasswordGenerator.vue',
+      'components/tools/RoleManager.vue',
+      'components/tools/SecurityScanPanel.vue',
+      'components/tools/SessionAuditManager.vue',
+      'components/tools/SubnetCalculator.vue',
+      'components/tools/machine/PingProbe.vue',
+      'components/tools/user/UserTable.vue',
+      'features/bulk-execution/components/BulkExecutionPanel.vue',
+      'features/company/components/DeviceManager.vue',
+      'features/hosts/components/HostImportDialog.vue',
+    ];
+
+    for (const relativePath of tableComponents) {
+      const source = template(relativePath);
+      const tableTags = source.match(/<el-table(?!-)\b[^>]*>/g) ?? [];
+
+      expect(tableTags.length, relativePath).toBeGreaterThan(0);
+      for (const tableTag of tableTags) {
+        expect(tableTag, relativePath).toContain('app-data-table');
+      }
+    }
+
+    expect(template('features/hosts/components/HostTable.vue')).toContain('class="host-table app-data-grid"');
+    expect(template('components/tools/RoleManager.vue')).toContain('class="role-permission-table app-native-data-table"');
+  });
 });

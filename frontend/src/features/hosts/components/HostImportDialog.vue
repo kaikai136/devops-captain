@@ -14,7 +14,7 @@ const emit = defineEmits<{
         <h2>导入主机表格</h2>
         <div class="host-import-body">
           <p>模板只导入主机基础信息，已存在的主机将跳过保留。</p>
-          <el-table :data="previewRows" class="host-import-template-preview" size="small">
+          <el-table :data="previewRows" class="host-import-template-preview app-data-table" size="small">
             <el-table-column prop="group" label="主机分组" />
             <el-table-column prop="name" label="节点" />
             <el-table-column prop="ip" label="IP地址" />

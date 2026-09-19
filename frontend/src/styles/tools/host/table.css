@@ -216,6 +216,12 @@
   text-align: center;
 }
 
+.host-platform-cell {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
 .host-platform-type.linux {
   background: #e8f7ef;
   color: #157047;

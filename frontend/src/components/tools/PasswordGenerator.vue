@@ -74,7 +74,7 @@ const {
           <h2>生成记录</h2>
           <el-tag type="info" effect="plain">{{ passwordHistory.length }} 条</el-tag>
         </div>
-        <el-table :data="passwordHistory" row-key="id" class="password-record-list" empty-text="还没有生成记录。">
+        <el-table :data="passwordHistory" row-key="id" class="password-record-list app-data-table" empty-text="还没有生成记录。">
           <el-table-column label="密码" min-width="220">
             <template #default="{ row }">
               <strong

@@ -69,7 +69,7 @@ function formatHostSystem(host: ManagedHost) {
 
 <template>
   <div class="host-table-scroll">
-    <div class="host-table" :style="props.tableStyle">
+    <div class="host-table app-data-grid" :style="props.tableStyle">
       <div class="host-table-row head">
         <label class="host-select-cell" aria-label="选择所有可见主机">
           <el-checkbox
@@ -171,9 +171,11 @@ function formatHostSystem(host: ManagedHost) {
             <em :title="formatHostSystem(host)">{{ formatHostSystem(host) }}</em>
           </span>
         </div>
-        <span v-if="props.isColumnVisible('platformType')" class="host-platform-type" :class="props.platformType(host.platformType)">
-          {{ props.platformType(host.platformType) }}
-        </span>
+        <div v-if="props.isColumnVisible('platformType')" class="host-platform-cell">
+          <span class="host-platform-type" :class="props.platformType(host.platformType)">
+            {{ props.platformType(host.platformType) }}
+          </span>
+        </div>
         <span v-if="props.isColumnVisible('user')" class="host-user-cell">{{ host.loginUser || '-' }}</span>
         <span v-if="props.isColumnVisible('port')" class="host-port-cell">{{ host.port || 22 }}</span>
         <span v-if="props.isColumnVisible('createdAt')" class="host-date-cell">{{ props.formatDate(host.createdAt) }}</span>

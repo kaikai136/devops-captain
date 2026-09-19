@@ -162,7 +162,7 @@ function emptyForm(): CredentialForm {
       <p v-if="message" class="account-message">{{ message }}</p>
 
       <div class="account-table">
-        <el-table :data="filteredCredentials" row-key="id" class="account-table" empty-text="没有匹配的账号">
+        <el-table :data="filteredCredentials" row-key="id" class="account-table app-data-table" empty-text="没有匹配的账号">
           <el-table-column label="账号名称" min-width="150">
             <template #default="{ row }">
               <div class="account-name">

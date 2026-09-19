@@ -117,7 +117,7 @@ const {
           <h3>详细结果</h3>
           <el-button :disabled="!pingDetails.length || isPinging" @click="clearPingResults">清空</el-button>
         </div>
-        <el-table :data="pingDetails" row-key="sequence" class="ping-detail-list" empty-text="还没有测试结果。">
+        <el-table :data="pingDetails" row-key="sequence" class="ping-detail-list app-data-table" empty-text="还没有测试结果。">
           <el-table-column label="#" width="80">
             <template #default="{ row }">#{{ row.sequence }}</template>
           </el-table-column>

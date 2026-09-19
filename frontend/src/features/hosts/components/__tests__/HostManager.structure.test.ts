@@ -650,7 +650,8 @@ describe('HostManager component structure', () => {
     expect(managerScript).toContain("'--host-select-column-width': '32px'");
     expect(managerScript).toContain("'--host-status-column-width': '86px'");
     expect(managerScript).toContain("'--host-actions-column-width': '132px'");
-    expect(managerScript).toContain("'--host-status-sticky-right': actionsVisible ? 'calc(var(--host-actions-column-width) + 6px)' : '0px'");
+    expect(managerScript).toContain("'--host-status-sticky-right': actionsVisible ? 'var(--host-actions-column-width)' : '0px'");
+    expect(findByClass(tableRoot, 'div', 'host-platform-cell')).toHaveLength(1);
     const resizeEvents = headerResizeHandles.map((handle) => directiveExpression(handle, 'on', 'mousedown'));
     expect(resizeEvents).toEqual(expect.arrayContaining([
       "emit('resize-column-start', 'group', $event)",

@@ -1102,7 +1102,7 @@ function formatFileSize(value: number) {
           </header>
 
           <div class="bulk-record-table">
-            <el-table :data="taskHistory" class="bulk-record-grid" row-key="id" empty-text="暂无批量执行任务" @row-click="(row) => selectTask(row.id, true, false)">
+            <el-table :data="taskHistory" class="bulk-record-grid app-data-table" row-key="id" empty-text="暂无批量执行任务" @row-click="(row) => selectTask(row.id, true, false)">
               <el-table-column width="54" align="center">
                 <template #header>
                   <el-checkbox

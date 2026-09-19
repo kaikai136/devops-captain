@@ -121,7 +121,7 @@ const {
           <article><span>总子网数</span><strong>{{ subnetSplitSummary.count }}</strong></article>
           <article><span>每个子网可用主机</span><strong>{{ subnetSplitSummary.usableHosts }}</strong></article>
         </div>
-        <el-table v-if="subnetResult?.subnets?.length" :data="subnetResult.subnets" row-key="index" class="subnet-table">
+        <el-table v-if="subnetResult?.subnets?.length" :data="subnetResult.subnets" row-key="index" class="subnet-table app-data-table">
           <el-table-column prop="index" label="#" width="80">
             <template #default="{ row }">#{{ row.index }}</template>
           </el-table-column>

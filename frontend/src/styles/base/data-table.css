@@ -1,0 +1,169 @@
+.el-table.app-data-table {
+  --el-table-bg-color: var(--ui-card);
+  --el-table-border-color: var(--ui-border);
+  --el-table-header-bg-color: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
+  --el-table-header-text-color: var(--ui-card-foreground);
+  --el-table-row-hover-bg-color: var(--ui-primary-soft);
+  --el-table-current-row-bg-color: var(--ui-primary-soft);
+  --el-table-text-color: var(--ui-foreground);
+  box-sizing: border-box;
+  display: block;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  gap: 0;
+  padding: 0;
+  border: 1px solid var(--ui-border);
+  border-radius: 0;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
+  font-size: 13px;
+}
+
+.el-table.app-data-table::before,
+.el-table.app-data-table .el-table__inner-wrapper::before {
+  display: none;
+}
+
+.el-table.app-data-table th.el-table__cell,
+.el-table.app-data-table td.el-table__cell {
+  padding: 0;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  text-align: center;
+}
+
+.el-table.app-data-table th.el-table__cell:last-child,
+.el-table.app-data-table td.el-table__cell:last-child {
+  border-right: 0;
+}
+
+.el-table.app-data-table th.el-table__cell {
+  height: 42px;
+  background: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
+  color: var(--ui-card-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.el-table.app-data-table td.el-table__cell {
+  height: 50px;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
+  font-size: 13px;
+}
+
+.el-table.app-data-table .cell {
+  padding: 0 12px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.el-table.app-data-table .el-table-fixed-column--left,
+.el-table.app-data-table .el-table-fixed-column--right {
+  background: var(--ui-card);
+}
+
+.el-table.app-data-table th.el-table-fixed-column--left,
+.el-table.app-data-table th.el-table-fixed-column--right {
+  background: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
+}
+
+.app-data-grid {
+  box-sizing: border-box;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
+  font-size: 13px;
+}
+
+.app-data-grid > .host-table-row {
+  min-height: 50px;
+  gap: 0;
+  border-bottom: 1px solid var(--ui-border);
+  padding: 0;
+}
+
+.app-data-grid > .host-table-row:last-of-type {
+  border-bottom: 0;
+}
+
+.app-data-grid > .host-table-row.head {
+  min-height: 42px;
+  background: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
+  color: var(--ui-card-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.app-data-grid > .host-table-row > * {
+  box-sizing: border-box;
+  min-width: 0;
+  min-height: 100%;
+  border-right: 1px solid var(--ui-border);
+  padding: 0 12px;
+}
+
+.app-data-grid > .host-table-row > :last-child {
+  border-right: 0;
+}
+
+.app-data-grid > .host-table-row > .host-select-cell {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0;
+}
+
+.app-data-grid > .host-table-row > .host-name-link {
+  width: 100%;
+  justify-self: stretch;
+}
+
+.app-data-grid > .host-table-row > :where(span, div, label, button) {
+  align-items: center;
+}
+
+.app-data-grid .host-sticky-cell {
+  background: var(--ui-card);
+}
+
+.app-data-grid > .host-table-row.head .host-sticky-cell {
+  background: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
+}
+
+.app-native-data-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
+  font-size: 13px;
+}
+
+.app-native-data-table th,
+.app-native-data-table td {
+  height: 50px;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  padding: 0 12px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.app-native-data-table tr > :last-child {
+  border-right: 0;
+}
+
+.app-native-data-table tbody:last-child tr:last-child > * {
+  border-bottom: 0;
+}
+
+.app-native-data-table thead th {
+  height: 42px;
+  background: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
+  color: var(--ui-card-foreground);
+  font-size: 13px;
+  font-weight: 600;
+}

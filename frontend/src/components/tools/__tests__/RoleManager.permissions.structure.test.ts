@@ -18,7 +18,7 @@ describe('RoleManager permission dialog', () => {
   });
 
   it('renders permissions as a three-column table with merged module cells', () => {
-    expect(template).toContain('class="role-permission-table"');
+    expect(template).toContain('class="role-permission-table app-native-data-table"');
     expect(template).toContain(':rowspan="group.items.length"');
     expect(template).toContain('<th scope="col">模块</th>');
     expect(template).toContain('<th scope="col">页面</th>');

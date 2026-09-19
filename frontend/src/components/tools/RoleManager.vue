@@ -519,7 +519,7 @@ function emptyRoleForm(): RoleForm {
 
         <p v-if="message" class="role-message" :class="messageTone">{{ message }}</p>
 
-        <el-table :data="pagedRoles" row-key="id" class="role-table" v-loading="isLoading" empty-text="暂无角色数据">
+        <el-table :data="pagedRoles" row-key="id" class="role-table app-data-table" v-loading="isLoading" empty-text="暂无角色数据">
           <el-table-column type="index" label="序号" width="76" :index="(index) => (page - 1) * pageSize + index + 1" />
           <el-table-column prop="name" label="角色名称" min-width="150" />
           <el-table-column label="角色标识" min-width="130">
@@ -614,7 +614,7 @@ function emptyRoleForm(): RoleForm {
             />
 
             <div class="role-permission-table-wrap">
-              <table class="role-permission-table">
+              <table class="role-permission-table app-native-data-table">
                 <colgroup>
                   <col class="role-permission-module-column" />
                   <col class="role-permission-page-column" />
