@@ -1440,7 +1440,18 @@ function formatFileSize(value: number) {
           </template>
       </el-dialog>
 
-      <el-drawer v-model="isTaskDetailOpen" class="bulk-task-detail bulk-task-detail-modal" title="执行详情" size="760px" :close-on-click-modal="false" @close="closeTaskDetail">
+      <el-dialog
+        v-model="isTaskDetailOpen"
+        class="bulk-task-detail-modal"
+        title="执行详情"
+        width="min(1440px, calc(100vw - 48px))"
+        top="24px"
+        append-to-body
+        destroy-on-close
+        :close-on-click-modal="false"
+        @close="closeTaskDetail"
+      >
+        <div class="bulk-task-detail">
           <template v-if="selectedTask">
             <header>
               <div>
@@ -1562,7 +1573,8 @@ function formatFileSize(value: number) {
             </div>
           </template>
           <el-empty v-else class="bulk-empty" description="请选择一个任务查看结果" />
-      </el-drawer>
+        </div>
+      </el-dialog>
     </article>
     <div v-else class="permission-empty">暂无可用功能</div>
   </section>

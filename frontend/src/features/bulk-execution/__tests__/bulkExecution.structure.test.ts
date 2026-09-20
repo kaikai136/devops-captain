@@ -91,7 +91,8 @@ describe('bulk execution frontend contract', () => {
     expect(panel).toContain('bulk-status-filter');
     expect(panel).toContain('isTaskDetailOpen');
     expect(panel).toContain('<el-dialog v-model="isTargetPickerOpen"');
-    expect(panel).toContain('<el-drawer v-model="isTaskDetailOpen"');
+    expect(panel).toContain('v-model="isTaskDetailOpen"');
+    expect(panel).not.toContain('<el-drawer v-model="isTaskDetailOpen"');
     expect(panel).toContain('bulk-execute-view');
     expect(panel).toContain('bulk-upload-view');
     expect(panel).toContain('taskHistory');
@@ -114,8 +115,10 @@ describe('bulk execution frontend contract', () => {
 
     expect(panel).toContain('bulk-task-detail-modal');
     expect(panel).toContain('bulk-command-block');
-    expect(styles).toContain('width: min(1520px, calc(100vw - 32px))');
-    expect(styles).toContain('height: min(900px, calc(100vh - 32px))');
+    expect(styles).toContain('width: min(1440px, calc(100vw - 48px))');
+    expect(styles).toContain('height: min(880px, calc(100dvh - 48px))');
+    expect(styles).toContain('.bulk-task-detail-modal .el-dialog__body');
+    expect(styles).toContain('overflow-x: hidden');
     expect(styles).toContain('max-height: clamp(170px, 24vh, 280px)');
     expect(styles).toContain('white-space: pre');
     expect(styles).toContain('word-break: normal');
@@ -334,7 +337,7 @@ describe('bulk execution frontend contract', () => {
 
   it('uses the detail modal primary action to expand or collapse all host outputs', () => {
     const panel = readSource('features/bulk-execution/components/BulkExecutionPanel.vue');
-    const detailModal = panel.match(/<el-drawer v-model="isTaskDetailOpen"[\s\S]*?<\/el-drawer>/)?.[0] ?? '';
+    const detailModal = panel.match(/<el-dialog[\s\S]*?v-model="isTaskDetailOpen"[\s\S]*?<\/el-dialog>/)?.[0] ?? '';
 
     expect(panel).toContain('allResultsExpanded');
     expect(panel).toContain('toggleAllResults');
