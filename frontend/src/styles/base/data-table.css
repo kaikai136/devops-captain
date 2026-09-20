@@ -1,3 +1,17 @@
+:root {
+  --app-table-gutter: 8px;
+  --app-table-section-gutter: var(--workspace-panel-padding, 16px);
+}
+
+.app-data-table-wrap {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 var(--app-table-section-gutter) 2px;
+}
+
 .el-table.app-data-table {
   --el-table-bg-color: var(--ui-card);
   --el-table-border-color: var(--ui-border);
@@ -8,8 +22,8 @@
   --el-table-text-color: var(--ui-foreground);
   box-sizing: border-box;
   display: block;
-  width: calc(100% - 16px);
-  margin: 0 8px;
+  width: calc(100% - (var(--app-table-gutter) * 2));
+  margin: 0 var(--app-table-gutter);
   gap: 0;
   padding: 0;
   border: 1px solid var(--ui-border);
@@ -70,8 +84,8 @@
 
 .app-data-grid {
   box-sizing: border-box;
-  width: calc(100% - 16px);
-  margin: 0 8px;
+  width: calc(100% - (var(--app-table-gutter) * 2));
+  margin: 0 var(--app-table-gutter);
   border: 1px solid var(--ui-border);
   background: var(--ui-card);
   color: var(--ui-foreground);

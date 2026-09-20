@@ -531,47 +531,49 @@ function emptyRoleForm(): RoleForm {
 
         <p v-if="message" class="role-message" :class="messageTone">{{ message }}</p>
 
-        <el-table :data="pagedRoles" row-key="id" class="role-table app-data-table" v-loading="isLoading" empty-text="暂无角色数据">
-          <el-table-column type="index" label="序号" width="76" :index="(index) => (page - 1) * pageSize + index + 1" />
-          <el-table-column prop="name" label="角色名称" min-width="150" />
-          <el-table-column label="角色标识" min-width="130">
-            <template #default="{ row }">{{ roleCode(row) }}</template>
-          </el-table-column>
-          <el-table-column label="状态" min-width="100">
-            <template #default>
-              <el-tag type="success" size="small" effect="dark">启用</el-tag>
-            </template>
-          </el-table-column>
-          <el-table-column label="用户数据" min-width="150">
-            <template #default="{ row }">
-              <el-button v-if="canUsePageAction('roles', 'edit')" text type="primary" @click.stop="openRoleUserDialog(row)">
-                {{ row.userCount ?? 0 }} 个用户
-              </el-button>
-              <span v-else>{{ row.userCount ?? 0 }} 个用户</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="权限管理" min-width="140">
-            <template #default="{ row }">
-              <el-button v-if="canUsePageAction('roles', 'permissions')" text type="primary" :title="permissionText(row)" @click="openPermissionDialog(row)">
-                管理
-              </el-button>
-              <span v-else class="role-action-placeholder">-</span>
-            </template>
-          </el-table-column>
-          <el-table-column label="操作" min-width="230" fixed="right">
-            <template #default="{ row }">
-              <div class="role-row-actions">
-                <el-button size="small" @click="openViewDialog(row)"><AppIcon name="eye" :size="13" />查看</el-button>
-                <el-button v-if="canUsePageAction('roles', 'edit')" size="small" type="primary" @click="openEditDialog(row)">
-                  <AppIcon name="edit" :size="13" />编辑
+        <div class="role-table-wrap app-data-table-wrap">
+          <el-table :data="pagedRoles" row-key="id" class="role-table app-data-table" v-loading="isLoading" empty-text="暂无角色数据">
+            <el-table-column type="index" label="序号" width="76" :index="(index) => (page - 1) * pageSize + index + 1" />
+            <el-table-column prop="name" label="角色名称" min-width="150" />
+            <el-table-column label="角色标识" min-width="130">
+              <template #default="{ row }">{{ roleCode(row) }}</template>
+            </el-table-column>
+            <el-table-column label="状态" min-width="100">
+              <template #default>
+                <el-tag type="success" size="small" effect="dark">启用</el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="用户数据" min-width="150">
+              <template #default="{ row }">
+                <el-button v-if="canUsePageAction('roles', 'edit')" text type="primary" @click.stop="openRoleUserDialog(row)">
+                  {{ row.userCount ?? 0 }} 个用户
                 </el-button>
-                <el-button v-if="canUsePageAction('roles', 'delete')" size="small" type="danger" @click="deleteTarget = row">
-                  <AppIcon name="trash" :size="13" />删除
+                <span v-else>{{ row.userCount ?? 0 }} 个用户</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="权限管理" min-width="140">
+              <template #default="{ row }">
+                <el-button v-if="canUsePageAction('roles', 'permissions')" text type="primary" :title="permissionText(row)" @click="openPermissionDialog(row)">
+                  管理
                 </el-button>
-              </div>
-            </template>
-          </el-table-column>
-        </el-table>
+                <span v-else class="role-action-placeholder">-</span>
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" min-width="230" fixed="right">
+              <template #default="{ row }">
+                <div class="role-row-actions">
+                  <el-button size="small" @click="openViewDialog(row)"><AppIcon name="eye" :size="13" />查看</el-button>
+                  <el-button v-if="canUsePageAction('roles', 'edit')" size="small" type="primary" @click="openEditDialog(row)">
+                    <AppIcon name="edit" :size="13" />编辑
+                  </el-button>
+                  <el-button v-if="canUsePageAction('roles', 'delete')" size="small" type="danger" @click="deleteTarget = row">
+                    <AppIcon name="trash" :size="13" />删除
+                  </el-button>
+                </div>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
 
         <div class="host-pagination" aria-label="角色列表分页">
           <AppPagination

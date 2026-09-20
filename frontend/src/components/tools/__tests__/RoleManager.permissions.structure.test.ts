@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 const componentSource = readFileSync(fileURLToPath(new URL('../RoleManager.vue', import.meta.url)), 'utf8');
 const template = parseSfc(componentSource, { filename: 'RoleManager.vue' }).descriptor.template?.content ?? '';
 const styles = readFileSync(fileURLToPath(new URL('../../../styles/tools/role-manager.css', import.meta.url)), 'utf8');
+const tableStyles = readFileSync(fileURLToPath(new URL('../../../styles/base/data-table.css', import.meta.url)), 'utf8');
 
 describe('RoleManager permission dialog', () => {
   it('uses the shared list toolbar layout for role management', () => {
@@ -16,6 +17,19 @@ describe('RoleManager permission dialog', () => {
     expect(styles).toMatch(/\.role-list-panel\s*\{[\s\S]*min-width:\s*0;/);
     expect(styles).toMatch(/\.role-list-toolbar\s*\{[\s\S]*border-bottom:\s*1px solid var\(--ui-border\);/);
     expect(styles).toMatch(/\.role-toolbar-actions\s*\{[\s\S]*flex-wrap:\s*wrap;/);
+  });
+
+  it('uses the shared login-log table presentation and an isolated scroll region', () => {
+    expect(template).toContain('class="role-table-wrap app-data-table-wrap"');
+    expect(template).toContain('class="role-table app-data-table"');
+    expect(template).toContain('class="host-pagination"');
+    expect(styles).not.toContain('.role-list-panel .el-table {');
+    expect(styles).toMatch(/\.role-list-panel > \.host-pagination\s*\{[\s\S]*margin:\s*0 var\(--workspace-panel-padding\);/);
+    expect(tableStyles).toContain('--app-table-section-gutter: var(--workspace-panel-padding, 16px);');
+    expect(tableStyles).toMatch(/\.app-data-table-wrap\s*\{[\s\S]*padding:\s*0 var\(--app-table-section-gutter\) 2px;/);
+    expect(tableStyles).toMatch(/\.app-data-table-wrap\s*\{[\s\S]*overflow:\s*auto;/);
+    expect(tableStyles).toContain('--app-table-gutter: 8px;');
+    expect(tableStyles).toMatch(/\.el-table\.app-data-table\s*\{[\s\S]*width:\s*calc\(100% - \(var\(--app-table-gutter\) \* 2\)\);[\s\S]*margin:\s*0 var\(--app-table-gutter\);[\s\S]*border:\s*1px solid var\(--ui-border\);/);
   });
 
   it('renders permissions as a three-column table with merged module cells', () => {

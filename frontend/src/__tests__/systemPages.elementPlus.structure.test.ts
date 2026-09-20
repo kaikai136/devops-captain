@@ -141,4 +141,10 @@ describe('system pages use Element Plus widgets', () => {
     expect(template('features/hosts/components/HostTable.vue')).toContain('class="host-table app-data-grid"');
     expect(template('components/tools/RoleManager.vue')).toContain('class="role-permission-table app-native-data-table"');
   });
+
+  it('uses one shared width container for the management log tables', () => {
+    for (const relativePath of ['components/tools/LoginLogManager.vue', 'components/tools/OperationLogManager.vue']) {
+      expect(template(relativePath), relativePath).toContain('class="login-log-table-wrap app-data-table-wrap"');
+    }
+  });
 });

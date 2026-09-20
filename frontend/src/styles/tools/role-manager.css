@@ -122,13 +122,6 @@
   color: #12b99f;
 }
 
-.role-table {
-  width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-  border: 0;
-}
-
 .role-table-row {
   display: grid;
   grid-template-columns: 54px minmax(160px, 1fr) minmax(150px, 0.9fr) minmax(96px, 0.62fr) minmax(120px, 0.72fr) minmax(130px, 0.74fr) 250px;
@@ -837,77 +830,13 @@ button.role-user-count:hover {
     min-height: 0;
   }
 
-  .role-table {
-    overflow-x: auto;
-  }
-
   .role-table-row {
     min-width: 980px;
   }
 }
 
-.role-list-panel .el-table {
-  --el-table-bg-color: var(--ui-card);
-  --el-table-border-color: var(--ui-border);
-  --el-table-header-bg-color: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
-  --el-table-row-hover-bg-color: var(--ui-primary-soft);
-  --el-table-text-color: var(--ui-foreground);
-  box-sizing: border-box;
-  width: calc(100% - 16px);
-  min-width: 0;
-  margin: 0 8px;
-  border-top: 1px solid var(--ui-border);
-  border-right: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
-  border-left: 1px solid var(--ui-border);
-  border-radius: 0;
-}
-
-.role-list-panel .el-table::before,
-.role-list-panel .el-table__inner-wrapper::before {
-  display: none;
-}
-
-.role-list-panel .el-table th.el-table__cell,
-.role-list-panel .el-table td.el-table__cell {
-  padding: 0;
-  border-right: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
-  text-align: center;
-}
-
-.role-list-panel .el-table th.el-table__cell:last-child,
-.role-list-panel .el-table td.el-table__cell:last-child {
-  border-right: 0;
-}
-
-.role-list-panel .el-table th.el-table__cell {
-  height: 42px;
-  background: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
-  color: var(--ui-card-foreground);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.role-list-panel .el-table td.el-table__cell {
-  height: 50px;
-  background: var(--ui-card);
-  color: var(--ui-foreground);
-  font-size: 13px;
-}
-
-.role-list-panel .el-table .cell {
-  padding: 0 12px;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.role-list-panel .el-table-fixed-column--right {
-  background: var(--ui-card);
-}
-
 .role-list-panel > .host-pagination {
-  border-top: 0;
+  margin: 0 var(--workspace-panel-padding);
 }
 
 .role-row-actions {

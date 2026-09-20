@@ -69,7 +69,7 @@ function hasRowActions() {
 
 <template>
   <div class="user-table" :style="tableStyle">
-    <div class="user-table-scroll">
+    <div class="user-table-scroll app-data-table-wrap">
       <el-table :data="users" row-key="id" class="app-data-table" :empty-text="isLoading ? '加载中...' : '暂无匹配账户'">
       <el-table-column v-if="isColumnVisible('username')" label="登录名" min-width="150">
         <template #default="{ row }">
@@ -158,7 +158,7 @@ function hasRowActions() {
       </el-table>
     </div>
 
-    <div v-show="filteredCount > 0" class="user-table-pagination" aria-label="用户列表分页">
+    <div v-show="filteredCount > 0" class="user-table-pagination host-pagination" aria-label="用户列表分页">
       <AppPagination
         :page="page"
         :page-size="pageSize"

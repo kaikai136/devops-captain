@@ -267,71 +267,6 @@
   border: 0;
 }
 
-.user-table-scroll {
-  width: 100%;
-  min-width: 0;
-  overflow-x: auto;
-}
-
-.user-table .el-table {
-  --el-table-bg-color: var(--ui-card);
-  --el-table-border-color: var(--ui-border);
-  --el-table-header-bg-color: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
-  --el-table-row-hover-bg-color: var(--ui-primary-soft);
-  --el-table-text-color: var(--ui-foreground);
-  box-sizing: border-box;
-  width: calc(100% - 16px);
-  margin: 0 8px;
-  border-top: 1px solid var(--ui-border);
-  border-right: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
-  border-left: 1px solid var(--ui-border);
-  border-radius: 0;
-}
-
-.user-table .el-table::before,
-.user-table .el-table__inner-wrapper::before {
-  display: none;
-}
-
-.user-table .el-table th.el-table__cell,
-.user-table .el-table td.el-table__cell {
-  padding: 0;
-  border-right: 1px solid var(--ui-border);
-  border-bottom: 1px solid var(--ui-border);
-  text-align: center;
-}
-
-.user-table .el-table th.el-table__cell:last-child,
-.user-table .el-table td.el-table__cell:last-child {
-  border-right: 0;
-}
-
-.user-table .el-table th.el-table__cell {
-  height: 42px;
-  background: color-mix(in srgb, var(--ui-muted) 55%, var(--ui-card));
-  color: var(--ui-card-foreground);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.user-table .el-table td.el-table__cell {
-  height: 50px;
-  background: var(--ui-card);
-  color: var(--ui-foreground);
-  font-size: 13px;
-}
-
-.user-table .el-table .cell {
-  padding: 0 12px;
-  line-height: 1.4;
-  text-align: center;
-}
-
-.user-table .el-table-fixed-column--right {
-  background: var(--ui-card);
-}
-
 .user-table .user-login-name,
 .user-table .user-row-actions {
   justify-content: center;
@@ -572,7 +507,7 @@
   display: flex;
   align-items: center;
   min-height: 64px;
-  margin: 0 8px;
+  margin: 0 var(--workspace-panel-padding);
   padding: 14px 0 16px;
   overflow-x: auto;
 }
