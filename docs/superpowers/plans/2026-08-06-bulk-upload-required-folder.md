@@ -6,7 +6,7 @@
 
 **Architecture:** Keep the existing `BulkExecutionTask` and upload metadata models. The frontend will carry one `relativePaths` entry per selected `File`, send those entries in the same order as multipart `files`, and show the relative path in the selection list. The backend will normalize and validate each relative path, store it in `BulkExecutionUploadFile.filename`, derive the remote path with `join_remote_path`, check duplicates using the complete path, and create remote parent directories before copying nested files.
 
-**Tech Stack:** Django REST Framework, Django TestCase, ansible-runner, Vue 3, TypeScript, Vitest.
+**Tech Stack:** Django REST Framework, Django TestCase, Paramiko/SSH/SFTP, Vue 3, TypeScript, Vitest.
 
 ## Global Constraints
 
@@ -33,7 +33,7 @@
 - Produces: `BulkExecutionUploadFile.filename` as a safe local relative path such as `release/config/app.yml`.
 - Produces: `BulkExecutionUploadFile.remote_path` and transfer `remote_path` as `/tmp/release/config/app.yml`.
 - Produces: duplicate-check requests that pass complete relative filenames to `inspect_bulk_upload_target`.
-- Produces: per-file remote parent-directory creation before `ansible.builtin.copy`.
+- Produces: per-file remote parent-directory creation as part of the shared SFTP/SSH upload flow.
 
 - [ ] **Step 1: Write failing backend tests for nested paths, positional metadata, and unsafe paths**
 
@@ -155,33 +155,22 @@ Expected: all `BulkExecutionApiTests` pass, including the existing flat/multi-fi
 
 - [ ] **Step 7: Write a failing runner test for remote parent directories**
 
-Extend the multi-file runner test with nested paths and assert that every upload first invokes `ansible.builtin.file` with a `path=<parent> state=directory` module argument, then invokes `ansible.builtin.copy` with the nested destination. The event callback for the directory task must be able to emit a failure without marking a transfer successful.
+Extend the multi-file runner test with nested paths and assert that every upload calls the shared streaming transfer service with the nested parent directory and final filename.
 
 Use this focused assertion shape:
 
 ```python
 self.assertEqual(
-    [(call["module"], call["module_args"]) for call in calls],
+    [(directory, filename) for directory, filename, _ in calls],
     [
-        ("ansible.builtin.file", "path=/srv/app/release/config state=directory"),
-        ("ansible.builtin.copy", "src=... dest=/srv/app/release/config/app.yml force=yes"),
+        ("/srv/app/release/config", "app.yml"),
     ],
 )
 ```
 
 - [ ] **Step 8: Implement parent-directory creation and failure propagation**
 
-In `run_upload_file_item`, derive the parent with `parent_remote_path(upload_file.remote_path)`. Run `ansible.builtin.file` with `path=<quoted parent> state=directory` before the existing copy call. Add a small event handler for the directory phase that:
-
-```python
-if event_name == "runner_on_failed" or event_name == "runner_on_unreachable":
-    mark the matching transfer failed with the returned error
-    mark the matching host result failed
-    return True
-return True
-```
-
-If the directory runner result is failed or canceled, return it without running copy. A successful directory phase must leave the transfer pending/running state for the subsequent copy phase. Keep shell quoting for both `path` and `dest`, and do not construct a shell command from an unvalidated client path.
+In `run_upload_file_item`, derive the parent with `parent_remote_path(upload_file.remote_path)` and pass the file stream to the shared remote-file upload service. The SFTP path creates missing parent directories and writes to a temporary remote file before rename; the SSH-stream fallback performs the same parent-directory and atomic-replacement flow. Propagate transfer failures to the matching host result and do not construct a shell command from an unvalidated client path.
 
 - [ ] **Step 9: Run all backend bulk-execution tests**
 

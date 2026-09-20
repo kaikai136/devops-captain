@@ -254,37 +254,19 @@ class BulkExecutionApiTests(TestCase):
         self.assertFalse(BulkExecutionTask.objects.exists())
         start_task.assert_not_called()
 
-    def test_create_task_accepts_playbook_execution_type(self):
+    def test_create_task_rejects_unsupported_execution_type(self):
         self.grant("access_bulkExecution", "action_bulkExecution_execute")
-        playbook = "- hosts: all\n  tasks:\n    - ansible.builtin.ping:\n"
 
-        with patch("bulk_execution.views.start_bulk_execution_task"):
+        with patch("bulk_execution.views.start_bulk_execution_task") as start_task:
             response = self.client.post(
                 "/api/bulk-execution/tasks/",
-                data={"targetIds": [self.linux.id], "command": playbook, "executionType": "playbook", "name": "ping playbook"},
+                data={"targetIds": [self.linux.id], "command": "uptime", "executionType": "unsupported", "name": "unsupported task"},
                 content_type="application/json",
             )
 
-        self.assertEqual(response.status_code, 201)
-        self.assertEqual(response.json()["executionType"], "playbook")
-        task = BulkExecutionTask.objects.get(name="ping playbook")
-        self.assertEqual(task.execution_type, BulkExecutionTask.EXECUTION_PLAYBOOK)
-
-    def test_create_task_accepts_long_playbook_scripts(self):
-        self.grant("access_bulkExecution", "action_bulkExecution_execute")
-        playbook = "- hosts: all\n  gather_facts: false\n  tasks:\n    - name: Long playbook\n      ansible.builtin.debug:\n        msg: '" + ("x" * 5000) + "'\n"
-
-        with patch("bulk_execution.views.start_bulk_execution_task"):
-            response = self.client.post(
-                "/api/bulk-execution/tasks/",
-                data={"targetIds": [self.linux.id], "command": playbook, "executionType": "playbook", "name": "long playbook"},
-                content_type="application/json",
-            )
-
-        self.assertEqual(response.status_code, 201)
-        task = BulkExecutionTask.objects.get(name="long playbook")
-        self.assertEqual(task.execution_type, BulkExecutionTask.EXECUTION_PLAYBOOK)
-        self.assertEqual(task.command, playbook)
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(BulkExecutionTask.objects.exists())
+        start_task.assert_not_called()
 
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bulk-upload-test-"))
     def test_create_file_upload_task_accepts_multipart_file_and_selected_targets(self):
@@ -628,13 +610,10 @@ class BulkExecutionRunnerTests(TestCase):
             self.assertEqual(timeout, 300)
             return "api-01\n", "", 0
 
-        with patch("bulk_execution.services.run_plain_ssh_command", side_effect=fake_run) as shell_runner, patch(
-            "bulk_execution.services.run_ansible_shell"
-        ) as ansible_runner:
+        with patch("bulk_execution.services.run_plain_ssh_command", side_effect=fake_run) as shell_runner:
             run_bulk_execution_task(task.id)
 
         shell_runner.assert_called_once()
-        ansible_runner.assert_not_called()
         task.refresh_from_db()
         result = task.results.get()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_COMPLETED)
@@ -648,156 +627,40 @@ class BulkExecutionRunnerTests(TestCase):
         self.assertIsNotNone(result.started_at)
         self.assertIsNotNone(result.finished_at)
 
-    def test_playbook_task_runs_ansible_playbook_file(self):
-        playbook = "- hosts: all\n  gather_facts: false\n  tasks:\n    - ansible.builtin.command: hostname\n"
-        task = create_bulk_execution_task(
-            self.user,
-            {"targetIds": [self.host.id], "command": playbook, "name": "hostnames playbook", "executionType": "playbook"},
-        )
-
-        def fake_run(**kwargs):
-            self.assertNotIn("module", kwargs)
-            self.assertEqual(kwargs["playbook"], "playbook.yml")
-            playbook_path = kwargs["private_data_dir"] + "/project/playbook.yml"
-            with open(playbook_path, "r", encoding="utf-8") as handle:
-                self.assertEqual(handle.read(), playbook)
-            kwargs["event_handler"]({"event": "runner_on_start", "event_data": {"host": "host_1"}})
-            kwargs["event_handler"](
-                {"event": "runner_on_ok", "event_data": {"host": "host_1", "res": {"stdout": "api-01\n", "stderr": "", "rc": 0}}}
-            )
-            return SimpleNamespace(status="successful", rc=0)
-
-        with patch("bulk_execution.services.run_ansible_playbook", side_effect=fake_run):
-            run_bulk_execution_task(task.id)
-
-        task.refresh_from_db()
-        self.assertEqual(task.status, BulkExecutionTask.STATUS_COMPLETED)
-        self.assertIn("ok: [host_1]", task.results.get().stdout)
-        self.assertIn("api-01", task.results.get().stdout)
-
-    def test_playbook_task_records_ansible_style_log(self):
-        playbook = "- hosts: all\n  gather_facts: false\n  tasks:\n    - name: Check hostname\n      ansible.builtin.command: hostname\n"
-        task = create_bulk_execution_task(
-            self.user,
-            {"targetIds": [self.host.id], "command": playbook, "name": "ansible style log", "executionType": "playbook"},
-        )
-
-        def fake_run(**kwargs):
-            kwargs["event_handler"]({"event": "playbook_on_play_start", "event_data": {"play": "all"}})
-            kwargs["event_handler"]({"event": "playbook_on_task_start", "event_data": {"task": "Check hostname"}})
-            kwargs["event_handler"]({"event": "runner_on_start", "event_data": {"host": "host_1"}})
-            kwargs["event_handler"](
-                {
-                    "event": "runner_on_ok",
-                    "event_data": {"host": "host_1", "res": {"stdout": "api-01\n", "stderr": "", "rc": 0, "changed": False}},
-                }
-            )
-            kwargs["event_handler"](
-                {
-                    "event": "playbook_on_stats",
-                    "event_data": {
-                        "ok": {"host_1": 1},
-                        "changed": {"host_1": 0},
-                        "failures": {"host_1": 0},
-                        "dark": {"host_1": 0},
-                        "skipped": {"host_1": 0},
-                        "rescued": {"host_1": 0},
-                        "ignored": {"host_1": 0},
-                    },
-                }
-            )
-            return SimpleNamespace(status="successful", rc=0)
-
-        with patch("bulk_execution.services.run_ansible_playbook", side_effect=fake_run):
-            run_bulk_execution_task(task.id)
-
-        task.refresh_from_db()
-        result = task.results.get()
-        self.assertIn("PLAY [all]", result.stdout)
-        self.assertIn("TASK [Check hostname]", result.stdout)
-        self.assertIn("ok: [host_1]", result.stdout)
-        self.assertIn("api-01", result.stdout)
-        self.assertEqual(result.stderr, "")
-        self.assertIn("PLAY [all]", task.log_output)
-        self.assertIn("TASK [Check hostname]", task.log_output)
-        self.assertIn("ok: [10.1.0.10]", task.log_output)
-        self.assertIn("PLAY RECAP", task.log_output)
-        self.assertIn("ok=1", task.log_output)
-
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bulk-upload-runner-test-"))
-    def test_file_upload_task_runs_ansible_copy_module(self):
+    def test_file_upload_task_streams_through_shared_transfer_service(self):
         upload = SimpleUploadedFile("payload.txt", b"payload", content_type="text/plain")
         from .services import create_bulk_file_upload_task
 
         task = create_bulk_file_upload_task(
             self.user,
-            {"targetIds": [self.host.id], "remoteDirectory": "/tmp/", "name": "upload payload"},
+            {"targetIds": [self.host.id], "remoteDirectory": "/tmp/", "overwrite": True, "name": "upload payload"},
             upload,
         )
 
-        def fake_run(**kwargs):
-            self.assertEqual(kwargs["module"], "ansible.builtin.copy")
-            self.assertIn("src=", kwargs["module_args"])
-            self.assertIn("dest=/tmp/payload.txt", kwargs["module_args"])
-            kwargs["event_handler"]({"event": "runner_on_start", "event_data": {"host": "host_1"}})
-            kwargs["event_handler"](
-                {"event": "runner_on_ok", "event_data": {"host": "host_1", "res": {"stdout": "copied\n", "stderr": "", "rc": 0}}}
-            )
-            return SimpleNamespace(status="successful", rc=0)
+        def fake_upload(host, directory, filename, source, relative_path=""):
+            self.assertEqual(host.id, self.host.id)
+            self.assertEqual(directory, "/tmp")
+            self.assertEqual(filename, "payload.txt")
+            self.assertEqual(source.read(), b"payload")
+            return {"size": 7, "protocol": "SFTP protocol"}
 
-        with patch("bulk_execution.services.run_ansible_shell", side_effect=fake_run):
+        with patch("bulk_execution.services.upload_remote_file_stream", side_effect=fake_upload) as uploader:
             run_bulk_execution_task(task.id)
 
+        uploader.assert_called_once()
         task.refresh_from_db()
+        result = task.results.get()
+        transfer = result.transfers.get()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_COMPLETED)
-        self.assertEqual(task.results.get().stdout, "copied\n")
+        self.assertEqual(result.status, BulkExecutionResult.STATUS_SUCCESS)
+        self.assertEqual(transfer.status, BulkExecutionTransferItem.STATUS_SUCCESS)
+        self.assertIn("SFTP protocol", result.stdout)
         self.assertFalse(task.upload_file.storage.exists(task.upload_file.name))
 
     @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bulk-upload-runner-multi-test-"))
-    def test_multi_file_upload_updates_transfer_items_and_aggregates_host_result(self):
+    def test_multi_file_upload_preserves_nested_remote_paths(self):
         deploy = SimpleUploadedFile("deploy.txt", b"deploy\n", content_type="text/plain")
-        config = SimpleUploadedFile("config.yml", b"name: api\n", content_type="text/yaml")
-        from .services import create_bulk_file_upload_task
-
-        task = create_bulk_file_upload_task(
-            self.user,
-            {"targetIds": [self.host.id], "remoteDirectory": "/srv/app", "overwrite": True, "name": "bundle upload"},
-            [deploy, config],
-        )
-        calls = []
-
-        def fake_run(**kwargs):
-            calls.append(kwargs["module_args"])
-            self.assertEqual(kwargs["module"], "ansible.builtin.copy")
-            self.assertIn("force=yes", kwargs["module_args"])
-            kwargs["event_handler"]({"event": "runner_on_start", "event_data": {"host": "host_1"}})
-            if "deploy.txt" in kwargs["module_args"]:
-                kwargs["event_handler"](
-                    {"event": "runner_on_ok", "event_data": {"host": "host_1", "res": {"stdout": "deploy copied\n", "stderr": "", "rc": 0}}}
-                )
-            else:
-                kwargs["event_handler"](
-                    {"event": "runner_on_ok", "event_data": {"host": "host_1", "res": {"stdout": "config copied\n", "stderr": "", "rc": 0}}}
-                )
-            return SimpleNamespace(status="successful", rc=0)
-
-        with patch("bulk_execution.services.run_ansible_shell", side_effect=fake_run):
-            run_bulk_execution_task(task.id)
-
-        task.refresh_from_db()
-        result = task.results.get()
-        transfers = list(result.transfers.order_by("id"))
-        self.assertEqual(len(calls), 2)
-        self.assertEqual(task.status, BulkExecutionTask.STATUS_COMPLETED)
-        self.assertEqual(result.status, BulkExecutionResult.STATUS_SUCCESS)
-        self.assertEqual(result.stdout, "deploy copied\nconfig copied\n")
-        self.assertEqual([transfer.status for transfer in transfers], ["success", "success"])
-        self.assertEqual([transfer.remote_path for transfer in transfers], ["/srv/app/deploy.txt", "/srv/app/config.yml"])
-        for upload_file in task.upload_files.all():
-            self.assertFalse(upload_file.file.storage.exists(upload_file.file.name))
-
-    @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bulk-upload-runner-relative-test-"))
-    def test_file_upload_creates_remote_parent_directory_before_copy(self):
         config = SimpleUploadedFile("app.yml", b"name: api\n", content_type="text/yaml")
         from .services import create_bulk_file_upload_task
 
@@ -807,83 +670,61 @@ class BulkExecutionRunnerTests(TestCase):
                 "targetIds": [self.host.id],
                 "remoteDirectory": "/srv/app",
                 "overwrite": True,
-                "name": "nested upload",
-                "relativePaths": ["release/config/app.yml"],
+                "name": "bundle upload",
+                "relativePaths": ["deploy.txt", "release/config/app.yml"],
             },
-            [config],
+            [deploy, config],
         )
         calls = []
 
-        def fake_run(**kwargs):
-            calls.append((kwargs["module"], kwargs["module_args"]))
-            if kwargs["module"] == "ansible.builtin.file":
-                kwargs["event_handler"]({"event": "runner_on_start", "event_data": {"host": "host_1"}})
-                kwargs["event_handler"](
-                    {"event": "runner_on_ok", "event_data": {"host": "host_1", "res": {"stdout": "", "stderr": "", "rc": 0}}}
-                )
-                return SimpleNamespace(status="successful", rc=0)
-            self.assertEqual(kwargs["module"], "ansible.builtin.copy")
-            kwargs["event_handler"]({"event": "runner_on_start", "event_data": {"host": "host_1"}})
-            kwargs["event_handler"](
-                {"event": "runner_on_ok", "event_data": {"host": "host_1", "res": {"stdout": "copied\n", "stderr": "", "rc": 0}}}
-            )
-            return SimpleNamespace(status="successful", rc=0)
+        def fake_upload(host, directory, filename, source, relative_path=""):
+            calls.append((directory, filename, source.read()))
+            return {"size": len(calls[-1][2]), "protocol": "SFTP protocol"}
 
-        with patch("bulk_execution.services.run_ansible_shell", side_effect=fake_run):
+        with patch("bulk_execution.services.upload_remote_file_stream", side_effect=fake_upload):
             run_bulk_execution_task(task.id)
 
-        self.assertEqual(calls[0], ("ansible.builtin.file", "path=/srv/app/release/config state=directory"))
-        self.assertEqual(calls[1][0], "ansible.builtin.copy")
-        self.assertIn("dest=/srv/app/release/config/app.yml", calls[1][1])
         task.refresh_from_db()
+        result = task.results.get()
+        self.assertEqual(
+            [(directory, filename) for directory, filename, _ in calls],
+            [("/srv/app", "deploy.txt"), ("/srv/app/release/config", "app.yml")],
+        )
         self.assertEqual(task.status, BulkExecutionTask.STATUS_COMPLETED)
-        self.assertEqual(task.results.get().stdout, "copied\n")
+        self.assertEqual(result.status, BulkExecutionResult.STATUS_SUCCESS)
+        self.assertEqual([item.status for item in result.transfers.order_by("id")], ["success", "success"])
 
-    @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bulk-upload-runner-relative-fail-test-"))
-    def test_file_upload_parent_directory_failure_marks_transfer_failed(self):
-        config = SimpleUploadedFile("app.yml", b"name: api\n", content_type="text/yaml")
+    @override_settings(MEDIA_ROOT=tempfile.mkdtemp(prefix="bulk-upload-existing-test-"))
+    def test_file_upload_without_overwrite_rejects_existing_remote_file(self):
+        upload = SimpleUploadedFile("payload.txt", b"payload", content_type="text/plain")
         from .services import create_bulk_file_upload_task
 
         task = create_bulk_file_upload_task(
             self.user,
-            {
-                "targetIds": [self.host.id],
-                "remoteDirectory": "/srv/app",
-                "name": "mkdir failed upload",
-                "relativePaths": ["release/config/app.yml"],
-            },
-            [config],
+            {"targetIds": [self.host.id], "remoteDirectory": "/tmp/", "name": "upload payload"},
+            upload,
         )
 
-        def fake_run(**kwargs):
-            if kwargs["module"] == "ansible.builtin.copy":
-                raise AssertionError("copy should not run when remote parent directory creation fails")
-            kwargs["event_handler"]({"event": "runner_on_start", "event_data": {"host": "host_1"}})
-            kwargs["event_handler"](
-                {"event": "runner_on_failed", "event_data": {"host": "host_1", "res": {"stdout": "", "stderr": "", "rc": 1, "msg": "mkdir denied"}}}
-            )
-            return SimpleNamespace(status="failed", rc=2)
-
-        with patch("bulk_execution.services.run_ansible_shell", side_effect=fake_run):
+        with patch("bulk_execution.services.remote_path_exists", return_value=True), patch(
+            "bulk_execution.services.upload_remote_file_stream"
+        ) as uploader:
             run_bulk_execution_task(task.id)
 
+        uploader.assert_not_called()
         task.refresh_from_db()
         result = task.results.get()
         transfer = result.transfers.get()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_FAILED)
         self.assertEqual(result.status, BulkExecutionResult.STATUS_FAILED)
         self.assertEqual(transfer.status, BulkExecutionTransferItem.STATUS_FAILED)
-        self.assertEqual(transfer.error, "mkdir denied")
+        self.assertIn("already exists", transfer.error)
 
     def test_runner_failure_event_marks_task_failed(self):
         task = create_bulk_execution_task(self.user, {"targetIds": [self.host.id], "command": "false", "name": "nonzero failure"})
 
-        with patch("bulk_execution.services.run_plain_ssh_command", return_value=("", "boom", 1)), patch(
-            "bulk_execution.services.run_ansible_shell"
-        ) as ansible_runner:
+        with patch("bulk_execution.services.run_plain_ssh_command", return_value=("", "boom", 1)):
             run_bulk_execution_task(task.id)
 
-        ansible_runner.assert_not_called()
         task.refresh_from_db()
         result = task.results.get()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_FAILED)
@@ -896,12 +737,9 @@ class BulkExecutionRunnerTests(TestCase):
     def test_plain_shell_empty_output_is_success_even_with_nonzero_exit_code(self):
         task = create_bulk_execution_task(self.user, {"targetIds": [self.host.id], "command": "grep missing /proc/mounts", "name": "empty grep"})
 
-        with patch("bulk_execution.services.run_plain_ssh_command", return_value=("", "", 1)), patch(
-            "bulk_execution.services.run_ansible_shell"
-        ) as ansible_runner:
+        with patch("bulk_execution.services.run_plain_ssh_command", return_value=("", "", 1)):
             run_bulk_execution_task(task.id)
 
-        ansible_runner.assert_not_called()
         task.refresh_from_db()
         result = task.results.get()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_COMPLETED)
@@ -913,7 +751,7 @@ class BulkExecutionRunnerTests(TestCase):
         self.assertEqual(result.error, "")
 
     @override_settings(BULK_EXECUTION_FORKS=1)
-    def test_shell_task_runs_each_host_with_plain_ssh_without_ansible(self):
+    def test_shell_task_runs_each_host_with_plain_ssh(self):
         host2 = ManagedHost.objects.create(
             name="api-02",
             group=self.group,
@@ -932,12 +770,9 @@ class BulkExecutionRunnerTests(TestCase):
             calls.append((host.name, command, timeout))
             return (f"{host.name}\n", "", 0)
 
-        with patch("bulk_execution.services.run_plain_ssh_command", side_effect=fake_run), patch(
-            "bulk_execution.services.run_ansible_shell"
-        ) as ansible_runner:
+        with patch("bulk_execution.services.run_plain_ssh_command", side_effect=fake_run):
             run_bulk_execution_task(task.id)
 
-        ansible_runner.assert_not_called()
         task.refresh_from_db()
         self.assertEqual(sorted(calls), [("api-01", "ls", 300), ("api-02", "ls", 300)])
         self.assertEqual(task.status, BulkExecutionTask.STATUS_COMPLETED)
@@ -951,16 +786,13 @@ class BulkExecutionRunnerTests(TestCase):
         self.assertEqual(second.stdout, "api-02\n")
         self.assertEqual(second.error, "")
 
-    def test_shell_command_failure_is_not_retried_with_ansible_raw(self):
+    def test_shell_command_failure_is_not_retried(self):
         task = create_bulk_execution_task(self.user, {"targetIds": [self.host.id], "command": "false", "name": "genuine failure"})
 
-        with patch("bulk_execution.services.run_plain_ssh_command", return_value=("", "boom", 1)) as shell_runner, patch(
-            "bulk_execution.services.run_ansible_shell"
-        ) as ansible_runner:
+        with patch("bulk_execution.services.run_plain_ssh_command", return_value=("", "boom", 1)) as shell_runner:
             run_bulk_execution_task(task.id)
 
         shell_runner.assert_called_once()
-        ansible_runner.assert_not_called()
         task.refresh_from_db()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_FAILED)
         self.assertEqual(task.results.get().status, BulkExecutionResult.STATUS_FAILED)
@@ -972,11 +804,10 @@ class BulkExecutionRunnerTests(TestCase):
         task.started_at = timezone.now()
         task.save(update_fields=["cancel_requested", "status", "started_at"])
 
-        with patch("bulk_execution.services.run_plain_ssh_command") as shell_runner, patch("bulk_execution.services.run_ansible_shell") as ansible_runner:
+        with patch("bulk_execution.services.run_plain_ssh_command") as shell_runner:
             run_bulk_execution_task(task.id)
 
         shell_runner.assert_not_called()
-        ansible_runner.assert_not_called()
         task.refresh_from_db()
         result = task.results.get()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_CANCELED)
@@ -984,15 +815,14 @@ class BulkExecutionRunnerTests(TestCase):
         self.assertEqual(result.status, BulkExecutionResult.STATUS_SKIPPED)
         self.assertIn("canceled", result.error.lower())
 
-    def test_task_with_no_available_inventory_fails_instead_of_staying_running(self):
+    def test_task_with_no_available_host_fails_instead_of_staying_running(self):
         task = create_bulk_execution_task(self.user, {"targetIds": [self.host.id], "command": "hostname", "name": "missing host"})
         self.host.delete()
 
-        with patch("bulk_execution.services.run_plain_ssh_command") as shell_runner, patch("bulk_execution.services.run_ansible_shell") as ansible_runner:
+        with patch("bulk_execution.services.run_plain_ssh_command") as shell_runner:
             run_bulk_execution_task(task.id)
 
         shell_runner.assert_not_called()
-        ansible_runner.assert_not_called()
         task.refresh_from_db()
         result = task.results.get()
         self.assertEqual(task.status, BulkExecutionTask.STATUS_FAILED)

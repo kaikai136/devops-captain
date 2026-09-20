@@ -123,13 +123,11 @@ class BulkExecutionTransferItemSerializer(serializers.ModelSerializer):
 
 
 class BulkExecutionTaskDetailSerializer(BulkExecutionTaskSerializer):
-    logOutput = serializers.CharField(source="log_output", read_only=True)
-    logOutputTruncated = serializers.BooleanField(source="log_output_truncated", read_only=True)
     results = serializers.SerializerMethodField()
     uploadFiles = serializers.SerializerMethodField()
 
     class Meta(BulkExecutionTaskSerializer.Meta):
-        fields = BulkExecutionTaskSerializer.Meta.fields + ["logOutput", "logOutputTruncated", "uploadFiles", "results"]
+        fields = BulkExecutionTaskSerializer.Meta.fields + ["uploadFiles", "results"]
 
     def get_results(self, task: BulkExecutionTask):
         return BulkExecutionResultSerializer(task.results.all(), many=True).data

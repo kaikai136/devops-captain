@@ -43,7 +43,7 @@ describe('bulk execution frontend contract', () => {
     const api = readSource('features/bulk-execution/api/bulkExecution.ts');
     const types = readSource('features/bulk-execution/types.ts');
 
-    expect(types).toContain("BulkExecutionType = 'shell' | 'playbook' | 'file_upload'");
+    expect(types).toContain("BulkExecutionType = 'shell' | 'file_upload'");
     expect(types).toContain('BulkFileUploadCreatePayload');
     expect(types).toContain('BulkUploadCheckResult');
     expect(types).toContain('BulkExecutionUploadFile');
@@ -100,11 +100,8 @@ describe('bulk execution frontend contract', () => {
     expect(panel).toContain('requestConfirm');
     expect(panel).toContain('stdout');
     expect(panel).toContain('stderr');
-    expect(panel).toContain("selectedTask.executionType === 'playbook' ? 'Ansible 日志' : 'stdout'");
-    expect(types).toContain('logOutput');
-    expect(panel).toContain('bulk-ansible-log');
-    expect(panel).toContain('ansibleLogLineClass');
-    expect(panel).toContain('v-if="selectedTask.executionType === \'playbook\'"');
+    expect(panel).not.toContain('playbook');
+    expect(types).not.toContain('logOutput');
     expect(panel).toContain('setInterval');
   });
 
@@ -121,16 +118,12 @@ describe('bulk execution frontend contract', () => {
     expect(styles).toContain('word-break: normal');
   });
 
-  it('falls back to host-level playbook output when the task log is empty', () => {
+  it('does not expose the removed playbook execution surface', () => {
     const panel = readSource('features/bulk-execution/components/BulkExecutionPanel.vue');
+    const types = readSource('features/bulk-execution/types.ts');
 
-    expect(panel).toContain('playbookLogOutput');
-    expect(panel).toContain('task.logOutput?.trim()');
-    expect(panel).toContain('formatPlaybookResultFallback');
-    expect(panel).toContain('result.stdout');
-    expect(panel).toContain('result.stderr');
-    expect(panel).toContain('result.error');
-    expect(panel).toContain('No result returned by Ansible');
+    expect(types).not.toContain("'playbook'");
+    expect(panel).not.toContain('Playbook');
   });
 
   it('uses a confirm-only target picker modal instead of rendering the full host list inline', () => {
@@ -481,15 +474,15 @@ describe('bulk execution frontend contract', () => {
     expect(styles).toContain('justify-content: flex-start');
   });
 
-  it('supports shell scripts and playbook scripts in the task composer', () => {
+  it('supports shell scripts in the task composer', () => {
     const panel = readSource('features/bulk-execution/components/BulkExecutionPanel.vue');
     const types = readSource('features/bulk-execution/types.ts');
 
-    expect(types).toContain("BulkExecutionType = 'shell' | 'playbook'");
+    expect(types).toContain("BulkExecutionType = 'shell' | 'file_upload'");
     expect(types).toContain('executionType');
     expect(panel).toContain('executionType');
     expect(panel).toContain('Shell');
-    expect(panel).toContain('Playbook');
+    expect(panel).not.toContain('Playbook');
     expect(panel).toContain('scriptPresets');
     expect(panel).toContain('executionType: executionType.value');
     expect(panel).toContain('taskName.value.trim().length > 0');

@@ -94,7 +94,7 @@ def tasks(request):
         if auth_error:
             return auth_error
         mark_interrupted_tasks()
-        queryset = BulkExecutionTask.objects.select_related("created_by").all()
+        queryset = BulkExecutionTask.objects.select_related("created_by").filter(execution_type__in=[BulkExecutionTask.EXECUTION_SHELL, BulkExecutionTask.EXECUTION_FILE_UPLOAD])
         status_filter = str(request.query_params.get("status", "")).strip()
         keyword = str(request.query_params.get("keyword", "")).strip()
         host = str(request.query_params.get("host", "")).strip()
@@ -146,7 +146,7 @@ def task_detail(request, task_id: int):
         return auth_error
     task, error = get_object_or_error(
         BulkExecutionTask,
-        queryset=BulkExecutionTask.objects.select_related("created_by").prefetch_related("upload_files", "results__transfers"),
+        queryset=BulkExecutionTask.objects.select_related("created_by").prefetch_related("upload_files", "results__transfers").filter(execution_type__in=[BulkExecutionTask.EXECUTION_SHELL, BulkExecutionTask.EXECUTION_FILE_UPLOAD]),
         id=task_id,
         error_message="批量执行任务不存在",
     )

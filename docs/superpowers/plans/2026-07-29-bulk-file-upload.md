@@ -4,9 +4,9 @@
 
 **Goal:** Add a single-file upload action to host batch operations, implemented as a bulk execution task that copies the file to selected Linux SSH hosts.
 
-**Architecture:** Extend `BulkExecutionTask` with a `file_upload` execution type plus remote path and uploaded-file metadata. The API accepts multipart form data, persists the uploaded file in Django storage, and the existing runner executes Ansible `copy` against the task inventory while reusing current polling/result UI.
+**Architecture:** Extend `BulkExecutionTask` with a `file_upload` execution type plus remote path and uploaded-file metadata. The API accepts multipart form data, persists the uploaded file in Django storage, and the runner streams files through the shared SFTP/SSH transfer service while reusing current polling/result UI.
 
-**Tech Stack:** Django REST Framework, Django model migrations, ansible-runner, Vue 3, TypeScript, Vitest.
+**Tech Stack:** Django REST Framework, Django model migrations, Paramiko/SSH/SFTP, Vue 3, TypeScript, Vitest.
 
 ## Global Constraints
 
@@ -35,7 +35,7 @@
 - Produces serialized fields `remoteDirectory`, `uploadFilename`, `uploadSize`
 
 - [ ] Write tests that multipart upload creates a `file_upload` task with selected executable hosts and starts the runner.
-- [ ] Write tests that `run_bulk_execution_task` uses `ansible.builtin.copy` with `src` and `dest` when task type is `file_upload`.
+- [ ] Write tests that `run_bulk_execution_task` streams the uploaded file through the shared remote-file transfer service when task type is `file_upload`.
 - [ ] Verify backend tests fail before implementation.
 - [ ] Add model fields, migration, serializer fields, API branch, validation, storage cleanup, and runner copy logic.
 - [ ] Verify backend tests pass.
