@@ -3876,8 +3876,8 @@ function readTerminalQuickCommandPanelCollapsed() {
               :class="{ active: terminalQuickCommandCategory === 'all' }"
               @click="terminalQuickCommandCategory = 'all'"
             >
-              全部
-              <span>{{ terminalQuickCommands.length }}</span>
+              <span class="terminal-quick-category-label">全部</span>
+              <span class="terminal-quick-category-count">{{ terminalQuickCommands.length }}</span>
             </el-button>
             <el-button
               v-for="category in terminalQuickCommandCategories"
@@ -3886,8 +3886,8 @@ function readTerminalQuickCommandPanelCollapsed() {
               :class="{ active: terminalQuickCommandCategory === category }"
               @click="terminalQuickCommandCategory = category"
             >
-              {{ category }}
-              <span>{{ terminalQuickCommands.filter((command) => command.category === category).length }}</span>
+              <span class="terminal-quick-category-label">{{ category }}</span>
+              <span class="terminal-quick-category-count">{{ terminalQuickCommands.filter((command) => command.category === category).length }}</span>
             </el-button>
           </aside>
           <div class="terminal-quick-content">

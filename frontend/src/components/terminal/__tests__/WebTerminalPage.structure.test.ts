@@ -60,6 +60,18 @@ describe('WebTerminalPage structure', () => {
     expect(styles).toContain('grid-template-columns: minmax(0, 1fr) 17px 8px 20px;');
   });
 
+  it('keeps quick-command category labels, counts, and action rows aligned', () => {
+    const { descriptor } = parseSfc(source());
+    const template = descriptor.template?.content ?? '';
+    const styles = readFileSync(fileURLToPath(new URL('../../../styles/terminal.css', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
+
+    expect(template).toContain('class="terminal-quick-category-label"');
+    expect(template).toContain('class="terminal-quick-category-count"');
+    expect(styles).toContain('.terminal-quick-categories button > span {\n  display: contents;\n}');
+    expect(styles).toContain('grid-template-columns: minmax(0, 1fr) 28px;');
+    expect(styles).toContain('.terminal-quick-item-actions button > span {');
+  });
+
   it('keeps host status pinned to the resizable tree edge without row offsets', () => {
     const styles = readFileSync(fileURLToPath(new URL('../../../styles/terminal.css', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
     const rowRule = styles.match(/\.terminal-tree-row \{([^}]+)\}/)?.[1] ?? '';
