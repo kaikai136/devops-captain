@@ -35,6 +35,19 @@ describe('WebTerminalPage structure', () => {
     expect(styles).toContain('.terminal-side-switch .el-button + .el-button {\n  margin-left: 0;\n}');
   });
 
+  it('loads the public system theme and uses its tokens in the standalone terminal', () => {
+    const entry = readFileSync(fileURLToPath(new URL('../../../terminal.ts', import.meta.url)), 'utf8');
+    const styles = readFileSync(fileURLToPath(new URL('../../../styles/terminal.css', import.meta.url)), 'utf8');
+    const script = parseSfc(source(), { filename: 'WebTerminalPage.vue' }).descriptor.scriptSetup?.content ?? '';
+
+    expect(entry).toContain('getSystemSettingOrNull(UI_THEME_SETTING_KEY)');
+    expect(entry).toContain('applyUiTheme(document.documentElement, normalizeUiThemeConfig(setting?.value))');
+    expect(styles).toContain('@import "./base/theme-tokens.css";');
+    expect(styles).toContain('background: var(--ui-primary-muted);');
+    expect(script).toContain("readTerminalThemeColor('--ui-primary-light', '#2563EB')");
+    expect(script).toContain('decorations: getTerminalSearchDecorations()');
+  });
+
   it('keeps compact tab labels and trailing controls in the same grid', () => {
     const styles = readFileSync(fileURLToPath(new URL('../../../styles/terminal.css', import.meta.url)), 'utf8').replace(/\r\n/g, '\n');
     const tabRule = styles.match(/\.terminal-tabs button \{([^}]+)\}/)?.[1] ?? '';

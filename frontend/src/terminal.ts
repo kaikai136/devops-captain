@@ -5,19 +5,37 @@ import 'element-plus/dist/index.css';
 
 import WatermarkOverlay from '@shared/components/WatermarkOverlay.vue';
 import WebTerminalPage from './components/terminal/WebTerminalPage.vue';
-import { buildTemplateVariables, normalizeSiteIdentity, renderTemplate, SITE_IDENTITY_SETTING_KEY } from './composables/features/useSiteSettings';
+import {
+  buildTemplateVariables,
+  normalizeSiteIdentity,
+  renderTemplate,
+  SITE_IDENTITY_SETTING_KEY,
+  UI_THEME_SETTING_KEY,
+} from './composables/features/useSiteSettings';
 import { normalizeWatermarkConfig, watermarkAppliesToPage, WATERMARK_SETTING_KEY } from './composables/features/useWatermarkSettings';
 import { getCurrentUser } from './services/auth';
 import { getSystemSetting, getSystemSettingOrNull } from './services/system';
+import { applyUiTheme, defaultUiTheme, normalizeUiThemeConfig } from './utils/uiTheme';
 import './styles/terminal.css';
 import './styles/base/element-plus-theme.css';
 import './styles/base/element-plus-overrides.css';
 
-const app = createApp(WebTerminalPage);
-app.use(ElementPlus, { locale: zhCn });
-app.mount('#terminal-app');
+applyUiTheme(document.documentElement, defaultUiTheme);
+void mountTerminalApp();
 
-void mountTerminalWatermark();
+async function mountTerminalApp() {
+  try {
+    const setting = await getSystemSettingOrNull(UI_THEME_SETTING_KEY);
+    applyUiTheme(document.documentElement, normalizeUiThemeConfig(setting?.value));
+  } catch {
+    // The standalone terminal keeps the default theme when public settings are unavailable.
+  }
+
+  const app = createApp(WebTerminalPage);
+  app.use(ElementPlus, { locale: zhCn });
+  app.mount('#terminal-app');
+  void mountTerminalWatermark();
+}
 
 async function mountTerminalWatermark() {
   try {

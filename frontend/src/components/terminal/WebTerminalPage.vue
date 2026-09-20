@@ -244,14 +244,23 @@ const TERMINAL_QUICK_COMMAND_PANEL_COLLAPSED_STORAGE_KEY = 'ops-tool.web-termina
 const TERMINAL_QUICK_COMMAND_PANEL_DEFAULT_HEIGHT = 260;
 const TERMINAL_QUICK_COMMAND_PANEL_MIN_HEIGHT = 160;
 const TERMINAL_QUICK_COMMAND_PANEL_MAX_HEIGHT = 420;
-const TERMINAL_SEARCH_DECORATIONS: NonNullable<ISearchOptions['decorations']> = {
-  matchBackground: '#7c3aed',
-  matchBorder: '#c084fc',
-  matchOverviewRuler: '#a855f7',
-  activeMatchBackground: '#a21caf',
-  activeMatchBorder: '#f0abfc',
-  activeMatchColorOverviewRuler: '#d946ef',
-};
+function readTerminalThemeColor(name: string, fallback: string) {
+  if (typeof document === 'undefined') return fallback;
+  return window.getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
+}
+
+function getTerminalSearchDecorations(): NonNullable<ISearchOptions['decorations']> {
+  const primary = readTerminalThemeColor('--ui-primary-light', '#2563EB');
+  const secondary = readTerminalThemeColor('--ui-chart-2-light', '#7C3AED');
+  return {
+    matchBackground: secondary,
+    matchBorder: primary,
+    matchOverviewRuler: secondary,
+    activeMatchBackground: primary,
+    activeMatchBorder: primary,
+    activeMatchColorOverviewRuler: primary,
+  };
+}
 const terminalTabColorOptions: TerminalTabColorOption[] = [
   {
     id: 'red',
@@ -1514,7 +1523,7 @@ function getTerminalSearchOptions(incremental = false): ISearchOptions {
   return {
     caseSensitive: false,
     incremental,
-    decorations: TERMINAL_SEARCH_DECORATIONS,
+    decorations: getTerminalSearchDecorations(),
   };
 }
 
@@ -2314,7 +2323,7 @@ function createTerminalTab(
         background: '#000000',
         foreground: '#f5f7fb',
         cursor: '#f5f7fb',
-        selectionBackground: '#7e22ce',
+        selectionBackground: readTerminalThemeColor('--ui-primary-light', '#2563EB'),
       },
     }),
   );
