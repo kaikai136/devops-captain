@@ -773,20 +773,38 @@ class RemoteSFTPFile:
         self.mode = sftp_mode_from_flags(asyncssh, pflags)
         self.file_obj = self.sftp.open(path, self.mode)
         self.lock = threading.Lock()
+        self.read_bytes = 0
+        self.write_bytes = 0
+        self.read_attempted = False
+        self.write_attempted = False
+        self.read_error = ""
+        self.write_error = ""
+        self.audit_recorded = False
 
     def read(self, offset: int, size: int) -> bytes:
         with self.lock:
-            self.file_obj.seek(offset)
-            data = self.file_obj.read(size)
-            record_file_audit(operation="read", host=self.host, user=self.user, path=self.path, size=len(data or b""), protocol="sftp")
-            return data
+            self.read_attempted = True
+            try:
+                self.file_obj.seek(offset)
+                data = self.file_obj.read(size)
+                self.read_bytes += len(data or b"")
+                return data
+            except Exception as error:
+                self.read_error = str(error)
+                raise
 
     def write(self, offset: int, data: bytes) -> int:
         with self.lock:
-            self.file_obj.seek(offset)
-            self.file_obj.write(data)
-            record_file_audit(operation="write", host=self.host, user=self.user, path=self.path, size=len(data or b""), protocol="sftp")
-            return len(data or b"")
+            self.write_attempted = True
+            try:
+                self.file_obj.seek(offset)
+                self.file_obj.write(data)
+                written = len(data or b"")
+                self.write_bytes += written
+                return written
+            except Exception as error:
+                self.write_error = str(error)
+                raise
 
     def stat(self):
         with self.lock:
@@ -794,13 +812,46 @@ class RemoteSFTPFile:
 
     def close(self):
         with self.lock:
-            try:
-                self.file_obj.close()
-            finally:
+            close_error = None
+            for resource in (self.file_obj, self.sftp, self.client):
                 try:
-                    self.sftp.close()
-                finally:
-                    self.client.close()
+                    resource.close()
+                except Exception as error:
+                    if close_error is None:
+                        close_error = error
+            self._record_transfer_audits(close_error)
+            if close_error is not None:
+                raise close_error
+
+    def _record_transfer_audits(self, close_error=None):
+        if self.audit_recorded:
+            return
+        self.audit_recorded = True
+        close_message = str(close_error or "")
+        if self.read_attempted:
+            error_message = self.read_error or close_message
+            record_file_audit(
+                operation="read",
+                host=self.host,
+                user=self.user,
+                path=self.path,
+                size=self.read_bytes,
+                protocol="sftp",
+                status="failed" if error_message else "success",
+                error_message=error_message,
+            )
+        if self.write_attempted:
+            error_message = self.write_error or close_message
+            record_file_audit(
+                operation="write",
+                host=self.host,
+                user=self.user,
+                path=self.path,
+                size=self.write_bytes,
+                protocol="sftp",
+                status="failed" if error_message else "success",
+                error_message=error_message,
+            )
 
 
 def sftp_mode_from_flags(asyncssh, pflags: int) -> str:

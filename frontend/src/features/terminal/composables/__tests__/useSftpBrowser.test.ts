@@ -211,9 +211,7 @@ describe('useSftpBrowser', () => {
   it('uploads the unchanged payload, updates progress, then refreshes the original directory', async () => {
     const uploadFile = vi.fn().mockResolvedValue({ protocol: 'sftp' });
     const listFiles = vi.fn().mockResolvedValue({ path: '/srv', protocol: 'sftp', entries: [parentEntry, alphaEntry] });
-    const { browser } = createBrowser(createApi({ uploadFile, listFiles }), {
-      readFileBase64: vi.fn().mockResolvedValue('YWJj'),
-    });
+    const { browser } = createBrowser(createApi({ uploadFile, listFiles }));
     browser.path.value = '/srv';
     const file = { name: 'a.txt' } as File;
 
@@ -223,7 +221,7 @@ describe('useSftpBrowser', () => {
       directory: '/srv',
       filename: 'a.txt',
       relativePath: 'folder/a.txt',
-      contentBase64: 'YWJj',
+      file,
     }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(browser.transferRecords.value[0]).toMatchObject({
       kind: 'upload',

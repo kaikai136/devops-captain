@@ -4,11 +4,12 @@ import base64
 import shlex
 import stat
 import time
+from uuid import uuid4
 
 from host_management.models import ManagedHost
 
 from .commands import run_one_shot_ssh_command, run_one_shot_ssh_upload
-from .connections import open_ssh_client
+from .connections import borrow_ssh_client
 from .errors import TerminalConnectionError
 from .file_parsers import (
     format_remote_timestamp,
@@ -95,6 +96,20 @@ def stream_remote_file_content(host: ManagedHost, path: str, protocol: str = "au
         payload.setdefault("path", path)
         payload.setdefault("protocol", "SFTP protocol")
         return payload
+
+
+def upload_remote_file_stream(host: ManagedHost, directory: str, filename: str, source, relative_path: str = "") -> dict:
+    directory = normalize_remote_file_path(directory or ".")
+    upload_name = normalize_remote_relative_file_path(relative_path) if str(relative_path or "").strip() else normalize_remote_file_name(filename)
+    path = join_remote_path(directory, upload_name)
+    return run_remote_file_operation(
+        "文件上传失败",
+        (
+            ("SFTP protocol", lambda: upload_remote_file_with_sftp_stream(host, path, source)),
+            ("SSH stream", lambda: upload_remote_file_with_ssh_stream(host, path, source)),
+        ),
+        path,
+    )
 
 def upload_remote_file(host: ManagedHost, directory: str, filename: str, content_base64: str, relative_path: str = "") -> dict:
     directory = normalize_remote_file_path(directory or ".")
@@ -204,8 +219,7 @@ def run_remote_file_operation(label: str, operations, path: str) -> dict:
     raise TerminalConnectionError(label + "：" + "；".join(f"{item['protocol']} {item.get('error', '')}" for item in attempts))
 
 def list_remote_directory_with_sftp(host: ManagedHost, path: str) -> dict:
-    client = open_ssh_client(host)
-    try:
+    with borrow_ssh_client(host) as client:
         sftp = client.open_sftp()
         try:
             current_path = sftp.normalize(path)
@@ -228,8 +242,6 @@ def list_remote_directory_with_sftp(host: ManagedHost, path: str) -> dict:
             sftp.close()
         entries.sort(key=remote_file_sort_key)
         return {"path": current_path, "entries": [parent_remote_entry(current_path), *entries]}
-    finally:
-        client.close()
 
 def list_remote_directory_with_scp_enhanced(host: ManagedHost, path: str) -> dict:
     current_path = resolve_remote_directory_path(host, path)
@@ -244,8 +256,7 @@ def list_remote_directory_with_scp_normal(host: ManagedHost, path: str) -> dict:
     return {"path": current_path, "entries": parse_remote_ls_entries(current_path, run_one_shot_ssh_command(host, command))}
 
 def get_remote_file_properties_with_sftp(host: ManagedHost, path: str) -> dict:
-    client = open_ssh_client(host)
-    try:
+    with borrow_ssh_client(host) as client:
         sftp = client.open_sftp()
         try:
             current_path = sftp.normalize(path)
@@ -258,8 +269,6 @@ def get_remote_file_properties_with_sftp(host: ManagedHost, path: str) -> dict:
             return stat_payload
         except Exception:
             return remote_file_properties_payload(current_path, attrs, resolve_remote_identity_names(client, attrs))
-    finally:
-        client.close()
 
 def get_remote_file_properties_with_stat(host: ManagedHost, path: str) -> dict:
     current_path = resolve_remote_file_path(host, path)
@@ -350,8 +359,7 @@ def download_remote_file_with_sftp(host: ManagedHost, path: str) -> dict:
     return encode_remote_download(path, payload["content"])
 
 def download_remote_file_content_with_sftp(host: ManagedHost, path: str) -> dict:
-    client = open_ssh_client(host)
-    try:
+    with borrow_ssh_client(host) as client:
         sftp = client.open_sftp()
         try:
             with sftp.open(path, "rb") as remote_file:
@@ -359,36 +367,27 @@ def download_remote_file_content_with_sftp(host: ManagedHost, path: str) -> dict
         finally:
             sftp.close()
         return {"content": data}
-    finally:
-        client.close()
 
 def stream_remote_file_content_with_sftp(host: ManagedHost, path: str) -> dict:
-    client = open_ssh_client(host)
-    sftp = None
-    remote_file = None
-    try:
+    with borrow_ssh_client(host) as client:
         sftp = client.open_sftp()
-        attrs = sftp.stat(path)
-        remote_file = sftp.open(path, "rb")
-    except Exception:
-        if remote_file is not None:
-            remote_file.close()
-        if sftp is not None:
+        try:
+            attrs = sftp.stat(path)
+        finally:
             sftp.close()
-        client.close()
-        raise
 
     def chunks():
-        try:
-            while True:
-                chunk = remote_file.read(REMOTE_FILE_STREAM_CHUNK_BYTES)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            remote_file.close()
-            sftp.close()
-            client.close()
+        with borrow_ssh_client(host) as client:
+            sftp = client.open_sftp()
+            try:
+                with sftp.open(path, "rb") as remote_file:
+                    while True:
+                        chunk = remote_file.read(REMOTE_FILE_STREAM_CHUNK_BYTES)
+                        if not chunk:
+                            break
+                        yield chunk
+            finally:
+                sftp.close()
 
     return {
         "filename": path.rstrip("/").split("/")[-1] or "download",
@@ -397,22 +396,22 @@ def stream_remote_file_content_with_sftp(host: ManagedHost, path: str) -> dict:
     }
 
 def stream_remote_file_content_with_scp(host: ManagedHost, path: str) -> dict:
-    client = open_ssh_client(host)
     quoted_path = shlex.quote(path)
-    command = f"stat -c %s -- {quoted_path} 2>/dev/null; cat -- {quoted_path}"
-    try:
-        _, stdout, stderr = client.exec_command(command, timeout=30)
-    except Exception:
-        client.close()
-        raise
-    size_line = stdout.readline().strip()
+    with borrow_ssh_client(host) as client:
+        _, stdout, stderr = client.exec_command(f"stat -c %s -- {quoted_path}", timeout=30)
+        size_line = stdout.readline().strip()
+        error_output = stderr.read().decode("utf-8", errors="replace").strip()
+        exit_code = stdout.channel.recv_exit_status()
+        if exit_code != 0:
+            raise TerminalConnectionError(error_output or f"远端 stat 命令退出码 {exit_code}")
     try:
         size = int(size_line or "0")
     except ValueError:
         size = 0
 
     def chunks():
-        try:
+        with borrow_ssh_client(host) as client:
+            _, stdout, stderr = client.exec_command(f"cat -- {quoted_path}", timeout=30)
             while True:
                 chunk = stdout.read(REMOTE_FILE_STREAM_CHUNK_BYTES)
                 if not chunk:
@@ -422,8 +421,6 @@ def stream_remote_file_content_with_scp(host: ManagedHost, path: str) -> dict:
             exit_code = stdout.channel.recv_exit_status()
             if exit_code != 0:
                 raise TerminalConnectionError(error_output or f"远端下载命令退出码 {exit_code}")
-        finally:
-            client.close()
 
     return {
         "filename": path.rstrip("/").split("/")[-1] or "download",
@@ -452,18 +449,106 @@ def download_remote_file_content_with_scp_normal(host: ManagedHost, path: str) -
     return {"content": base64.b64decode(output.strip(), validate=False)}
 
 def upload_remote_file_with_sftp(host: ManagedHost, path: str, data: bytes) -> dict:
-    client = open_ssh_client(host)
-    try:
+    from io import BytesIO
+
+    return upload_remote_file_with_sftp_stream(host, path, BytesIO(data))
+
+
+def upload_remote_file_with_sftp_stream(host: ManagedHost, path: str, source) -> dict:
+    rewind_upload_source(source)
+    temp_path = temporary_remote_upload_path(path)
+    written = 0
+    with borrow_ssh_client(host) as client:
         sftp = client.open_sftp()
         try:
             ensure_remote_sftp_directory(sftp, parent_remote_path(path))
-            with sftp.open(path, "wb") as remote_file:
-                remote_file.write(data)
+            try:
+                with sftp.open(temp_path, "wb") as remote_file:
+                    for chunk in iter_upload_chunks(source):
+                        if not chunk:
+                            continue
+                        remote_file.write(chunk)
+                        written += len(chunk)
+                replace_remote_sftp_file(sftp, temp_path, path)
+            except Exception:
+                try:
+                    sftp.remove(temp_path)
+                except Exception:
+                    pass
+                raise
         finally:
             sftp.close()
-        return {"size": len(data)}
-    finally:
-        client.close()
+    return {"size": written}
+
+
+def upload_remote_file_with_ssh_stream(host: ManagedHost, path: str, source) -> dict:
+    rewind_upload_source(source)
+    temp_path = temporary_remote_upload_path(path)
+    quoted_path = shlex.quote(path)
+    quoted_temp = shlex.quote(temp_path)
+    quoted_parent = shlex.quote(parent_remote_path(path))
+    command = f"mkdir -p {quoted_parent} && cat > {quoted_temp} && mv -f -- {quoted_temp} {quoted_path}"
+    written = 0
+    with borrow_ssh_client(host) as client:
+        stdin, stdout, stderr = client.exec_command(command, timeout=60)
+        try:
+            for chunk in iter_upload_chunks(source):
+                if not chunk:
+                    continue
+                stdin.write(chunk)
+                written += len(chunk)
+            stdin.channel.shutdown_write()
+            error_output = stderr.read().decode("utf-8", errors="replace").strip()
+            exit_code = stdout.channel.recv_exit_status()
+            if exit_code != 0:
+                raise TerminalConnectionError(error_output or f"远端上传命令退出码 {exit_code}")
+        except Exception:
+            try:
+                client.exec_command(f"rm -f -- {quoted_temp}", timeout=10)
+            except Exception:
+                pass
+            raise
+    return {"size": written}
+
+
+def iter_upload_chunks(source):
+    chunks = getattr(source, "chunks", None)
+    if callable(chunks):
+        yield from chunks(REMOTE_FILE_STREAM_CHUNK_BYTES)
+        return
+    while True:
+        chunk = source.read(REMOTE_FILE_STREAM_CHUNK_BYTES)
+        if not chunk:
+            return
+        yield chunk
+
+
+def rewind_upload_source(source) -> None:
+    seek = getattr(source, "seek", None)
+    if callable(seek):
+        seek(0)
+
+
+def temporary_remote_upload_path(path: str) -> str:
+    parent = parent_remote_path(path)
+    filename = path.rstrip("/").split("/")[-1] or "upload"
+    return join_remote_path(parent, f".{filename}.upload-{uuid4().hex}")
+
+
+def replace_remote_sftp_file(sftp, temp_path: str, path: str) -> None:
+    posix_rename = getattr(sftp, "posix_rename", None)
+    if callable(posix_rename):
+        try:
+            posix_rename(temp_path, path)
+            return
+        except Exception:
+            pass
+    try:
+        sftp.remove(path)
+    except Exception:
+        pass
+    sftp.rename(temp_path, path)
+
 
 def ensure_remote_sftp_directory(sftp, directory: str) -> None:
     directory = str(directory or "").strip()
@@ -499,6 +584,7 @@ __all__ = [
     'download_remote_file',
     'download_remote_file_content',
     'stream_remote_file_content',
+    'upload_remote_file_stream',
     'upload_remote_file',
     'create_remote_file',
     'create_remote_directory',
@@ -530,6 +616,8 @@ __all__ = [
     'download_remote_file_with_scp_normal',
     'download_remote_file_content_with_scp_normal',
     'upload_remote_file_with_sftp',
+    'upload_remote_file_with_sftp_stream',
+    'upload_remote_file_with_ssh_stream',
     'ensure_remote_sftp_directory',
     'upload_remote_file_with_scp_enhanced',
     'upload_remote_file_with_scp_normal',
