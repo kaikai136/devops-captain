@@ -4,11 +4,9 @@ from django.db import models
 
 class BulkExecutionTask(models.Model):
     EXECUTION_SHELL = "shell"
-    EXECUTION_PLAYBOOK = "playbook"
     EXECUTION_FILE_UPLOAD = "file_upload"
     EXECUTION_CHOICES = [
         (EXECUTION_SHELL, "Shell"),
-        (EXECUTION_PLAYBOOK, "Playbook"),
         (EXECUTION_FILE_UPLOAD, "File upload"),
     ]
 
@@ -42,8 +40,6 @@ class BulkExecutionTask(models.Model):
     failed_count = models.PositiveIntegerField(default=0)
     skipped_count = models.PositiveIntegerField(default=0)
     error = models.TextField(blank=True)
-    log_output = models.TextField(blank=True)
-    log_output_truncated = models.BooleanField(default=False)
     started_at = models.DateTimeField(null=True, blank=True)
     finished_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)

@@ -4,13 +4,10 @@ import json
 import os
 import re
 import shlex
-import tempfile
 import threading
 import uuid
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
-from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 from django.conf import settings
 from django.core.files.storage import default_storage
@@ -21,6 +18,7 @@ from django.utils import timezone
 from host_management.models import ManagedHost
 from web_terminal.services.commands import run_one_shot_ssh_command
 from web_terminal.services.connections import open_ssh_client
+from web_terminal.services.files import upload_remote_file_stream
 from web_terminal.services.file_parsers import (
     join_remote_path,
     normalize_remote_file_name,
@@ -94,7 +92,7 @@ def create_bulk_execution_task(user, payload: dict) -> BulkExecutionTask:
         raise ValueError("Invalid host selection")
 
     execution_type = str(payload.get("executionType") or payload.get("execution_type") or BulkExecutionTask.EXECUTION_SHELL).strip()
-    if execution_type not in {BulkExecutionTask.EXECUTION_SHELL, BulkExecutionTask.EXECUTION_PLAYBOOK}:
+    if execution_type != BulkExecutionTask.EXECUTION_SHELL:
         raise ValueError("Unsupported execution type")
 
     task_name = require_task_name(payload)
@@ -103,7 +101,7 @@ def create_bulk_execution_task(user, payload: dict) -> BulkExecutionTask:
         raise ValueError("Please enter a command")
     if len(raw_command) > MAX_COMMAND_LENGTH:
         raise ValueError(f"Command cannot exceed {MAX_COMMAND_LENGTH} characters")
-    command = raw_command if execution_type == BulkExecutionTask.EXECUTION_PLAYBOOK else raw_command.strip()
+    command = raw_command.strip()
 
     hosts_by_id = {host.id: host for host in list_executable_targets() if host.id in set(target_ids)}
     hosts = [hosts_by_id[target_id] for target_id in target_ids if target_id in hosts_by_id]
@@ -468,38 +466,34 @@ def run_bulk_execution_task(task_id: int) -> None:
     task.started_at = task.started_at or timezone.now()
     task.finished_at = None
     task.error = ""
-    task.log_output = ""
-    task.log_output_truncated = False
-    task.save(update_fields=["status", "started_at", "finished_at", "error", "log_output", "log_output_truncated"])
+    task.save(update_fields=["status", "started_at", "finished_at", "error"])
 
     results = list(task.results.select_related("host").all())
-    result_by_inventory = {result.inventory_name: result for result in results}
     config = bulk_execution_settings()
 
     try:
-        with tempfile.TemporaryDirectory(prefix=f"bulk-execution-{task.id}-") as temp_dir:
-            inventory = build_runner_inventory(results, Path(temp_dir))
-            if not inventory["all"]["hosts"]:
-                task.status = BulkExecutionTask.STATUS_FAILED
-                task.error = "No available target host"
-                mark_unfinished_results(task, BulkExecutionResult.STATUS_SKIPPED, task.error)
-                return
-            if task.execution_type == BulkExecutionTask.EXECUTION_PLAYBOOK:
-                runner_result = run_playbook(task, result_by_inventory, temp_dir, inventory, config)
-            elif task.execution_type == BulkExecutionTask.EXECUTION_FILE_UPLOAD:
-                runner_result = run_file_upload(task, result_by_inventory, temp_dir, inventory, config)
-            else:
-                runner_result = run_plain_shell_task(task, results, config)
-            task.refresh_from_db(fields=["cancel_requested"])
-            canceled = bool(task.cancel_requested) or getattr(runner_result, "status", "") == "canceled"
+        if not any(result.host_id for result in results):
+            task.status = BulkExecutionTask.STATUS_FAILED
+            task.error = "No available target host"
+            mark_unfinished_results(task, BulkExecutionResult.STATUS_SKIPPED, task.error)
+            return
+
+        if task.execution_type == BulkExecutionTask.EXECUTION_FILE_UPLOAD:
+            runner_result = run_file_upload(task, results, config)
+        elif task.execution_type == BulkExecutionTask.EXECUTION_SHELL:
+            runner_result = run_plain_shell_task(task, results, config)
+        else:
+            raise RuntimeError(f"Unsupported execution type: {task.execution_type}")
+
+        task.refresh_from_db(fields=["cancel_requested"])
+        canceled = bool(task.cancel_requested) or getattr(runner_result, "status", "") == "canceled"
         if canceled:
             mark_unfinished_transfers(task, BulkExecutionTransferItem.STATUS_SKIPPED, "Task canceled")
             mark_unfinished_results(task, BulkExecutionResult.STATUS_SKIPPED, "Task canceled")
             task.status = BulkExecutionTask.STATUS_CANCELED
         else:
-            no_result_error = "No result returned by Ansible" if task.execution_type in {BulkExecutionTask.EXECUTION_PLAYBOOK, BulkExecutionTask.EXECUTION_FILE_UPLOAD} else "No result returned"
-            mark_unfinished_transfers(task, BulkExecutionTransferItem.STATUS_FAILED, no_result_error)
-            mark_unfinished_results(task, BulkExecutionResult.STATUS_FAILED, no_result_error)
+            mark_unfinished_transfers(task, BulkExecutionTransferItem.STATUS_FAILED, "No result returned")
+            mark_unfinished_results(task, BulkExecutionResult.STATUS_FAILED, "No result returned")
             task.status = final_task_status(task)
     except Exception as error:
         task.status = BulkExecutionTask.STATUS_FAILED
@@ -675,26 +669,7 @@ def mark_plain_shell_result_failed(task_id: int, result_id: int, error: str) -> 
     refresh_task_counts(BulkExecutionTask.objects.get(id=task_id))
 
 
-def run_playbook(task, result_by_inventory, temp_dir, inventory, config):
-    project_dir = Path(temp_dir) / "project"
-    project_dir.mkdir(parents=True, exist_ok=True)
-    playbook_path = project_dir / "playbook.yml"
-    playbook_path.write_text(task.command, encoding="utf-8")
-    event_context: dict[str, Any] = {"current_play": "", "current_task": "", "host_headers": {}}
-    return run_ansible_playbook(
-        private_data_dir=temp_dir,
-        inventory=inventory,
-        playbook="playbook.yml",
-        forks=max(1, min(len(inventory["all"]["hosts"]), int(config["forks"]))),
-        timeout=int(config["timeoutSeconds"]),
-        quiet=True,
-        envvars={"ANSIBLE_HOST_KEY_CHECKING": "False"},
-        event_handler=lambda event: handle_playbook_event(task.id, result_by_inventory, event_context, event),
-        cancel_callback=lambda: is_cancel_requested(task.id),
-    )
-
-
-def run_file_upload(task, result_by_inventory, temp_dir, inventory, config):
+def run_file_upload(task: BulkExecutionTask, results: list[BulkExecutionResult], config: dict[str, int | bool]):
     upload_files = list(task.upload_files.all())
     if not upload_files and not task.upload_file:
         raise RuntimeError("No upload file attached to task")
@@ -712,191 +687,172 @@ def run_file_upload(task, result_by_inventory, temp_dir, inventory, config):
         ]
         create_transfer_items_for_uploads(task)
 
-    runner_result = None
-    canceled = False
     for upload_file in upload_files:
         if is_cancel_requested(task.id):
-            canceled = True
-            break
-        runner_result = run_upload_file_item(task, upload_file, result_by_inventory, temp_dir, inventory, config)
-        if getattr(runner_result, "status", "") == "canceled":
-            canceled = True
-            break
-    if canceled:
-        mark_unfinished_transfers(task, BulkExecutionTransferItem.STATUS_SKIPPED, "Task canceled")
-        return runner_result
+            return SimpleNamespace(status="canceled", rc=1)
+        item_result = run_upload_file_item(task, upload_file, results, config)
+        if getattr(item_result, "status", "") == "canceled":
+            return item_result
+
     aggregate_file_upload_results(task)
-    return runner_result
+    return SimpleNamespace(status="successful", rc=0)
 
 
-def run_upload_file_item(task, upload_file: BulkExecutionUploadFile, result_by_inventory, temp_dir, inventory, config):
-    copy_inventory = inventory
-    if upload_file_needs_parent_directory(upload_file):
-        directory_result = run_upload_parent_directory(task, upload_file, result_by_inventory, temp_dir, inventory, config)
-        if getattr(directory_result, "status", "") == "canceled" or is_cancel_requested(task.id):
-            return directory_result
-        copy_inventory = upload_copy_inventory(upload_file, result_by_inventory, inventory)
-        if not copy_inventory["all"]["hosts"]:
-            return directory_result
-
-    source_path = upload_file.file.path
-    force = "yes" if task.upload_overwrite else "no"
-    return run_ansible_shell(
-        private_data_dir=temp_dir,
-        inventory=copy_inventory,
-        module="ansible.builtin.copy",
-        module_args=f"src={shlex.quote(source_path)} dest={shlex.quote(upload_file.remote_path)} force={force}",
-        host_pattern="all",
-        forks=max(1, min(len(copy_inventory["all"]["hosts"]), int(config["forks"]))),
-        timeout=int(config["timeoutSeconds"]),
-        quiet=True,
-        envvars={"ANSIBLE_HOST_KEY_CHECKING": "False"},
-        event_handler=lambda event: handle_file_upload_event(task.id, result_by_inventory, upload_file, event),
-        cancel_callback=lambda: is_cancel_requested(task.id),
-    )
-
-
-def upload_file_needs_parent_directory(upload_file: BulkExecutionUploadFile) -> bool:
-    return "/" in str(upload_file.filename or "")
-
-
-def run_upload_parent_directory(task, upload_file: BulkExecutionUploadFile, result_by_inventory, temp_dir, inventory, config):
-    parent = parent_remote_path(upload_file.remote_path)
-    return run_ansible_shell(
-        private_data_dir=temp_dir,
-        inventory=inventory,
-        module="ansible.builtin.file",
-        module_args=f"path={shlex.quote(parent)} state=directory",
-        host_pattern="all",
-        forks=max(1, min(len(inventory["all"]["hosts"]), int(config["forks"]))),
-        timeout=int(config["timeoutSeconds"]),
-        quiet=True,
-        envvars={"ANSIBLE_HOST_KEY_CHECKING": "False"},
-        event_handler=lambda event: handle_file_upload_directory_event(task.id, result_by_inventory, upload_file, event),
-        cancel_callback=lambda: is_cancel_requested(task.id),
-    )
-
-
-def upload_copy_inventory(upload_file: BulkExecutionUploadFile, result_by_inventory: dict[str, BulkExecutionResult], inventory: dict[str, Any]) -> dict[str, Any]:
-    blocked_result_ids = set(
-        upload_file.transfers.filter(
-            status__in=[BulkExecutionTransferItem.STATUS_FAILED, BulkExecutionTransferItem.STATUS_SKIPPED]
-        ).values_list("result_id", flat=True)
-    )
-    hosts = {
-        inventory_name: variables
-        for inventory_name, variables in inventory["all"]["hosts"].items()
-        if result_by_inventory.get(inventory_name) and result_by_inventory[inventory_name].id not in blocked_result_ids
-    }
-    return {"all": {"hosts": hosts}}
-
-
-def handle_file_upload_directory_event(
-    task_id: int,
-    result_by_inventory: dict[str, BulkExecutionResult],
+def run_upload_file_item(
+    task: BulkExecutionTask,
     upload_file: BulkExecutionUploadFile,
-    event: dict[str, Any],
-) -> bool:
-    event_name = str(event.get("event", ""))
-    event_data = event.get("event_data") if isinstance(event.get("event_data"), dict) else {}
-    result = result_by_inventory.get(str(event_data.get("host", "")))
-    if result is None:
-        return True
+    results: list[BulkExecutionResult],
+    config: dict[str, int | bool],
+):
+    result_by_id = {result.id: result for result in results}
+    transfers = list(upload_file.transfers.select_related("result", "result__host").all())
+    runnable_ids: list[int] = []
+    for transfer in transfers:
+        result = result_by_id.get(transfer.result_id) or transfer.result
+        if result.host_id:
+            runnable_ids.append(transfer.id)
+        else:
+            mark_upload_transfer_skipped(transfer, "Host no longer exists")
 
-    transfer = BulkExecutionTransferItem.objects.filter(result=result, upload_file=upload_file).first()
-    if transfer is None:
-        return True
+    if not runnable_ids:
+        return SimpleNamespace(status="successful", rc=0)
 
-    if event_name == "runner_on_start":
+    forks = max(1, min(len(runnable_ids), int(config["forks"])))
+    if forks == 1:
+        canceled = False
+        for transfer_id in runnable_ids:
+            if is_cancel_requested(task.id):
+                canceled = True
+                transfer = BulkExecutionTransferItem.objects.get(id=transfer_id)
+                mark_upload_transfer_skipped(transfer, "Task canceled")
+                continue
+            if run_upload_transfer(task.id, transfer_id, task.upload_overwrite) == "canceled":
+                canceled = True
+        return SimpleNamespace(status="canceled" if canceled else "successful", rc=1 if canceled else 0)
+
+    pending = list(runnable_ids)
+    running = {}
+    canceled = False
+
+    with ThreadPoolExecutor(max_workers=forks, thread_name_prefix=f"bulk-upload-{task.id}") as executor:
+        while pending or running:
+            while pending and len(running) < forks:
+                if is_cancel_requested(task.id):
+                    canceled = True
+                    break
+                transfer_id = pending.pop(0)
+                future = executor.submit(run_upload_transfer, task.id, transfer_id, task.upload_overwrite)
+                running[future] = transfer_id
+
+            if canceled:
+                for transfer_id in pending:
+                    transfer = BulkExecutionTransferItem.objects.get(id=transfer_id)
+                    mark_upload_transfer_skipped(transfer, "Task canceled")
+                pending = []
+
+            if not running:
+                break
+
+            done, _ = wait(running, return_when=FIRST_COMPLETED)
+            for future in done:
+                running.pop(future)
+                try:
+                    if future.result() == "canceled":
+                        canceled = True
+                except Exception:
+                    pass
+                if is_cancel_requested(task.id):
+                    canceled = True
+
+    return SimpleNamespace(status="canceled" if canceled else "successful", rc=1 if canceled else 0)
+
+
+def run_upload_transfer(task_id: int, transfer_id: int, overwrite: bool) -> str:
+    close_old_connections()
+    try:
+        if is_cancel_requested(task_id):
+            transfer = BulkExecutionTransferItem.objects.select_related("result").get(id=transfer_id)
+            mark_upload_transfer_skipped(transfer, "Task canceled")
+            return "canceled"
+
+        transfer = BulkExecutionTransferItem.objects.select_related("result__host", "upload_file").get(id=transfer_id)
+        result = transfer.result
+        host = result.host
+        if host is None:
+            mark_upload_transfer_skipped(transfer, "Host no longer exists")
+            return "skipped"
+
+        now = timezone.now()
         transfer.status = BulkExecutionTransferItem.STATUS_RUNNING
-        transfer.started_at = transfer.started_at or timezone.now()
+        transfer.started_at = transfer.started_at or now
         transfer.finished_at = None
+        transfer.stdout = ""
+        transfer.stderr = ""
         transfer.error = ""
-        transfer.save(update_fields=["status", "started_at", "finished_at", "error"])
+        transfer.save(update_fields=["status", "started_at", "finished_at", "stdout", "stderr", "error"])
+
         result.status = BulkExecutionResult.STATUS_RUNNING
-        result.started_at = result.started_at or timezone.now()
+        result.started_at = result.started_at or now
         result.finished_at = None
         result.error = ""
         result.save(update_fields=["status", "started_at", "finished_at", "error"])
-        return True
 
-    if event_name in {"runner_on_failed", "runner_on_unreachable", "runner_on_skipped"}:
-        res = event_data.get("res") if isinstance(event_data.get("res"), dict) else {}
-        transfer.status = (
-            BulkExecutionTransferItem.STATUS_SKIPPED
-            if event_name == "runner_on_skipped"
-            else BulkExecutionTransferItem.STATUS_FAILED
-        )
-        transfer.error = result_error(event_name, res)
+        if not overwrite and remote_path_exists(host, transfer.remote_path):
+            raise FileExistsError(f"Remote file already exists: {transfer.remote_path}")
+
+        upload_file = transfer.upload_file
+        storage = upload_file.file.storage
+        with storage.open(upload_file.file.name, "rb") as source:
+            payload = upload_remote_file_stream(
+                host,
+                parent_remote_path(transfer.remote_path),
+                transfer.remote_path.rstrip("/").split("/")[-1],
+                source,
+            )
+
+        size = int(payload.get("size", transfer.size) or 0)
+        protocol = str(payload.get("protocol") or "file transfer")
+        stdout, truncated = truncate_output(f"Uploaded {size} bytes via {protocol}: {transfer.remote_path}\n")
+        transfer.status = BulkExecutionTransferItem.STATUS_SUCCESS
+        transfer.stdout = stdout
+        transfer.finished_at = timezone.now()
+        transfer.save(update_fields=["status", "stdout", "finished_at"])
+
+        combined, combined_truncated = append_limited_output(result.stdout, stdout)
+        result.stdout = combined
+        result.output_truncated = result.output_truncated or truncated or combined_truncated
+        result.save(update_fields=["stdout", "output_truncated"])
+        return "completed"
+    except Exception as error:
+        transfer = BulkExecutionTransferItem.objects.select_related("result").get(id=transfer_id)
+        message = str(error)
+        transfer.status = BulkExecutionTransferItem.STATUS_FAILED
+        transfer.error = message
         transfer.started_at = transfer.started_at or timezone.now()
         transfer.finished_at = timezone.now()
         transfer.save(update_fields=["status", "error", "started_at", "finished_at"])
-
-        result.status = (
-            BulkExecutionResult.STATUS_SKIPPED
-            if event_name == "runner_on_skipped"
-            else BulkExecutionResult.STATUS_FAILED
-        )
-        result.error = transfer.error
-        result.started_at = result.started_at or timezone.now()
-        result.finished_at = timezone.now()
-        result.save(update_fields=["status", "error", "started_at", "finished_at"])
-        refresh_task_counts(BulkExecutionTask.objects.get(id=task_id))
-    return True
+        result = transfer.result
+        result.error = message
+        result.save(update_fields=["error"])
+        return "failed"
+    finally:
+        close_old_connections()
 
 
-def handle_file_upload_event(task_id: int, result_by_inventory: dict[str, BulkExecutionResult], upload_file: BulkExecutionUploadFile, event: dict[str, Any]) -> bool:
-    event_name = str(event.get("event", ""))
-    event_data = event.get("event_data") if isinstance(event.get("event_data"), dict) else {}
-    result = result_by_inventory.get(str(event_data.get("host", "")))
-    if result is None:
-        return True
+def remote_path_exists(host: ManagedHost, path: str) -> bool:
+    output = run_one_shot_ssh_command(
+        host,
+        f"if test -e {shlex.quote(path)}; then printf '%s' exists; fi",
+    )
+    return output.strip() == "exists"
 
-    transfer = BulkExecutionTransferItem.objects.filter(result=result, upload_file=upload_file).first()
-    if transfer is None:
-        return True
 
-    if event_name == "runner_on_start":
-        transfer.status = BulkExecutionTransferItem.STATUS_RUNNING
-        transfer.started_at = transfer.started_at or timezone.now()
-        transfer.finished_at = None
-        transfer.error = ""
-        transfer.save(update_fields=["status", "started_at", "finished_at", "error"])
-        result.status = BulkExecutionResult.STATUS_RUNNING
-        result.started_at = result.started_at or timezone.now()
-        result.finished_at = None
-        result.error = ""
-        result.save(update_fields=["status", "started_at", "finished_at", "error"])
-        return True
-
-    if event_name in {"runner_on_ok", "runner_on_failed", "runner_on_unreachable", "runner_on_skipped"}:
-        res = event_data.get("res") if isinstance(event_data.get("res"), dict) else {}
-        if event_name == "runner_on_ok":
-            status = BulkExecutionTransferItem.STATUS_SUCCESS
-        elif event_name == "runner_on_skipped":
-            status = BulkExecutionTransferItem.STATUS_SKIPPED
-        else:
-            status = BulkExecutionTransferItem.STATUS_FAILED
-        stdout, stdout_truncated = truncate_output(str(res.get("stdout", "") or ""))
-        stderr, stderr_truncated = truncate_output(str(res.get("stderr", "") or ""))
-        transfer.status = status
-        transfer.stdout = stdout
-        transfer.stderr = stderr
-        transfer.error = result_error(event_name, res)
-        transfer.started_at = transfer.started_at or timezone.now()
-        transfer.finished_at = timezone.now()
-        transfer.save(update_fields=["status", "stdout", "stderr", "error", "started_at", "finished_at"])
-
-        if stdout:
-            result.stdout = append_output(result.stdout, stdout)
-        if stderr:
-            result.stderr = append_output(result.stderr, stderr)
-        result.output_truncated = result.output_truncated or stdout_truncated or stderr_truncated
-        if transfer.error:
-            result.error = transfer.error
-        result.save(update_fields=["stdout", "stderr", "output_truncated", "error"])
-        refresh_task_counts(BulkExecutionTask.objects.get(id=task_id))
-    return True
+def mark_upload_transfer_skipped(transfer: BulkExecutionTransferItem, error: str) -> None:
+    transfer.status = BulkExecutionTransferItem.STATUS_SKIPPED
+    transfer.error = error
+    transfer.started_at = transfer.started_at or timezone.now()
+    transfer.finished_at = timezone.now()
+    transfer.save(update_fields=["status", "error", "started_at", "finished_at"])
 
 
 def append_output(current: str, addition: str) -> str:
@@ -953,249 +909,14 @@ def cleanup_upload_files(task: BulkExecutionTask) -> None:
         pass
 
 
-def run_ansible_shell(**kwargs):
-    try:
-        import ansible_runner
-    except ImportError as error:
-        raise RuntimeError("ansible-runner is not installed") from error
-    return ansible_runner.run(**kwargs)
-
-
-def run_ansible_playbook(**kwargs):
-    try:
-        import ansible_runner
-    except ImportError as error:
-        raise RuntimeError("ansible-runner is not installed") from error
-    return ansible_runner.run(**kwargs)
-
-
-def build_runner_inventory(results: list[BulkExecutionResult], temp_dir: Path) -> dict[str, Any]:
-    hosts: dict[str, dict[str, Any]] = {}
-    key_dir = temp_dir / "keys"
-    key_dir.mkdir(parents=True, exist_ok=True)
-    for result in results:
-        host = result.host
-        if host is None:
-            mark_result(result, BulkExecutionResult.STATUS_SKIPPED, error="Host no longer exists")
-            continue
-        variables: dict[str, Any] = {
-            "ansible_host": str(host.public_ip or host.private_ip),
-            "ansible_user": host.login_user,
-            "ansible_port": int(host.port or 22),
-            "ansible_connection": "ssh",
-            "ansible_ssh_common_args": "-o StrictHostKeyChecking=no",
-        }
-        if host.login_password:
-            variables["ansible_password"] = host.login_password
-        if host.private_key:
-            key_path = key_dir / f"{result.inventory_name}.key"
-            key_path.write_text(host.private_key.strip() + "\n", encoding="utf-8")
-            try:
-                os.chmod(key_path, 0o600)
-            except OSError:
-                pass
-            variables["ansible_ssh_private_key_file"] = str(key_path)
-        hosts[result.inventory_name] = variables
-    return {"all": {"hosts": hosts}}
-
-
 def is_cancel_requested(task_id: int) -> bool:
     return bool(BulkExecutionTask.objects.filter(id=task_id, cancel_requested=True).exists())
-
-
-def handle_playbook_event(task_id: int, result_by_inventory: dict[str, BulkExecutionResult], context: dict[str, Any], event: dict[str, Any]) -> bool:
-    event_name = str(event.get("event", ""))
-    event_data = event.get("event_data") if isinstance(event.get("event_data"), dict) else {}
-
-    if event_name == "playbook_on_play_start":
-        context["current_play"] = event_label(event_data, "play", "name", default="all")
-        context["current_task"] = ""
-        append_playbook_task_log(task_id, context, f"{ansible_banner('PLAY', context['current_play'])}\n")
-        return True
-
-    if event_name == "playbook_on_task_start":
-        context["current_task"] = event_label(event_data, "task", "name", "task_action", default="task")
-        append_playbook_task_log(task_id, context, f"{ansible_banner('TASK', context['current_task'])}\n")
-        return True
-
-    if event_name == "playbook_on_stats":
-        append_playbook_recap(task_id, context, result_by_inventory, event_data)
-        return True
-
-    result = result_by_inventory.get(str(event_data.get("host", "")))
-    if result is None:
-        return True
-
-    if event_name == "runner_on_start":
-        result.status = BulkExecutionResult.STATUS_RUNNING
-        result.started_at = result.started_at or timezone.now()
-        result.finished_at = None
-        result.error = ""
-        result.save(update_fields=["status", "started_at", "finished_at", "error"])
-        return True
-
-    if event_name in {"runner_on_ok", "runner_on_failed", "runner_on_unreachable", "runner_on_skipped"}:
-        res = event_data.get("res") if isinstance(event_data.get("res"), dict) else {}
-        if event_name == "runner_on_ok":
-            status = BulkExecutionResult.STATUS_SUCCESS
-        elif event_name == "runner_on_skipped":
-            status = BulkExecutionResult.STATUS_SKIPPED
-        else:
-            status = BulkExecutionResult.STATUS_FAILED
-
-        event_output = format_playbook_event_output(context, event_name, event_data, result, res)
-        append_playbook_task_log(task_id, context, format_playbook_task_output(event_name, result, res))
-        stdout, stdout_truncated = append_limited_output(result.stdout, event_output)
-        stderr, stderr_truncated = truncate_output(str(res.get("stderr", "") or ""))
-        result.status = status
-        result.stdout = stdout
-        result.stderr = stderr
-        result.exit_code = safe_int(res.get("rc"))
-        result.output_truncated = result.output_truncated or stdout_truncated or stderr_truncated
-        result.error = result_error(event_name, res)
-        result.started_at = result.started_at or timezone.now()
-        result.finished_at = timezone.now()
-        result.save(
-            update_fields=[
-                "status",
-                "stdout",
-                "stderr",
-                "exit_code",
-                "output_truncated",
-                "error",
-                "started_at",
-                "finished_at",
-            ]
-        )
-        refresh_task_counts(BulkExecutionTask.objects.get(id=task_id))
-    return True
-
-
-def append_playbook_task_log(task_id: int, context: dict[str, Any], addition: str) -> None:
-    if not addition:
-        return
-    output, truncated = append_limited_output(str(context.get("log_output") or ""), addition)
-    context["log_output"] = output
-    context["log_output_truncated"] = bool(context.get("log_output_truncated")) or truncated
-    BulkExecutionTask.objects.filter(id=task_id).update(
-        log_output=output,
-        log_output_truncated=context["log_output_truncated"],
-    )
-
-
-def append_playbook_recap(
-    task_id: int,
-    context: dict[str, Any],
-    result_by_inventory: dict[str, BulkExecutionResult],
-    stats: dict[str, Any],
-) -> None:
-    if context.get("recap_emitted"):
-        return
-    lines = [f"PLAY RECAP {'*' * 65}"]
-    for inventory_name, result in result_by_inventory.items():
-        label = str(result.host_ip or inventory_name)
-        lines.append(
-            f"{label:<15} : "
-            f"ok={recap_count(stats, 'ok', inventory_name)} "
-            f"changed={recap_count(stats, 'changed', inventory_name)} "
-            f"unreachable={recap_count(stats, 'dark', inventory_name) or recap_count(stats, 'unreachable', inventory_name)} "
-            f"failed={recap_count(stats, 'failures', inventory_name)} "
-            f"skipped={recap_count(stats, 'skipped', inventory_name)} "
-            f"rescued={recap_count(stats, 'rescued', inventory_name)} "
-            f"ignored={recap_count(stats, 'ignored', inventory_name)}"
-        )
-    append_playbook_task_log(task_id, context, "\n".join(lines) + "\n")
-    context["recap_emitted"] = True
-
-
-def recap_count(stats: dict[str, Any], key: str, inventory_name: str) -> int:
-    values = stats.get(key)
-    if not isinstance(values, dict):
-        return 0
-    return safe_int(values.get(inventory_name)) or 0
-
-
-def format_playbook_task_output(event_name: str, result: BulkExecutionResult, res: dict[str, Any]) -> str:
-    lines = [ansible_result_line(event_name, str(result.host_ip or result.inventory_name), res)]
-    command_stdout = str(res.get("stdout", "") or "").rstrip("\n")
-    if command_stdout:
-        lines.append(command_stdout)
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def event_label(event_data: dict[str, Any], *keys: str, default: str) -> str:
-    for key in keys:
-        value = event_data.get(key)
-        if value:
-            return str(value)
-    return default
-
-
-def format_playbook_event_output(context: dict[str, Any], event_name: str, event_data: dict[str, Any], result: BulkExecutionResult, res: dict[str, Any]) -> str:
-    lines: list[str] = []
-    play = event_label(event_data, "play", default=str(context.get("current_play") or "all"))
-    task = event_label(event_data, "task", default=str(context.get("current_task") or "task"))
-    headers = context.setdefault("host_headers", {}).setdefault(result.inventory_name, {"play": "", "task": ""})
-
-    if play and headers.get("play") != play:
-        lines.append(ansible_banner("PLAY", play))
-        headers["play"] = play
-        headers["task"] = ""
-    if task and headers.get("task") != task:
-        lines.append(ansible_banner("TASK", task))
-        headers["task"] = task
-
-    lines.append(ansible_result_line(event_name, result.inventory_name, res))
-    command_stdout = str(res.get("stdout", "") or "").rstrip("\n")
-    if command_stdout:
-        lines.append(command_stdout)
-    return "\n".join(lines).rstrip() + "\n"
-
-
-def ansible_banner(kind: str, label: str) -> str:
-    title = f"{kind} [{label}] "
-    return title + ("*" * max(0, 72 - len(title)))
-
-
-def ansible_result_line(event_name: str, inventory_name: str, res: dict[str, Any]) -> str:
-    if event_name == "runner_on_ok":
-        state = "changed" if res.get("changed") else "ok"
-        return f"{state}: [{inventory_name}]"
-    if event_name == "runner_on_skipped":
-        return f"skipping: [{inventory_name}]" + ansible_result_payload(res)
-    if event_name == "runner_on_unreachable":
-        return f"fatal: [{inventory_name}]: UNREACHABLE!" + ansible_result_payload(res)
-    return f"fatal: [{inventory_name}]: FAILED!" + ansible_result_payload(res)
-
-
-def ansible_result_payload(res: dict[str, Any]) -> str:
-    payload = {
-        key: value
-        for key, value in res.items()
-        if key not in {"stdout", "stdout_lines"} and value not in ("", None, [], {})
-    }
-    if not payload:
-        return ""
-    return " => " + json.dumps(payload, ensure_ascii=False, sort_keys=True, default=str)
 
 
 def append_limited_output(current: str, addition: str) -> tuple[str, bool]:
     if not addition:
         return current, False
     return truncate_output(append_output(current, addition))
-
-
-def result_error(event_name: str, result_payload: dict[str, Any]) -> str:
-    if event_name == "runner_on_ok":
-        return ""
-    return str(result_payload.get("msg") or result_payload.get("stderr") or result_payload.get("exception") or event_name)
-
-
-def safe_int(value) -> int | None:
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return None
 
 
 def truncate_output(value: str) -> tuple[str, bool]:

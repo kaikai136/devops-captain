@@ -68,19 +68,12 @@ const historyStatusOptions: Array<{ value: BulkExecutionStatus | ''; label: stri
 
 const executionTypeLabels: Record<BulkExecutionType, string> = {
   shell: '普通 Shell',
-  playbook: 'Playbook 脚本',
   file_upload: '文件上传',
 };
 
 const scriptPresets: Array<{ key: string; label: string; type: Exclude<BulkExecutionType, 'file_upload'>; command: string }> = [
   { key: 'shell-health', label: '系统巡检', type: 'shell', command: 'hostname\nuptime\ndf -h\nfree -m' },
   { key: 'shell-service', label: '服务状态', type: 'shell', command: 'systemctl status nginx --no-pager || true' },
-  {
-    key: 'playbook-ping',
-    label: '连通性检查',
-    type: 'playbook',
-    command: '- hosts: all\n  gather_facts: false\n  tasks:\n    - name: Ping hosts\n      ansible.builtin.ping:\n',
-  },
 ];
 
 const MAX_SCRIPT_LENGTH = 200000;
@@ -173,29 +166,16 @@ const selectedTaskProgress = computed(() => {
   if (!selectedTask.value || selectedTask.value.targetCount <= 0) return 0;
   return Math.round((selectedTask.value.completedCount / selectedTask.value.targetCount) * 100);
 });
-const playbookLogOutput = computed(() => {
-  if (!selectedTask.value || selectedTask.value.executionType !== 'playbook') return '';
-  return buildPlaybookLogOutput(selectedTask.value);
-});
-const selectedTaskLogLines = computed(() => {
-  const output = playbookLogOutput.value;
-  const lines = output.split(/\r?\n/);
-  return lines.length && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines;
-});
 const selectedTaskUploadSize = computed(() => selectedTask.value?.uploadSize || selectedTask.value?.uploadFiles.reduce((total, file) => total + file.size, 0) || 0);
 const uploadFileTreeRows = computed(() => flattenUploadFileTree(buildUploadFileTree(selectedTask.value?.uploadFiles ?? []), expandedUploadFolderKeys.value));
 const selectedTaskExecutionType = computed(() => selectedTask.value ? executionTypeLabels[selectedTask.value.executionType] : '');
 const selectedTaskResultIds = computed(() => selectedTask.value?.results.map((result) => result.id) ?? []);
 const allResultsExpanded = computed(() => selectedTaskResultIds.value.length > 0 && selectedTaskResultIds.value.every((id) => expandedResultIds.value.has(id)));
 const canClearScriptInput = computed(() => Boolean(commandInput.value.trim() || scriptSourceName.value));
-const commandPlaceholder = computed(() =>
-  executionType.value === 'playbook'
-    ? '- hosts: all\n  gather_facts: false\n  tasks:\n    - name: Check hostname\n      ansible.builtin.command: hostname'
-    : 'set -e\nhostname\nuptime',
-);
-const scriptFileAccept = computed(() => (executionType.value === 'playbook' ? '.yml,.yaml' : '.sh'));
-const scriptUploadButtonLabel = computed(() => (executionType.value === 'playbook' ? '上传 YAML' : '上传 SH'));
-const executeActionLabel = computed(() => (executionType.value === 'playbook' ? '执行 Playbook' : '执行 Shell'));
+const commandPlaceholder = 'set -e\nhostname\nuptime';
+const scriptFileAccept = '.sh';
+const scriptUploadButtonLabel = '上传 SH';
+const executeActionLabel = '执行 Shell';
 
 onMounted(async () => {
   await refreshAll();
@@ -683,7 +663,7 @@ async function onScriptFileChange(event: Event) {
   input.value = '';
   if (!file) return;
   if (!isScriptFileAllowed(file.name)) {
-    showToast('脚本类型不匹配', executionType.value === 'playbook' ? '请上传 .yml 或 .yaml 文件。' : '请上传 .sh 脚本文件。', 'error');
+    showToast('脚本类型不匹配', '请上传 .sh 脚本文件。', 'error');
     return;
   }
   try {
@@ -701,7 +681,7 @@ async function onScriptFileChange(event: Event) {
 
 function isScriptFileAllowed(fileName: string) {
   const normalized = fileName.toLowerCase();
-  return executionType.value === 'playbook' ? /\.ya?ml$/.test(normalized) : /\.sh$/.test(normalized);
+  return /\.sh$/.test(normalized);
 }
 
 function triggerUploadFileSelect() {
@@ -844,9 +824,6 @@ async function createUploadTask() {
 function setExecutionType(type: Exclude<BulkExecutionType, 'file_upload'>) {
   executionType.value = type;
   scriptSourceName.value = '';
-  if (!commandInput.value.trim()) {
-    commandInput.value = type === 'playbook' ? scriptPresets.find((preset) => preset.type === 'playbook')?.command ?? '' : '';
-  }
 }
 
 function applyScriptPreset(preset: (typeof scriptPresets)[number]) {
@@ -861,7 +838,7 @@ async function cancelSelectedTask() {
   try {
     await cancelBulkExecutionTask(selectedTaskId.value);
     await Promise.all([loadTasks(), selectTask(selectedTaskId.value, false, false)]);
-    showToast('已请求取消', '任务会在当前 Ansible 执行结束后停止。', 'success');
+    showToast('已请求取消', '任务会在当前命令或文件传输结束后停止。', 'success');
   } catch (error) {
     showToast('取消任务失败', errorMessage(error), 'error');
   } finally {
@@ -938,48 +915,6 @@ function toggleAllResults() {
     return;
   }
   expandedResultIds.value = new Set([...expandedResultIds.value, ...ids]);
-}
-
-function buildPlaybookLogOutput(task: BulkExecutionTaskDetail) {
-  if (task.logOutput?.trim()) return task.logOutput;
-  const blocks: string[] = [];
-  if (task.error?.trim()) blocks.push(`error: [task] ${task.error.trim()}`);
-  for (const result of task.results) {
-    const fallback = formatPlaybookResultFallback(result);
-    if (fallback) blocks.push(fallback);
-  }
-  return blocks.join('\n');
-}
-
-function formatPlaybookResultFallback(result: BulkExecutionResult) {
-  const label = result.hostIp || result.hostName || `host-${result.id}`;
-  const stdout = result.stdout?.trimEnd();
-  const stderr = result.stderr?.trimEnd();
-  const error = result.error?.trim();
-  const blocks: string[] = [];
-  if (stdout) blocks.push(stdout);
-  if (stderr) blocks.push(`stderr: [${label}]\n${stderr}`);
-  if (error && !logContains(stdout, error) && !logContains(stderr, error)) {
-    const prefix = result.status === 'failed' ? `fatal: [${label}]: FAILED! => ` : `error: [${label}] `;
-    blocks.push(`${prefix}${error}`);
-  }
-  if (!blocks.length && result.status === 'failed') blocks.push(`fatal: [${label}]: FAILED! => No result returned by Ansible`);
-  return blocks.join('\n');
-}
-
-function logContains(output: string | undefined, needle: string) {
-  return Boolean(output && output.includes(needle));
-}
-
-function ansibleLogLineClass(line: string) {
-  const normalized = line.trim().toLowerCase();
-  if (!normalized) return 'is-empty';
-  if (normalized.startsWith('play ') || normalized.startsWith('task ') || normalized.startsWith('play recap')) return 'is-heading';
-  if (normalized.startsWith('fatal:') || /\b(unreachable|failed)=[1-9]\d*/.test(normalized)) return 'is-error';
-  if (normalized.startsWith('changed:') || /\bchanged=[1-9]\d*/.test(normalized)) return 'is-changed';
-  if (normalized.startsWith('ok:') || /\bok=[1-9]\d*/.test(normalized)) return 'is-success';
-  if (normalized.startsWith('skipping:')) return 'is-muted';
-  return '';
 }
 
 function startPolling() {
@@ -1065,7 +1000,7 @@ function formatFileSize(value: number) {
       <header class="bulk-execution-head">
         <div>
           <h2>批量执行</h2>
-          <p>面向已验证 Linux SSH 主机执行命令、Playbook 和文件分发任务。</p>
+          <p>面向已验证 Linux SSH 主机执行命令和文件分发任务。</p>
         </div>
         <el-button-group class="bulk-execution-actions">
           <el-button v-if="canRefresh || canExecute" :type="activeBulkView === 'history' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'history' }" @click="switchBulkView('history')"><AppIcon name="rows" :size="16" />执行记录</el-button>
@@ -1188,10 +1123,6 @@ function formatFileSize(value: number) {
               <el-button :type="executionType === 'shell' ? 'primary' : 'default'" :class="{ active: executionType === 'shell' }" @click="setExecutionType('shell')">
                 <AppIcon name="terminal" :size="15" />
                 普通 Shell
-              </el-button>
-              <el-button :type="executionType === 'playbook' ? 'primary' : 'default'" :class="{ active: executionType === 'playbook' }" @click="setExecutionType('playbook')">
-                <AppIcon name="rows" :size="15" />
-                Playbook 脚本
               </el-button>
             </el-button-group>
             <label class="bulk-task-name-field">
@@ -1483,27 +1414,7 @@ function formatFileSize(value: number) {
             <el-alert v-if="selectedTask.error" class="bulk-error" type="error" :closable="false" :title="selectedTask.error" />
             <el-progress :percentage="selectedTaskProgress" :stroke-width="10" />
 
-            <section v-if="selectedTask.executionType === 'playbook'" class="bulk-ansible-log-panel">
-              <header class="bulk-ansible-log-header">
-                <strong>Ansible 执行日志</strong>
-                <span v-if="selectedTask.logOutputTruncated">日志已截断</span>
-                <span v-else>{{ selectedTask.status === 'running' ? '实时输出中' : '执行记录' }}</span>
-              </header>
-              <div v-if="selectedTaskLogLines.length" class="bulk-ansible-log" role="log" aria-live="polite">
-                <div
-                  v-for="(line, index) in selectedTaskLogLines"
-                  :key="`${index}-${line}`"
-                  class="bulk-ansible-log-line"
-                  :class="ansibleLogLineClass(line)"
-                >
-                  <span class="bulk-ansible-log-gutter">{{ String(index + 1).padStart(3, '0') }}</span>
-                  <span>{{ line || ' ' }}</span>
-                </div>
-              </div>
-              <div v-else class="bulk-ansible-log-empty">{{ selectedTask.status === 'running' || selectedTask.status === 'queued' ? '等待 Ansible 输出...' : '暂无 Ansible 输出' }}</div>
-            </section>
-
-            <div v-else-if="selectedTask.executionType === 'file_upload' && uploadDetailView === 'files'" class="bulk-upload-detail-tree">
+            <div v-if="selectedTask.executionType === 'file_upload' && uploadDetailView === 'files'" class="bulk-upload-detail-tree">
               <el-button
                 v-for="row in uploadFileTreeRows"
                 :key="row.key"
@@ -1560,7 +1471,7 @@ function formatFileSize(value: number) {
                     </div>
                   </div>
                   <div>
-                    <strong>{{ selectedTask.executionType === 'playbook' ? 'Ansible 日志' : 'stdout' }}</strong>
+                    <strong>stdout</strong>
                     <pre>{{ result.stdout || '无标准输出' }}</pre>
                   </div>
                   <div>
