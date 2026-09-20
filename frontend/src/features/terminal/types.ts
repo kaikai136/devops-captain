@@ -40,6 +40,16 @@ export interface TerminalFileListResponse {
   path: string;
   protocol: string;
   entries: TerminalFileEntry[];
+  metrics?: {
+    entryCount: number;
+    sessionReused: boolean;
+    sessionMs: number;
+    normalizeMs: number;
+    readMs: number;
+    identityMs: number;
+    sortMs: number;
+    totalMs: number;
+  };
 }
 
 export interface SshGatewayConnectionInfo {

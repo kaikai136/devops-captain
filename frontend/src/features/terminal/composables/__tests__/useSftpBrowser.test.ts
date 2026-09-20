@@ -121,7 +121,7 @@ describe('useSftpBrowser', () => {
 
     const request = browser.loadDirectory('logs');
 
-    expect(listFiles).toHaveBeenCalledWith(7, { path: 'logs' });
+    expect(listFiles).toHaveBeenCalledWith(7, { path: 'logs' }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(browser.isLoading.value).toBe(true);
     expect(browser.error.value).toBe('');
 
@@ -132,6 +132,56 @@ describe('useSftpBrowser', () => {
     expect(browser.path.value).toBe('/srv/logs');
     expect(browser.entries.value.map((entry) => entry.name)).toEqual(['..', 'alpha.txt', 'beta.txt']);
     expect(browser.listProtocol.value).toBe('sftp');
+  });
+
+  it('deduplicates in-flight directory loads and reuses the short-lived cache', async () => {
+    let resolveList!: (value: { path: string; protocol: string; entries: TerminalFileEntry[] }) => void;
+    const listFiles = vi.fn(() => new Promise<{ path: string; protocol: string; entries: TerminalFileEntry[] }>((resolve) => {
+      resolveList = resolve;
+    }));
+    const { browser } = createBrowser(createApi({ listFiles }));
+
+    const first = browser.loadDirectory('/srv');
+    const duplicate = browser.loadDirectory('/srv');
+    expect(listFiles).toHaveBeenCalledTimes(1);
+
+    resolveList({ path: '/srv', protocol: 'sftp', entries: [parentEntry, alphaEntry] });
+    await Promise.all([first, duplicate]);
+    await browser.loadDirectory('/srv');
+    expect(listFiles).toHaveBeenCalledTimes(1);
+
+    const forced = browser.loadDirectory('/srv', { force: true });
+    expect(listFiles).toHaveBeenCalledTimes(2);
+    resolveList({ path: '/srv', protocol: 'sftp', entries: [parentEntry, alphaEntry, betaEntry] });
+    await forced;
+    expect(browser.entries.value).toHaveLength(3);
+  });
+
+  it('aborts an obsolete directory request when navigating elsewhere', async () => {
+    const signals: AbortSignal[] = [];
+    const listFiles = vi.fn((
+      _hostId: number,
+      payload: { path: string },
+      options: RequestInit = {},
+    ) => {
+      const signal = options.signal as AbortSignal;
+      signals.push(signal);
+      if (payload.path === '/first') {
+        return new Promise<{ path: string; protocol: string; entries: TerminalFileEntry[] }>((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })));
+        });
+      }
+      return Promise.resolve({ path: '/second', protocol: 'sftp', entries: [parentEntry, betaEntry] });
+    });
+    const { browser } = createBrowser(createApi({ listFiles }));
+
+    const first = browser.loadDirectory('/first');
+    const second = browser.loadDirectory('/second');
+
+    expect(signals[0].aborted).toBe(true);
+    await Promise.all([first, second]);
+    expect(browser.path.value).toBe('/second');
+    expect(browser.error.value).toBe('');
   });
 
   it('refreshes after create and selects the created entry', async () => {
@@ -230,7 +280,7 @@ describe('useSftpBrowser', () => {
       totalFiles: 1,
       progress: 100,
     });
-    expect(listFiles).toHaveBeenCalledWith(7, { path: '/srv' });
+    expect(listFiles).toHaveBeenLastCalledWith(7, { path: '/srv' }, expect.objectContaining({ signal: expect.any(AbortSignal) }));
   });
 
   it('uses the response filename for downloads and streams bytes into the selected directory', async () => {

@@ -9,7 +9,7 @@ from uuid import uuid4
 from host_management.models import ManagedHost
 
 from .commands import run_one_shot_ssh_command, run_one_shot_ssh_upload
-from .connections import borrow_ssh_client
+from .connections import borrow_sftp_client, borrow_ssh_client, ssh_client_pool_key
 from .errors import TerminalConnectionError
 from .file_parsers import (
     format_remote_timestamp,
@@ -35,6 +35,9 @@ from .file_parsers import (
 
 
 REMOTE_FILE_STREAM_CHUNK_BYTES = 1024 * 1024
+REMOTE_IDENTITY_CACHE_TTL_SECONDS = 300.0
+REMOTE_IDENTITY_CACHE_MAX_ENTRIES = 2048
+_REMOTE_IDENTITY_CACHE: dict[tuple[tuple[str, str, int, str], str, str], tuple[float, str]] = {}
 
 def list_remote_directory(host: ManagedHost, path: str) -> dict:
     path = normalize_remote_file_path(path or ".")
@@ -219,29 +222,51 @@ def run_remote_file_operation(label: str, operations, path: str) -> dict:
     raise TerminalConnectionError(label + "：" + "；".join(f"{item['protocol']} {item.get('error', '')}" for item in attempts))
 
 def list_remote_directory_with_sftp(host: ManagedHost, path: str) -> dict:
-    with borrow_ssh_client(host) as client:
-        sftp = client.open_sftp()
-        try:
-            current_path = sftp.normalize(path)
-            entries = []
-            for item in sftp.listdir_attr(current_path):
-                entries.append(
-                    {
-                        "name": item.filename,
-                        "type": "directory" if stat.S_ISDIR(item.st_mode) else "file",
-                        "modifiedAt": time.strftime("%Y/%m/%d %H:%M", time.localtime(item.st_mtime or 0)),
-                        "size": item.st_size or 0,
-                        "permissions": stat.filemode(item.st_mode),
-                        "owner": str(getattr(item, "st_uid", "") or ""),
-                        "group": str(getattr(item, "st_gid", "") or ""),
-                        "path": join_remote_path(current_path, item.filename),
-                    }
-                )
-            enrich_remote_entries_with_stat(client, current_path, entries)
-        finally:
-            sftp.close()
-        entries.sort(key=remote_file_sort_key)
-        return {"path": current_path, "entries": [parent_remote_entry(current_path), *entries]}
+    started_at = time.perf_counter()
+    session_started_at = started_at
+    with borrow_sftp_client(host) as (client, sftp, session_reused):
+        session_ms = elapsed_ms(session_started_at)
+        normalize_started_at = time.perf_counter()
+        current_path = sftp.normalize(path)
+        normalize_ms = elapsed_ms(normalize_started_at)
+
+        read_started_at = time.perf_counter()
+        remote_entries = sftp.listdir_attr(current_path)
+        read_ms = elapsed_ms(read_started_at)
+        entries = [
+            {
+                "name": item.filename,
+                "type": "directory" if stat.S_ISDIR(item.st_mode) else "file",
+                "modifiedAt": time.strftime("%Y/%m/%d %H:%M", time.localtime(item.st_mtime or 0)),
+                "size": item.st_size or 0,
+                "permissions": stat.filemode(item.st_mode),
+                "owner": str(getattr(item, "st_uid", "") or ""),
+                "group": str(getattr(item, "st_gid", "") or ""),
+                "path": join_remote_path(current_path, item.filename),
+            }
+            for item in remote_entries
+        ]
+
+        identity_started_at = time.perf_counter()
+        enrich_remote_entries_with_identities(host, client, entries)
+        identity_ms = elapsed_ms(identity_started_at)
+
+    sort_started_at = time.perf_counter()
+    entries.sort(key=remote_file_sort_key)
+    return {
+        "path": current_path,
+        "entries": [parent_remote_entry(current_path), *entries],
+        "metrics": {
+            "entryCount": len(entries),
+            "sessionReused": session_reused,
+            "sessionMs": session_ms,
+            "normalizeMs": normalize_ms,
+            "readMs": read_ms,
+            "identityMs": identity_ms,
+            "sortMs": elapsed_ms(sort_started_at),
+            "totalMs": elapsed_ms(started_at),
+        },
+    }
 
 def list_remote_directory_with_scp_enhanced(host: ManagedHost, path: str) -> dict:
     current_path = resolve_remote_directory_path(host, path)
@@ -256,13 +281,9 @@ def list_remote_directory_with_scp_normal(host: ManagedHost, path: str) -> dict:
     return {"path": current_path, "entries": parse_remote_ls_entries(current_path, run_one_shot_ssh_command(host, command))}
 
 def get_remote_file_properties_with_sftp(host: ManagedHost, path: str) -> dict:
-    with borrow_ssh_client(host) as client:
-        sftp = client.open_sftp()
-        try:
-            current_path = sftp.normalize(path)
-            attrs = sftp.stat(current_path)
-        finally:
-            sftp.close()
+    with borrow_sftp_client(host) as (client, sftp, _session_reused):
+        current_path = sftp.normalize(path)
+        attrs = sftp.stat(current_path)
         try:
             stat_payload = parse_remote_stat_output(current_path, run_client_command(client, remote_stat_command(current_path)))
             stat_payload["path"] = current_path
@@ -329,6 +350,92 @@ def run_optional_client_command(client, command: str, timeout: int = 10) -> str:
         return ""
     return output[-1].strip() if output else ""
 
+def elapsed_ms(started_at: float) -> float:
+    return round((time.perf_counter() - started_at) * 1000, 2)
+
+
+def enrich_remote_entries_with_identities(host: ManagedHost, client, entries: list[dict]) -> None:
+    user_ids = {str(entry.get("owner") or "") for entry in entries if str(entry.get("owner") or "").isdigit()}
+    group_ids = {str(entry.get("group") or "") for entry in entries if str(entry.get("group") or "").isdigit()}
+    if not user_ids and not group_ids:
+        return
+
+    users, groups = resolve_remote_identity_names_batch(host, client, user_ids, group_ids)
+    for entry in entries:
+        owner = str(entry.get("owner") or "")
+        group = str(entry.get("group") or "")
+        entry["owner"] = users.get(owner) or owner
+        entry["group"] = groups.get(group) or group
+
+
+def resolve_remote_identity_names_batch(
+    host: ManagedHost,
+    client,
+    user_ids: set[str],
+    group_ids: set[str],
+) -> tuple[dict[str, str], dict[str, str]]:
+    pool_key = ssh_client_pool_key(host)
+    now = time.monotonic()
+    users: dict[str, str] = {}
+    groups: dict[str, str] = {}
+    missing_users: list[str] = []
+    missing_groups: list[str] = []
+
+    for kind, identities, resolved, missing in (
+        ("user", user_ids, users, missing_users),
+        ("group", group_ids, groups, missing_groups),
+    ):
+        for identity in sorted(identities):
+            cached = _REMOTE_IDENTITY_CACHE.get((pool_key, kind, identity))
+            if cached and now - cached[0] <= REMOTE_IDENTITY_CACHE_TTL_SECONDS:
+                resolved[identity] = cached[1]
+            else:
+                missing.append(identity)
+
+    if missing_users or missing_groups:
+        command_parts = []
+        for identity in missing_users:
+            quoted = shlex.quote(identity)
+            command_parts.append(
+                f"printf 'U\\t{identity}\\t'; getent passwd {quoted} 2>/dev/null | cut -d: -f1 | head -n1; printf '\\n'"
+            )
+        for identity in missing_groups:
+            quoted = shlex.quote(identity)
+            command_parts.append(
+                f"printf 'G\\t{identity}\\t'; getent group {quoted} 2>/dev/null | cut -d: -f1 | head -n1; printf '\\n'"
+            )
+
+        try:
+            output = run_client_command(client, " ".join(command_parts), timeout=10)
+        except Exception:
+            output = ""
+
+        for line in output.splitlines():
+            parts = line.split("\t", 2)
+            if len(parts) != 3:
+                continue
+            kind, identity, name = parts
+            if kind == "U" and identity in user_ids:
+                users[identity] = name.strip()
+            elif kind == "G" and identity in group_ids:
+                groups[identity] = name.strip()
+
+        for kind, identities, resolved in (
+            ("user", missing_users, users),
+            ("group", missing_groups, groups),
+        ):
+            for identity in identities:
+                _REMOTE_IDENTITY_CACHE[(pool_key, kind, identity)] = (now, resolved.get(identity, ""))
+
+        if len(_REMOTE_IDENTITY_CACHE) > REMOTE_IDENTITY_CACHE_MAX_ENTRIES:
+            overflow = len(_REMOTE_IDENTITY_CACHE) - REMOTE_IDENTITY_CACHE_MAX_ENTRIES
+            oldest = sorted(_REMOTE_IDENTITY_CACHE.items(), key=lambda item: item[1][0])[:overflow]
+            for key, _value in oldest:
+                _REMOTE_IDENTITY_CACHE.pop(key, None)
+
+    return users, groups
+
+
 def enrich_remote_entries_with_stat(client, path: str, entries: list[dict]) -> None:
     if not entries:
         return
@@ -359,35 +466,23 @@ def download_remote_file_with_sftp(host: ManagedHost, path: str) -> dict:
     return encode_remote_download(path, payload["content"])
 
 def download_remote_file_content_with_sftp(host: ManagedHost, path: str) -> dict:
-    with borrow_ssh_client(host) as client:
-        sftp = client.open_sftp()
-        try:
-            with sftp.open(path, "rb") as remote_file:
-                data = remote_file.read()
-        finally:
-            sftp.close()
+    with borrow_sftp_client(host) as (_client, sftp, _session_reused):
+        with sftp.open(path, "rb") as remote_file:
+            data = remote_file.read()
         return {"content": data}
 
 def stream_remote_file_content_with_sftp(host: ManagedHost, path: str) -> dict:
-    with borrow_ssh_client(host) as client:
-        sftp = client.open_sftp()
-        try:
-            attrs = sftp.stat(path)
-        finally:
-            sftp.close()
+    with borrow_sftp_client(host) as (_client, sftp, _session_reused):
+        attrs = sftp.stat(path)
 
     def chunks():
-        with borrow_ssh_client(host) as client:
-            sftp = client.open_sftp()
-            try:
-                with sftp.open(path, "rb") as remote_file:
-                    while True:
-                        chunk = remote_file.read(REMOTE_FILE_STREAM_CHUNK_BYTES)
-                        if not chunk:
-                            break
-                        yield chunk
-            finally:
-                sftp.close()
+        with borrow_sftp_client(host) as (_client, sftp, _session_reused):
+            with sftp.open(path, "rb") as remote_file:
+                while True:
+                    chunk = remote_file.read(REMOTE_FILE_STREAM_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    yield chunk
 
     return {
         "filename": path.rstrip("/").split("/")[-1] or "download",
@@ -458,26 +553,22 @@ def upload_remote_file_with_sftp_stream(host: ManagedHost, path: str, source) ->
     rewind_upload_source(source)
     temp_path = temporary_remote_upload_path(path)
     written = 0
-    with borrow_ssh_client(host) as client:
-        sftp = client.open_sftp()
+    with borrow_sftp_client(host) as (_client, sftp, _session_reused):
+        ensure_remote_sftp_directory(sftp, parent_remote_path(path))
         try:
-            ensure_remote_sftp_directory(sftp, parent_remote_path(path))
+            with sftp.open(temp_path, "wb") as remote_file:
+                for chunk in iter_upload_chunks(source):
+                    if not chunk:
+                        continue
+                    remote_file.write(chunk)
+                    written += len(chunk)
+            replace_remote_sftp_file(sftp, temp_path, path)
+        except Exception:
             try:
-                with sftp.open(temp_path, "wb") as remote_file:
-                    for chunk in iter_upload_chunks(source):
-                        if not chunk:
-                            continue
-                        remote_file.write(chunk)
-                        written += len(chunk)
-                replace_remote_sftp_file(sftp, temp_path, path)
+                sftp.remove(temp_path)
             except Exception:
-                try:
-                    sftp.remove(temp_path)
-                except Exception:
-                    pass
-                raise
-        finally:
-            sftp.close()
+                pass
+            raise
     return {"size": written}
 
 
