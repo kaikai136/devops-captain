@@ -28,6 +28,7 @@ const emit = defineEmits<{
   marqueeStart: [event: MouseEvent];
   dragStart: [entry: TerminalFileEntry, event: DragEvent];
   open: [entry: TerminalFileEntry];
+  navigate: [path: string];
   dragEnter: [event: DragEvent];
   dragOver: [event: DragEvent];
   dragLeave: [event: DragEvent];
@@ -39,6 +40,7 @@ const emit = defineEmits<{
 
 const list = ref<HTMLElement | null>(null);
 const renameInput = ref<InputInstance | null>(null);
+const pathDraft = ref(props.path);
 const scrollTop = ref(0);
 const viewportHeight = ref(0);
 let resizeObserver: ResizeObserver | null = null;
@@ -59,6 +61,7 @@ watch(() => props.rename?.path, async (path) => {
   renameInput.value?.input?.select();
 });
 watch(() => props.path, () => {
+  pathDraft.value = props.path;
   scrollTop.value = 0;
   if (list.value) list.value.scrollTop = 0;
 });
@@ -94,13 +97,28 @@ function openDirectory(entry: TerminalFileEntry) {
   }
 }
 
+function navigateToPath(event?: KeyboardEvent) {
+  if (event?.isComposing || !props.active || props.loading) return;
+  const target = pathDraft.value.trim();
+  if (target) emit('navigate', target);
+}
+
 defineExpose({ list });
 </script>
 
 <template>
   <div class="terminal-file-path">
-    <span>{{ path }}</span>
-    <el-button circle title="收藏路径" aria-label="收藏路径"><AppIcon name="folder" :size="14" /></el-button>
+    <el-input
+      v-model="pathDraft"
+      class="terminal-file-path-input"
+      aria-label="目录路径"
+      placeholder="输入目录路径，按 Enter 跳转"
+      :disabled="!active"
+      :readonly="loading"
+      @keydown.enter.stop.prevent="navigateToPath"
+      @keydown.esc.stop.prevent="pathDraft = path"
+    />
+    <el-button circle title="跳转目录" aria-label="跳转目录" :disabled="!active || loading || !pathDraft.trim()" @click="navigateToPath()"><AppIcon name="folder" :size="14" /></el-button>
   </div>
   <div class="terminal-file-table">
     <div class="terminal-file-table-head">

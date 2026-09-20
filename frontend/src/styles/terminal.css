@@ -776,6 +776,21 @@ input {
   font-weight: 800;
 }
 
+.terminal-file-path-input {
+  min-width: 0;
+}
+
+.terminal-file-path-input .el-input__wrapper {
+  padding: 0 6px;
+  background: transparent;
+  box-shadow: none;
+}
+
+.terminal-file-path-input .el-input__inner {
+  height: 28px;
+  font-size: 12px;
+}
+
 .terminal-file-table {
   display: grid;
   grid-template-rows: 30px minmax(0, 1fr);

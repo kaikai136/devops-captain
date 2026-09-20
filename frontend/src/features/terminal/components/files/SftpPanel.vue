@@ -509,6 +509,7 @@ onBeforeUnmount(() => {
           @marquee-start="startMarquee"
           @drag-start="startDragDownload"
           @open="browser.openDirectory"
+          @navigate="browser.loadDirectory($event)"
           @drag-enter="dragEnter"
           @drag-over="dragOver"
           @drag-leave="dragLeave"

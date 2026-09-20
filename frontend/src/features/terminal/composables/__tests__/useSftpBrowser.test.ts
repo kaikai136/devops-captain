@@ -81,6 +81,39 @@ function createBrowser(api = createApi(), options: Record<string, unknown> = {})
 }
 
 describe('useSftpBrowser', () => {
+  it('navigates typed absolute, relative, parent, and home paths through the listing API', async () => {
+    const listFiles = vi.fn(async (_hostId: number, payload: { path: string }) => ({
+      path: payload.path === '~' ? '/home/root' : payload.path,
+      protocol: 'sftp',
+      entries: [alphaEntry],
+    }));
+    const { browser } = createBrowser(createApi({ listFiles }));
+
+    await browser.loadDirectory(' /srv ');
+    await browser.loadDirectory('logs');
+    expect(browser.path.value).toBe('/srv/logs');
+    await browser.loadDirectory('..');
+    expect(browser.path.value).toBe('/srv');
+    await browser.loadDirectory('~');
+    expect(browser.path.value).toBe('/home/root');
+    expect(listFiles.mock.calls.map(([, payload]) => payload.path)).toEqual(['/srv', '/srv/logs', '~']);
+  });
+
+  it('retains the current directory and entries if a typed path cannot be opened', async () => {
+    const api = createApi();
+    const { browser } = createBrowser(api);
+    await browser.loadDirectory('/srv');
+    const previousEntries = browser.entries.value;
+    vi.mocked(api.listFiles).mockRejectedValueOnce(new Error('目录不存在或无权限'));
+
+    await browser.loadDirectory('/missing');
+
+    expect(browser.path.value).toBe('/srv');
+    expect(browser.entries.value).toBe(previousEntries);
+    expect(browser.error.value).toBe('目录不存在或无权限');
+    expect(browser.isLoading.value).toBe(false);
+  });
+
   it('restores the followed cwd when switching terminal sessions even when the cwd text is unchanged', () => {
     expect(getSftpSessionLoadPath(true, true, '/home/root')).toBe('/home/root');
     expect(getSftpSessionLoadPath(false, true, '/home/root')).toBe('.');
