@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import codecs
+from contextlib import contextmanager
 from dataclasses import dataclass
+import hashlib
 import io
 import threading
 import time
@@ -91,6 +93,10 @@ SSH_BANNER_TIMEOUT = 30
 SSH_AUTH_TIMEOUT = 20
 SSH_RETRY_DELAY_SECONDS = 0.8
 SSH_CREDENTIAL_POLL_ATTEMPTS = 1
+SSH_CLIENT_POOL_IDLE_SECONDS = 45.0
+SSH_CLIENT_POOL_MAX_PER_HOST = 2
+_SSH_CLIENT_POOL: dict[tuple[str, str, int, str], list[tuple[float, object]]] = {}
+_SSH_CLIENT_POOL_LOCK = threading.Lock()
 SSH_RETRY_ERROR_MARKERS = (
     "error reading ssh protocol banner",
     "error reading protocol banner",
@@ -175,6 +181,113 @@ def open_ssh_client(host: ManagedHost, *, terminal_settings: dict | None = None)
     if last_error.startswith("SSH 连接失败："):
         raise TerminalConnectionError(last_error)
     raise TerminalConnectionError(f"SSH 连接失败：{last_error}")
+
+
+@contextmanager
+def borrow_ssh_client(host: ManagedHost, *, terminal_settings: dict | None = None):
+    """Borrow an exclusive SSH client and return it to a small idle pool.
+
+    Live terminal shells intentionally keep dedicated connections. The pool is
+    only for short-lived file operations which would otherwise pay a full SSH
+    handshake for every HTTP request.
+    """
+
+    key = ssh_client_pool_key(host)
+    client = _take_pooled_ssh_client(key)
+    if client is None:
+        client = open_ssh_client(host, terminal_settings=terminal_settings)
+        key = ssh_client_pool_key(host)
+    try:
+        yield client
+    except Exception:
+        _close_ssh_client(client)
+        raise
+    else:
+        if _ssh_client_is_active(client):
+            _return_pooled_ssh_client(key, client)
+        else:
+            _close_ssh_client(client)
+
+
+def ssh_client_pool_key(host: ManagedHost) -> tuple[str, str, int, str]:
+    target = str(getattr(host, "public_ip", "") or getattr(host, "private_ip", "") or "")
+    port = int(getattr(host, "port", 22) or 22)
+    host_identity = str(getattr(host, "pk", None) or getattr(host, "id", None) or id(host))
+    credential_material = "\0".join(
+        (
+            str(getattr(host, "login_user", "") or ""),
+            str(getattr(host, "login_password", "") or ""),
+            str(getattr(host, "private_key", "") or ""),
+        )
+    )
+    credential_fingerprint = hashlib.sha256(credential_material.encode("utf-8")).hexdigest()
+    return host_identity, target, port, credential_fingerprint
+
+
+def clear_ssh_client_pool() -> None:
+    with _SSH_CLIENT_POOL_LOCK:
+        pooled = [client for entries in _SSH_CLIENT_POOL.values() for _returned_at, client in entries]
+        _SSH_CLIENT_POOL.clear()
+    for client in pooled:
+        _close_ssh_client(client)
+
+
+def _take_pooled_ssh_client(key):
+    now = time.monotonic()
+    expired = []
+    selected = None
+    with _SSH_CLIENT_POOL_LOCK:
+        for pool_key, entries in list(_SSH_CLIENT_POOL.items()):
+            active_entries = []
+            for returned_at, client in entries:
+                if now - returned_at > SSH_CLIENT_POOL_IDLE_SECONDS or not _ssh_client_is_active(client):
+                    expired.append(client)
+                else:
+                    active_entries.append((returned_at, client))
+            if active_entries:
+                _SSH_CLIENT_POOL[pool_key] = active_entries
+            else:
+                _SSH_CLIENT_POOL.pop(pool_key, None)
+
+        entries = _SSH_CLIENT_POOL.get(key, [])
+        if entries:
+            _returned_at, selected = entries.pop()
+        if entries:
+            _SSH_CLIENT_POOL[key] = entries
+        else:
+            _SSH_CLIENT_POOL.pop(key, None)
+
+    for client in expired:
+        _close_ssh_client(client)
+    return selected
+
+
+def _return_pooled_ssh_client(key, client) -> None:
+    now = time.monotonic()
+    to_close = []
+    with _SSH_CLIENT_POOL_LOCK:
+        entries = _SSH_CLIENT_POOL.setdefault(key, [])
+        entries.append((now, client))
+        while len(entries) > SSH_CLIENT_POOL_MAX_PER_HOST:
+            _returned_at, stale_client = entries.pop(0)
+            to_close.append(stale_client)
+    for stale_client in to_close:
+        _close_ssh_client(stale_client)
+
+
+def _ssh_client_is_active(client) -> bool:
+    try:
+        transport = client.get_transport()
+        return bool(transport and transport.is_active())
+    except Exception:
+        return False
+
+
+def _close_ssh_client(client) -> None:
+    try:
+        client.close()
+    except Exception:
+        pass
 
 
 def current_host_login_candidate(host: ManagedHost) -> SshLoginCandidate | None:
@@ -368,9 +481,12 @@ __all__ = [
     'LIVE_TERMINALS',
     'LiveTerminalConnection',
     'TerminalConnectionError',
+    'borrow_ssh_client',
+    'clear_ssh_client_pool',
     'load_private_key',
     'normalize_terminal_output',
     'open_live_terminal',
     'open_ssh_client',
+    'ssh_client_pool_key',
     'should_retry_ssh_connect_error',
 ]

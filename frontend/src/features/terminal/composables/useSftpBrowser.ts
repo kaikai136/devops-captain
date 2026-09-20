@@ -49,7 +49,7 @@ export interface SftpLocalDirectoryHandle {
 export interface SftpBrowserApi {
   listFiles(hostId: number, payload: { path: string }, options?: RequestInit): Promise<TerminalFileListResponse>;
   listDownloadFiles(hostId: number, payload: { path: string }, options?: RequestInit): Promise<TerminalFileListResponse>;
-  uploadFile(hostId: number, payload: { directory: string; filename: string; relativePath: string; contentBase64: string }, options?: RequestInit): Promise<{ protocol: string }>;
+  uploadFile(hostId: number, payload: { directory: string; filename: string; relativePath: string; file: File }, options?: RequestInit): Promise<{ protocol: string }>;
   createEntry(hostId: number, endpoint: string, payload: unknown): Promise<TerminalFileProperties>;
   deleteEntry(hostId: number, payload: { path: string }): Promise<{ deleted: boolean }>;
   renameEntry(hostId: number, payload: { path: string; newName: string }): Promise<TerminalFileProperties>;
@@ -60,7 +60,7 @@ export interface SftpBrowserApi {
 export interface UseSftpBrowserOptions {
   session: MaybeRefOrGetter<SftpSession | null>; api?: SftpBrowserApi; onUnauthorized?: (error: unknown) => boolean;
   confirm?: (message: string) => boolean; fetcher?: typeof fetch;
-  pickDownloadDirectory?: () => Promise<SftpLocalDirectoryHandle | null>; readFileBase64?: (file: File) => Promise<string>;
+  pickDownloadDirectory?: () => Promise<SftpLocalDirectoryHandle | null>;
 }
 
 const DEFAULT_DOWNLOAD_CONCURRENCY = 1;
@@ -87,7 +87,6 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
   const api = options.api ?? defaultApi;
   const confirmAction = options.confirm ?? ((message: string) => window.confirm(message));
   const fetcher = options.fetcher ?? fetch;
-  const readFileBase64 = options.readFileBase64 ?? fileToBase64;
   const entries = ref<TerminalFileEntry[]>([]);
   const selectedEntry = ref<TerminalFileEntry | null>(null);
   const selectedPaths = ref<Set<string>>(new Set());
@@ -354,10 +353,9 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
           for (const item of group.items) {
             throwIfTransferCanceled(record);
             setTransferCurrentFile(record, item.relativePath || item.file.name);
-            const contentBase64 = await readFileBase64(item.file);
             throwIfTransferCanceled(record);
             await api.uploadFile(session.hostId, {
-              directory: targetDirectory, filename: item.file.name, relativePath: item.relativePath || '', contentBase64,
+              directory: targetDirectory, filename: item.file.name, relativePath: item.relativePath || '', file: item.file,
             }, transferRequestOptions(record));
             completeTransferFile(record);
           }
@@ -619,11 +617,3 @@ function uniqueDownloadFilename(filename: string, usedNames: Set<string>) {
   usedNames.add(nextName.toLowerCase()); return nextName;
 }
 function isDownloadAbortError(value: unknown) { return value instanceof DOMException && value.name === 'AbortError' }
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => { const result = String(reader.result || ''); resolve(result.includes(',') ? result.split(',')[1] : result) };
-    reader.onerror = () => reject(reader.error ?? new Error('文件读取失败'));
-    reader.readAsDataURL(file);
-  });
-}

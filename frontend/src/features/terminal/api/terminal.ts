@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut } from '../../../api';
+import { apiDelete, apiGet, apiPost, apiPostForm, apiPut } from '../../../api';
 import type {
   TerminalDownloadProtocol,
   TerminalFileAuditListResponse,
@@ -58,8 +58,19 @@ export function listTerminalDownloadFiles(hostId: number, payload: unknown, opti
   return apiPost<TerminalFileListResponse>(`${terminalBaseUrl}/hosts/${hostId}/files/list-download/`, payload, options);
 }
 
-export function uploadTerminalFile(hostId: number, payload: unknown, options: RequestInit = {}) {
-  return apiPost<{ protocol: string }>(`${terminalBaseUrl}/hosts/${hostId}/files/upload/`, payload, options);
+export function uploadTerminalFile(
+  hostId: number,
+  payload: { directory: string; filename: string; relativePath: string; file: File },
+  options: RequestInit = {},
+) {
+  const body = new FormData();
+  body.set('directory', payload.directory);
+  body.set('filename', payload.filename);
+  body.set('relativePath', payload.relativePath);
+  body.set('file', payload.file, payload.filename || payload.file.name);
+  return apiPostForm<{ protocol: string; size?: number; path?: string }>(
+    `${terminalBaseUrl}/hosts/${hostId}/files/upload/`, body, options,
+  );
 }
 
 export function createTerminalFileEntry(hostId: number, endpoint: string, payload: unknown) {
