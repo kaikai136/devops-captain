@@ -47,6 +47,27 @@ describe('system pages use Element Plus widgets', () => {
     expect(sessions).not.toContain('<input');
   });
 
+  it('uses one shared search panel across system management pages', () => {
+    const searchPanel = readComponent('shared/components/SystemSearchPanel.vue');
+    const systemPages = [
+      'components/tools/UserManager.vue',
+      'components/tools/RoleManager.vue',
+      'components/tools/LoginLogManager.vue',
+      'components/tools/OperationLogManager.vue',
+    ];
+
+    for (const relativePath of systemPages) {
+      const source = template(relativePath);
+      expect(source, relativePath).toContain('<SystemSearchPanel');
+      expect(source, relativePath).toContain('class="system-search-form"');
+      expect(source, relativePath).toContain('class="system-search-actions"');
+    }
+
+    expect(searchPanel).toContain('class="system-search-panel-body"');
+    expect(searchPanel).not.toContain('<button');
+    expect(searchPanel).not.toContain('expanded');
+  });
+
   it('renders the network utility pages with Element Plus controls', () => {
     const ipScanner = template('components/tools/IpScanner.vue');
     const pingProbe = template('components/tools/machine/PingProbe.vue');

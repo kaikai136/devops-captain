@@ -16,58 +16,8 @@
   padding: var(--workspace-page-gutter);
 }
 
-.login-log-filter-panel,
 .login-log-list-panel {
   background: #fff;
-}
-
-.login-log-filter-panel {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  min-height: 80px;
-  padding: 0 16px;
-}
-
-.login-log-filter-panel label {
-  display: grid;
-  grid-template-columns: auto minmax(260px, 428px);
-  align-items: center;
-  gap: 12px;
-  color: #1f2d3d;
-  font-size: 14px;
-}
-
-.login-log-filter-panel span {
-  white-space: nowrap;
-}
-
-.login-log-filter-panel input {
-  width: 100%;
-  height: 32px;
-  border: 1px solid #d7dce2;
-  border-radius: 0;
-  background: #fff;
-  padding: 0 11px;
-  color: #1f2d3d;
-  font: inherit;
-  outline: none;
-}
-
-.login-log-filter-panel input:focus {
-  border-color: #3b73ff;
-  box-shadow: 0 0 0 2px rgba(59, 115, 255, 0.12);
-}
-
-.operation-log-page .login-log-filter-panel {
-  display: grid;
-  grid-template-columns: repeat(5, minmax(150px, 1fr));
-  gap: 16px;
-  padding: 16px;
-}
-
-.operation-log-page .login-log-filter-panel label {
-  grid-template-columns: auto minmax(0, 1fr);
 }
 
 .login-log-list-panel {
@@ -366,20 +316,6 @@
 @media (max-width: 900px) {
   .login-log-page {
     padding: var(--workspace-page-gutter);
-  }
-
-  .login-log-filter-panel {
-    display: grid;
-    gap: 12px;
-    padding: 16px;
-  }
-
-  .login-log-filter-panel label {
-    grid-template-columns: 76px minmax(0, 1fr);
-  }
-
-  .operation-log-page .login-log-filter-panel {
-    grid-template-columns: 1fr;
   }
 
   .login-log-toolbar {

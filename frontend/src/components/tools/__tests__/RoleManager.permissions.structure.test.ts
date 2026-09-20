@@ -10,8 +10,9 @@ const styles = readFileSync(fileURLToPath(new URL('../../../styles/tools/role-ma
 describe('RoleManager permission dialog', () => {
   it('uses the shared list toolbar layout for role management', () => {
     expect(template).toContain('class="role-list-heading"');
-    expect(template).toContain('class="role-toolbar-search"');
-    expect(template).toContain('搜索角色名称或标识');
+    expect(template).toContain('<SystemSearchPanel>');
+    expect(template).toContain('class="system-search-field"');
+    expect(template).toContain('请输入角色名称或标识');
     expect(styles).toMatch(/\.role-list-panel\s*\{[\s\S]*min-width:\s*0;/);
     expect(styles).toMatch(/\.role-list-toolbar\s*\{[\s\S]*border-bottom:\s*1px solid var\(--ui-border\);/);
     expect(styles).toMatch(/\.role-toolbar-actions\s*\{[\s\S]*flex-wrap:\s*wrap;/);

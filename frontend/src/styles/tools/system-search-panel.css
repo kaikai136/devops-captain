@@ -1,0 +1,124 @@
+.system-search-panel {
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-card);
+  padding: 18px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.system-search-panel-body {
+  min-width: 0;
+}
+
+.system-search-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  align-items: center;
+  gap: 16px 20px;
+  width: 100%;
+}
+
+.system-search-form .el-form-item {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  min-width: 0;
+  margin: 0;
+}
+
+.system-search-form .el-form-item__label {
+  justify-content: flex-end;
+  width: auto !important;
+  height: auto;
+  padding: 0 12px 0 0;
+  color: var(--ui-foreground);
+  line-height: 1.4;
+}
+
+.system-search-form .el-form-item__content {
+  min-width: 0;
+  width: 100%;
+}
+
+.system-search-field {
+  width: 100%;
+}
+
+.system-search-date-range {
+  width: 100% !important;
+}
+
+.system-search-date-item {
+  grid-column: span 2;
+}
+
+.system-search-form .el-input__wrapper,
+.system-search-form .el-select__wrapper,
+.system-search-form .el-date-editor {
+  background: var(--ui-background);
+  box-shadow: 0 0 0 1px var(--ui-input) inset;
+}
+
+.system-search-form .el-input__wrapper:hover,
+.system-search-form .el-select__wrapper:hover,
+.system-search-form .el-date-editor:hover {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--ui-input) 70%, var(--ui-foreground)) inset;
+}
+
+.system-search-actions {
+  display: flex;
+  grid-template-columns: 1fr !important;
+  justify-self: start;
+}
+
+.system-search-actions .el-form-item__content {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 10px;
+}
+
+.system-search-actions .el-button {
+  min-height: 40px;
+  margin-left: 0;
+}
+
+@media (max-width: 900px) {
+  .system-search-panel {
+    padding: 16px;
+  }
+
+  .system-search-form {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .system-search-date-item {
+    grid-column: 1 / -1;
+  }
+
+  .system-search-actions {
+    grid-column: 1 / -1;
+  }
+}
+
+@media (max-width: 640px) {
+  .system-search-form {
+    grid-template-columns: 1fr;
+  }
+
+  .system-search-form .el-form-item {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .system-search-form .el-form-item__label {
+    justify-content: flex-start;
+    padding-right: 0;
+  }
+
+  .system-search-date-item,
+  .system-search-actions {
+    grid-column: auto;
+  }
+}

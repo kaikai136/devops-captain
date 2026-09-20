@@ -1,14 +1,16 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch } from 'vue';
 
 import { apiGet } from '../../api';
 import { useAppContext } from '@app/context';
 import { errorMessage } from '@shared/utils/errors';
 import AppIcon from '@shared/components/AppIcon.vue';
 import AppPagination from '@shared/components/AppPagination.vue';
+import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 
 type LoginLogStatus = 'success' | 'failed';
-type StatusFilter = 'all' | LoginLogStatus;
+type StatusFilter = '' | LoginLogStatus;
+type DateRange = [string, string] | null;
 type ColumnKey = 'createdAt' | 'username' | 'status' | 'ipAddress' | 'userAgent' | 'message';
 
 interface LoginLog {
@@ -47,7 +49,8 @@ const { activeTool, canUsePageAction, canUseAnyPageAction } = useAppContext();
 const logs = ref<LoginLog[]>([]);
 const username = ref('');
 const loginIp = ref('');
-const statusFilter = ref<StatusFilter>('all');
+const statusFilter = ref<StatusFilter>('');
+const dateRange = ref<DateRange>(null);
 const page = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
@@ -64,8 +67,6 @@ const visibleColumns = ref<Record<ColumnKey, boolean>>({
   message: true,
 });
 
-let filterTimer: number | undefined;
-
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize.value)));
 const visibleColumnCount = computed(() => Object.values(visibleColumns.value).filter(Boolean).length);
 const allColumnsVisible = computed(() => columnOptions.every((column) => visibleColumns.value[column.key]));
@@ -73,21 +74,9 @@ const someColumnsVisible = computed(() => visibleColumnCount.value > 0);
 
 onMounted(loadLogs);
 
-watch([username, loginIp], () => {
-  window.clearTimeout(filterTimer);
-  filterTimer = window.setTimeout(() => {
-    page.value = 1;
-    loadLogs();
-  }, 300);
-});
-
-watch([statusFilter, pageSize], () => {
+watch(pageSize, () => {
   page.value = 1;
   loadLogs();
-});
-
-onUnmounted(() => {
-  window.clearTimeout(filterTimer);
 });
 
 async function loadLogs() {
@@ -102,7 +91,11 @@ async function loadLogs() {
     const ip = loginIp.value.trim();
     if (account) params.set('username', account);
     if (ip) params.set('ip', ip);
-    if (statusFilter.value !== 'all') params.set('status', statusFilter.value);
+    if (statusFilter.value) params.set('status', statusFilter.value);
+    if (dateRange.value?.length === 2) {
+      params.set('startTime', dateRange.value[0]);
+      params.set('endTime', dateRange.value[1]);
+    }
 
     const data = await apiGet<LoginLogPage>(`/api/system/login-logs/?${params.toString()}`);
     logs.value = data.results;
@@ -118,8 +111,17 @@ async function loadLogs() {
   }
 }
 
-function setStatusFilter(nextStatus: StatusFilter) {
-  statusFilter.value = nextStatus;
+function searchLogs() {
+  page.value = 1;
+  loadLogs();
+}
+
+function resetSearch() {
+  username.value = '';
+  loginIp.value = '';
+  statusFilter.value = '';
+  dateRange.value = null;
+  searchLogs();
 }
 
 function setPage(nextPage: number) {
@@ -179,26 +181,49 @@ function statusTagType(status: LoginLogStatus) {
 <template>
   <section v-if="activeTool === 'loginLogs'" class="login-log-page" :class="{ fullscreen }" @click="columnsOpen = false">
     <template v-if="canUseAnyPageAction('loginLogs', ['refresh', 'filter', 'columns'])">
-      <article v-if="canUsePageAction('loginLogs', 'filter')" class="login-log-filter-panel">
-        <el-form inline label-position="left">
+      <SystemSearchPanel v-if="canUsePageAction('loginLogs', 'filter')">
+        <el-form class="system-search-form" inline label-position="left" @submit.prevent="searchLogs">
           <el-form-item label="账户名称">
-            <el-input v-model="username" placeholder="请输入" clearable />
+            <el-input v-model="username" class="system-search-field" placeholder="请输入用户名称" clearable @keyup.enter="searchLogs" />
           </el-form-item>
-          <el-form-item label="登录 IP">
-            <el-input v-model="loginIp" placeholder="请输入" clearable />
+          <el-form-item label="IP 地址">
+            <el-input v-model="loginIp" class="system-search-field" placeholder="请输入 IP 地址" clearable @keyup.enter="searchLogs" />
+          </el-form-item>
+          <el-form-item label="登录状态">
+            <el-select v-model="statusFilter" class="system-search-field" placeholder="请选择日志状态" clearable>
+              <el-option label="登录成功" value="success" />
+              <el-option label="登录失败" value="failed" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="访问时间" class="system-search-date-item">
+            <el-date-picker
+              v-model="dateRange"
+              class="system-search-date-range"
+              type="datetimerange"
+              value-format="YYYY-MM-DD HH:mm:ss"
+              start-placeholder="开始日期"
+              range-separator="至"
+              end-placeholder="结束日期"
+              :default-time="[new Date(2000, 1, 1, 0, 0, 0), new Date(2000, 1, 1, 23, 59, 59)]"
+            />
+          </el-form-item>
+          <el-form-item class="system-search-actions">
+            <el-button type="primary" plain @click="searchLogs">
+              <AppIcon name="search" :size="16" />
+              搜索
+            </el-button>
+            <el-button type="danger" plain @click="resetSearch">
+              <AppIcon name="reset" :size="16" />
+              重置
+            </el-button>
           </el-form-item>
         </el-form>
-      </article>
+      </SystemSearchPanel>
 
       <article class="login-log-list-panel">
         <div class="login-log-toolbar">
           <h2>登录记录</h2>
           <div class="login-log-actions">
-            <el-radio-group v-if="canUsePageAction('loginLogs', 'filter')" v-model="statusFilter" class="login-log-tabs" @change="setStatusFilter">
-              <el-radio-button label="all">全部</el-radio-button>
-              <el-radio-button label="success">成功</el-radio-button>
-              <el-radio-button label="failed">失败</el-radio-button>
-            </el-radio-group>
             <span v-if="canUseAnyPageAction('loginLogs', ['filter', 'refresh', 'columns'])" class="login-log-toolbar-divider"></span>
             <el-tooltip v-if="canUsePageAction('loginLogs', 'refresh')" content="刷新" placement="top">
               <el-button circle @click="loadLogs"><AppIcon name="refresh" :size="18" /></el-button>

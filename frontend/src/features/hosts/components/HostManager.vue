@@ -52,7 +52,6 @@ const hostColumnOptions = [
   { key: 'updatedAt', label: '更新时间', width: 'minmax(126px, 0.85fr)', minWidth: 126 },
   { key: 'creator', label: '创建者', width: 'minmax(76px, 0.55fr)', minWidth: 76 },
   { key: 'remark', label: '备注', width: 'minmax(104px, 0.82fr)', minWidth: 104 },
-  { key: 'collect', label: '采集', width: 'minmax(74px, 0.48fr)', minWidth: 74 },
   { key: 'status', label: '状态', width: 'minmax(86px, 0.65fr)', minWidth: 86 },
   { key: 'actions', label: '操作', width: 'minmax(132px, 0.8fr)', minWidth: 132 },
 ] as const;
@@ -65,7 +64,6 @@ const defaultVisibleHostColumnKeys = [
   'spec',
   'platformType',
   'remark',
-  'collect',
   'status',
   'actions',
 ] as const satisfies readonly HostColumnKey[];

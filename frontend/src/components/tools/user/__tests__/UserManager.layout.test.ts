@@ -8,10 +8,12 @@ const paginationTemplate = readFileSync(fileURLToPath(new URL('../../../../share
 const styles = readFileSync(fileURLToPath(new URL('../../../../styles/tools/user-manager.css', import.meta.url)), 'utf8');
 
 describe('UserManager layout', () => {
-  it('keeps search and list actions in one responsive toolbar', () => {
-    expect(template).not.toContain('class="user-filter-panel"');
+  it('keeps search and list content in separate responsive sections', () => {
+    expect(template).toContain('<SystemSearchPanel>');
+    expect(template).toContain('class="system-search-field"');
     expect(template).toContain('class="user-list-heading"');
-    expect(template).toContain('class="user-toolbar-search"');
+    expect(template).toContain('class="user-list-panel"');
+    expect(styles).toMatch(/\.user-manager-page\s*\{[\s\S]*grid-template-rows:\s*auto minmax\(0, 1fr\);/);
     expect(styles).toMatch(/\.user-list-panel\s*\{[\s\S]*min-width:\s*0;[\s\S]*overflow:\s*hidden;/);
     expect(styles).toMatch(/\.user-toolbar-actions\s*\{[\s\S]*justify-content:\s*flex-end;/);
     expect(styles).toMatch(/@media \(max-width:\s*920px\)[\s\S]*\.user-toolbar-actions\s*\{[\s\S]*flex-wrap:\s*wrap;/);

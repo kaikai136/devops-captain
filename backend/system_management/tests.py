@@ -110,6 +110,15 @@ class OperationLogApiTests(TestCase):
         self.assertEqual(data["results"][0]["action"], "新建用户")
         self.assertEqual(data["results"][0]["ipAddress"], "1.1.1.1")
 
+    def test_operation_log_api_filters_by_access_time(self):
+        response = self.client.get(
+            "/api/system/operation-logs/",
+            {"startTime": "2000-01-01 00:00:00", "endTime": "2000-01-01 23:59:59"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 0)
+
 
 class LoginLogApiTests(TestCase):
     def setUp(self):
@@ -158,6 +167,15 @@ class LoginLogApiTests(TestCase):
         data = response.json()
         self.assertEqual(data["total"], 3)
         self.assertEqual(len(data["results"]), 1)
+
+    def test_login_log_api_filters_by_access_time(self):
+        response = self.client.get(
+            "/api/system/login-logs/",
+            {"startTime": "2000-01-01 00:00:00", "endTime": "2000-01-01 23:59:59"},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["total"], 0)
 
 
 class BuiltinAdminTests(TestCase):

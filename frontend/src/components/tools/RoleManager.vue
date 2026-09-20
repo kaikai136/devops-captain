@@ -7,6 +7,7 @@ import { dashboardNavItem, navGroups } from '@app/navigation';
 import { errorMessage } from '@shared/utils/errors';
 import AppIcon from '@shared/components/AppIcon.vue';
 import AppPagination from '@shared/components/AppPagination.vue';
+import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 
 interface SystemRole {
   id: number;
@@ -480,6 +481,30 @@ function emptyRoleForm(): RoleForm {
 <template>
   <section v-if="activeTool === 'roles'" class="role-manager-page" @click="columnsOpen = false">
     <template v-if="canUseAnyPageAction('roles', ['create', 'edit', 'permissions', 'delete'])">
+      <SystemSearchPanel>
+        <el-form class="system-search-form" inline label-position="left" @submit.prevent="runSearch">
+          <el-form-item label="角色名称">
+            <el-input
+              v-model="searchDraft"
+              class="system-search-field"
+              placeholder="请输入角色名称或标识"
+              clearable
+              @keyup.enter="runSearch"
+            />
+          </el-form-item>
+          <el-form-item class="system-search-actions">
+            <el-button type="primary" plain @click="runSearch">
+              <AppIcon name="search" :size="16" />
+              搜索
+            </el-button>
+            <el-button type="danger" plain @click="resetSearch">
+              <AppIcon name="reset" :size="16" />
+              重置
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </SystemSearchPanel>
+
       <article class="role-list-panel">
         <div class="role-list-toolbar">
           <div class="role-list-heading">
@@ -487,24 +512,11 @@ function emptyRoleForm(): RoleForm {
             <span>共 {{ filteredRoles.length }} 个角色</span>
           </div>
           <div class="role-toolbar-actions">
-            <el-input
-              v-model="searchDraft"
-              class="role-toolbar-search"
-              placeholder="搜索角色名称或标识"
-              clearable
-              @input="runSearch"
-              @clear="resetSearch"
-              @keyup.enter="runSearch"
-            >
-              <template #prefix>
-                <AppIcon name="search" :size="15" />
-              </template>
-            </el-input>
             <el-button v-if="canUsePageAction('roles', 'create')" type="primary" @click="openCreateDialog">
               <AppIcon name="circlePlus" :size="15" />
               <span>新增角色</span>
             </el-button>
-            <span class="role-toolbar-divider"></span>
+            <span v-if="canUsePageAction('roles', 'create')" class="role-toolbar-divider"></span>
             <el-tooltip content="刷新" placement="top">
               <el-button circle @click="loadRoles"><AppIcon name="refresh" :size="18" /></el-button>
             </el-tooltip>

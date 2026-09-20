@@ -592,14 +592,11 @@ describe('HostManager component structure', () => {
     );
 
     expect(managerScript).toContain("{ key: 'spec', label: '主机规格'");
-    expect(managerScript).toContain("{ key: 'collect', label: '采集'");
     expect(managerScript).not.toContain("{ key: 'systemArch', label: '系统架构'");
     expect(managerScript).not.toContain("{ key: 'systemType', label: '系统类型'");
     expect(managerScript).not.toContain("{ key: 'config', label: '配置信息'");
     expect(toolbarScript).toContain("| 'spec'");
     expect(tableTemplate).toContain("props.isColumnVisible('spec')");
-    expect(tableTemplate).toContain("props.isColumnVisible('collect')");
-    expect(tableTemplate).toContain('class="host-collect-cell"');
     expect(tableTemplate).toContain('class="host-spec-cell"');
     expect(tableTemplate).toContain('<strong>规格:</strong>');
     expect(tableTemplate).toContain('<strong>系统:</strong>');
@@ -624,7 +621,7 @@ describe('HostManager component structure', () => {
 
     expect(defaultVisibleMatch).toBeTruthy();
     const defaultVisibleBlock = defaultVisibleMatch?.[1] ?? '';
-    for (const key of ['group', 'name', 'ip', 'machine', 'spec', 'platformType', 'remark', 'collect', 'status', 'actions']) {
+    for (const key of ['group', 'name', 'ip', 'machine', 'spec', 'platformType', 'remark', 'status', 'actions']) {
       expect(defaultVisibleBlock).toContain(`'${key}',`);
     }
     for (const key of ['user', 'port', 'createdAt', 'updatedAt', 'creator']) {

@@ -1,5 +1,7 @@
 from django.db.models import CharField, Q
 from django.db.models.functions import Cast
+from django.utils import timezone
+from django.utils.dateparse import parse_datetime
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
@@ -9,6 +11,25 @@ from ..dashboard import build_dashboard_summary
 from ..models import LoginLog, OperationLog
 from ..serializers import LoginLogSerializer, OperationLogSerializer
 from .common import require_dashboard_access, require_system_permission
+
+
+def _query_datetime(value):
+    parsed = parse_datetime(str(value or "").strip())
+    if parsed is None:
+        return None
+    if timezone.is_naive(parsed):
+        return timezone.make_aware(parsed, timezone.get_current_timezone())
+    return parsed
+
+
+def _filter_created_at(queryset, request):
+    start_time = _query_datetime(request.query_params.get("startTime"))
+    end_time = _query_datetime(request.query_params.get("endTime"))
+    if start_time:
+        queryset = queryset.filter(created_at__gte=start_time)
+    if end_time:
+        queryset = queryset.filter(created_at__lte=end_time)
+    return queryset
 
 
 @api_view(["GET"])
@@ -35,6 +56,7 @@ def login_logs(request):
         queryset = queryset.filter(username__icontains=username)
     if ip_address:
         queryset = queryset.annotate(ip_address_text=Cast("ip_address", CharField())).filter(ip_address_text__icontains=ip_address)
+    queryset = _filter_created_at(queryset, request)
 
     return Response(paginate_queryset(queryset, request, serializer=LoginLogSerializer, default_page_size=10))
 
@@ -68,5 +90,6 @@ def operation_logs(request):
         )
     if ip_address:
         queryset = queryset.annotate(ip_address_text=Cast("ip_address", CharField())).filter(ip_address_text__icontains=ip_address)
+    queryset = _filter_created_at(queryset, request)
 
     return Response(paginate_queryset(queryset, request, serializer=OperationLogSerializer, default_page_size=10))

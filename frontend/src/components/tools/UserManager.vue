@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { ref } from 'vue';
+
 import { useAppContext } from '@app/context';
 import { useUserManager, userColumnOptions } from '../../composables/features/useUserManager';
 import AppIcon from '@shared/components/AppIcon.vue';
+import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 import UserAccountDialog from './user/UserAccountDialog.vue';
 import UserDeleteDialog from './user/UserDeleteDialog.vue';
 import UserResetPasswordDialog from './user/UserResetPasswordDialog.vue';
@@ -81,11 +84,51 @@ const {
   toggleAllColumns,
   resetColumns,
 } = useUserManager({ setActiveTool });
+
+const searchDraft = ref('');
+const statusDraft = ref<'all' | 'active' | 'disabled'>('all');
+
+function runSearch() {
+  search.value = searchDraft.value.trim();
+  statusFilter.value = statusDraft.value;
+}
+
+function resetSearch() {
+  searchDraft.value = '';
+  statusDraft.value = 'all';
+  search.value = '';
+  statusFilter.value = 'all';
+}
 </script>
 
 <template>
   <section v-if="activeTool === 'users'" class="user-manager-page" :class="{ fullscreen }" @click="columnsOpen = false">
     <template v-if="canAccessPage('users')">
+      <SystemSearchPanel>
+        <el-form class="system-search-form" inline label-position="left" @submit.prevent="runSearch">
+          <el-form-item label="登录账号">
+            <el-input v-model="searchDraft" class="system-search-field" placeholder="请输入登录账号或用户名称" clearable @keyup.enter="runSearch" />
+          </el-form-item>
+          <el-form-item label="账户状态">
+            <el-select v-model="statusDraft" class="system-search-field" placeholder="请选择账户状态">
+              <el-option label="全部" value="all" />
+              <el-option label="正常" value="active" />
+              <el-option label="禁用" value="disabled" />
+            </el-select>
+          </el-form-item>
+          <el-form-item class="system-search-actions">
+            <el-button type="primary" plain @click="runSearch">
+              <AppIcon name="search" :size="16" />
+              搜索
+            </el-button>
+            <el-button type="danger" plain @click="resetSearch">
+              <AppIcon name="reset" :size="16" />
+              重置
+            </el-button>
+          </el-form-item>
+        </el-form>
+      </SystemSearchPanel>
+
       <article class="user-list-panel">
         <div class="user-list-toolbar">
           <div class="user-list-heading">
@@ -93,21 +136,11 @@ const {
             <span>共 {{ filteredUsers.length }} 个账户</span>
           </div>
           <div class="user-toolbar-actions">
-            <el-input v-model="search" class="user-toolbar-search" placeholder="搜索登录名或姓名" clearable>
-              <template #prefix>
-                <AppIcon name="search" :size="15" />
-              </template>
-            </el-input>
             <el-button v-if="canUsePageAction('users', 'create')" type="primary" @click="openCreateDialog">
               <AppIcon name="plus" :size="15" />
               <span>新建</span>
             </el-button>
-            <el-radio-group v-model="statusFilter" class="user-status-tabs">
-              <el-radio-button label="all">全部</el-radio-button>
-              <el-radio-button label="active">正常</el-radio-button>
-              <el-radio-button label="disabled">禁用</el-radio-button>
-            </el-radio-group>
-            <span class="user-toolbar-divider"></span>
+            <span v-if="canUsePageAction('users', 'create')" class="user-toolbar-divider"></span>
             <el-tooltip content="刷新" placement="top">
               <el-button circle @click="refreshUsers">
                 <AppIcon name="refresh" :size="18" />

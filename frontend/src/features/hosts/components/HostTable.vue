@@ -139,10 +139,6 @@ function formatHostSystem(host: ManagedHost) {
           <span>备注</span>
           <span class="host-column-resize-handle" role="separator" aria-label="调整备注列宽" @mousedown="emit('resize-column-start', 'remark', $event)"></span>
         </div>
-        <div v-if="props.isColumnVisible('collect')" class="host-table-head-cell">
-          <span>采集</span>
-          <span class="host-column-resize-handle" role="separator" aria-label="调整采集列宽" @mousedown="emit('resize-column-start', 'collect', $event)"></span>
-        </div>
         <span v-if="props.isColumnVisible('status')" class="host-sticky-cell host-status-cell">状态</span>
         <span v-if="props.isColumnVisible('actions')" class="host-sticky-cell host-actions-cell">操作</span>
       </div>
@@ -182,7 +178,6 @@ function formatHostSystem(host: ManagedHost) {
         <span v-if="props.isColumnVisible('updatedAt')" class="host-date-cell">{{ props.formatDate(host.updatedAt) }}</span>
         <span v-if="props.isColumnVisible('creator')" class="host-creator-cell">{{ host.creator || '-' }}</span>
         <span v-if="props.isColumnVisible('remark')" class="host-remark-cell" :title="host.remark">{{ host.remark || '-' }}</span>
-        <span v-if="props.isColumnVisible('collect')" class="host-collect-cell" aria-hidden="true"></span>
         <div v-if="props.isColumnVisible('status')" class="host-sticky-cell host-status-cell">
           <span class="verify-badge" :class="{ verified: host.verified, failed: host.verifyStatus === 'failed' }">
             {{ host.verified ? '已验证' : host.verifyStatus === 'failed' ? '验证失败' : '未验证' }}
