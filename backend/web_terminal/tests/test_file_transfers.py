@@ -13,6 +13,7 @@ from system_management.services import FEATURE_PERMISSION_CODE_BY_KEY, PAGE_ACTI
 from web_terminal.gateway.server import RemoteSFTPFile
 from web_terminal.models import TerminalFileAudit
 from web_terminal.services import (
+    borrow_sftp_client,
     borrow_ssh_client,
     clear_ssh_client_pool,
     upload_remote_file_with_sftp_stream,
@@ -24,13 +25,35 @@ class _ActiveTransport:
         return True
 
 
-class _PooledClient:
+class _SftpChannel:
+    closed = False
+
+
+class _PooledSftp:
     def __init__(self):
+        self.channel = _SftpChannel()
+        self.closed = False
+
+    def get_channel(self):
+        return self.channel
+
+    def close(self):
+        self.closed = True
+
+
+class _PooledClient:
+    def __init__(self, sftp=None):
         self.transport = _ActiveTransport()
         self.closed = False
+        self.sftp = sftp
+        self.open_sftp_calls = 0
 
     def get_transport(self):
         return self.transport
+
+    def open_sftp(self):
+        self.open_sftp_calls += 1
+        return self.sftp
 
     def close(self):
         self.closed = True
@@ -63,6 +86,35 @@ class SshClientPoolTests(SimpleTestCase):
         clear_ssh_client_pool()
         self.assertTrue(client.closed)
 
+    def test_borrow_reuses_idle_sftp_session_for_same_host_and_credentials(self):
+        host = SimpleNamespace(
+            pk=7,
+            public_ip="203.0.113.7",
+            private_ip="10.0.0.7",
+            port=22,
+            login_user="root",
+            login_password="secret",
+            private_key="",
+        )
+        sftp = _PooledSftp()
+        client = _PooledClient(sftp)
+
+        with patch("web_terminal.services.connections.open_ssh_client", return_value=client) as opener:
+            with borrow_sftp_client(host) as (first_client, first_sftp, first_reused):
+                self.assertIs(first_client, client)
+                self.assertIs(first_sftp, sftp)
+                self.assertFalse(first_reused)
+            with borrow_sftp_client(host) as (second_client, second_sftp, second_reused):
+                self.assertIs(second_client, client)
+                self.assertIs(second_sftp, sftp)
+                self.assertTrue(second_reused)
+
+        self.assertEqual(opener.call_count, 1)
+        self.assertEqual(client.open_sftp_calls, 1)
+        clear_ssh_client_pool()
+        self.assertTrue(sftp.closed)
+        self.assertTrue(client.closed)
+
 
 class StreamingUploadServiceTests(SimpleTestCase):
     def test_sftp_upload_streams_chunks_to_temp_file_then_renames(self):
@@ -93,11 +145,9 @@ class StreamingUploadServiceTests(SimpleTestCase):
         sftp = MagicMock()
         sftp.open.return_value = RemoteFile()
         sftp.posix_rename = MagicMock()
-        client = MagicMock()
-        client.open_sftp.return_value = sftp
         source = Source()
 
-        with patch("web_terminal.services.files.borrow_ssh_client", return_value=nullcontext(client)), patch(
+        with patch("web_terminal.services.files.borrow_sftp_client", return_value=nullcontext((MagicMock(), sftp, False))), patch(
             "web_terminal.services.files.ensure_remote_sftp_directory"
         ), patch(
             "web_terminal.services.files.temporary_remote_upload_path",
@@ -110,7 +160,6 @@ class StreamingUploadServiceTests(SimpleTestCase):
         self.assertEqual(source.seek_calls, [0])
         sftp.open.assert_called_once_with("/srv/.report.txt.upload-test", "wb")
         sftp.posix_rename.assert_called_once_with("/srv/.report.txt.upload-test", "/srv/report.txt")
-        sftp.close.assert_called_once_with()
 
 
 class MultipartUploadApiTests(TestCase):

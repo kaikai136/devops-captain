@@ -63,6 +63,13 @@ export interface UseSftpBrowserOptions {
   pickDownloadDirectory?: () => Promise<SftpLocalDirectoryHandle | null>;
 }
 
+interface DirectoryCacheEntry {
+  cachedAt: number;
+  response: TerminalFileListResponse;
+}
+
+const DIRECTORY_CACHE_TTL_MS = 5_000;
+const DIRECTORY_CACHE_MAX_ENTRIES = 24;
 const DEFAULT_DOWNLOAD_CONCURRENCY = 1;
 const LOCAL_FILENAME_RESERVED_CHARS = /[<>:"/\\|?*\x00-\x1f]/g;
 const LOCAL_FILENAME_RESERVED_NAMES = new Set([
@@ -104,6 +111,8 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
   const downloadProtocol = ref<TerminalDownloadProtocol>('auto');
   const isDragOver = ref(false);
   let listRequestId = 0;
+  const directoryCache = new Map<string, DirectoryCacheEntry>();
+  let activeListRequest: { key: string; controller: AbortController; promise: Promise<void> } | null = null;
 
   const selectedEntries = computed(() => entries.value.filter((entry) => selectedPaths.value.has(entry.path) && !isParentEntry(entry)));
   const selectedCount = computed(() => selectedEntries.value.length);
@@ -123,28 +132,80 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
     if (options.onUnauthorized?.(value)) return '';
     return value instanceof Error ? value.message : fallback;
   }
-  async function loadDirectory(target = path.value) {
+  async function loadDirectory(target = path.value, requestOptions: { force?: boolean } = {}) {
     const session = currentSession();
     if (!session) return;
     const resolvedPath = resolveDirectoryPath(target);
+    const cacheKey = directoryCacheKey(session, resolvedPath);
+    const cached = directoryCache.get(cacheKey);
+    if (!requestOptions.force && cached && Date.now() - cached.cachedAt <= DIRECTORY_CACHE_TTL_MS) {
+      cancelActiveListRequest();
+      listRequestId += 1;
+      applyDirectoryResponse(cached.response);
+      return;
+    }
+    if (!requestOptions.force && activeListRequest?.key === cacheKey) return activeListRequest.promise;
+
+    cancelActiveListRequest();
     const requestId = ++listRequestId;
+    const controller = new AbortController();
     isLoading.value = true;
     error.value = '';
-    try {
-      const response = await api.listFiles(session.hostId, { path: resolvedPath });
-      if (requestId !== listRequestId) return;
-      path.value = response.path;
-      entries.value = sortEntries(response.entries);
-      listProtocol.value = response.protocol;
-      syncSelectionAfterEntriesChange();
-    } catch (caught) {
-      if (requestId !== listRequestId) return;
-      error.value = handleError(caught, '目录加载失败');
-    } finally {
-      if (requestId === listRequestId) isLoading.value = false;
+
+    const promise = (async () => {
+      try {
+        const response = await api.listFiles(session.hostId, { path: resolvedPath }, { signal: controller.signal });
+        if (requestId !== listRequestId) return;
+        cacheDirectoryResponse(session, cacheKey, response);
+        applyDirectoryResponse(response);
+      } catch (caught) {
+        if (requestId !== listRequestId || isAbortError(caught)) return;
+        error.value = handleError(caught, '目录加载失败');
+      } finally {
+        if (requestId === listRequestId) isLoading.value = false;
+        if (activeListRequest?.controller === controller) activeListRequest = null;
+      }
+    })();
+
+    activeListRequest = { key: cacheKey, controller, promise };
+    return promise;
+  }
+  function applyDirectoryResponse(response: TerminalFileListResponse) {
+    path.value = response.path;
+    entries.value = sortEntries(response.entries);
+    listProtocol.value = response.protocol;
+    syncSelectionAfterEntriesChange();
+  }
+  function cacheDirectoryResponse(session: SftpSession, requestKey: string, response: TerminalFileListResponse) {
+    const cached: DirectoryCacheEntry = { cachedAt: Date.now(), response };
+    directoryCache.delete(requestKey);
+    directoryCache.set(requestKey, cached);
+    const canonicalKey = directoryCacheKey(session, response.path);
+    if (canonicalKey !== requestKey) {
+      directoryCache.delete(canonicalKey);
+      directoryCache.set(canonicalKey, cached);
+    }
+    while (directoryCache.size > DIRECTORY_CACHE_MAX_ENTRIES) {
+      const oldestKey = directoryCache.keys().next().value as string | undefined;
+      if (!oldestKey) break;
+      directoryCache.delete(oldestKey);
     }
   }
+  function directoryCacheKey(session: SftpSession, target: string) {
+    return `${session.key}:${session.hostId}:${target}`;
+  }
+  function cancelActiveListRequest() {
+    activeListRequest?.controller.abort();
+    activeListRequest = null;
+  }
+  function invalidateDirectoryCache(target = path.value) {
+    const session = currentSession();
+    if (!session) return;
+    directoryCache.delete(directoryCacheKey(session, resolveDirectoryPath(target)));
+    directoryCache.delete(directoryCacheKey(session, target));
+  }
   function reset(nextPath = '.') {
+    cancelActiveListRequest();
     listRequestId += 1; path.value = nextPath; entries.value = []; listProtocol.value = ''; error.value = ''; isLoading.value = false;
     setSelection([], ''); rename.value = null; deleteDialog.value = emptyDeleteDialog(); createDialog.value = emptyCreateDialog();
     propertiesDialog.value = emptyPropertiesDialog(); isDragOver.value = false;
@@ -218,7 +279,8 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
     try {
       await api.renameEntry(session.hostId, { path: state.path, newName });
       rename.value = null;
-      await loadDirectory(path.value);
+      invalidateDirectoryCache(path.value);
+      await loadDirectory(path.value, { force: true });
     } catch (caught) {
       const message = handleError(caught, '重命名失败');
       if (message) rename.value = { ...state, saving: false, error: message };
@@ -243,7 +305,8 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
       for (const entry of targetEntries) await api.deleteEntry(session.hostId, { path: entry.path });
       deleteDialog.value = emptyDeleteDialog();
       setSelection([], '');
-      await loadDirectory(path.value);
+      invalidateDirectoryCache(path.value);
+      await loadDirectory(path.value, { force: true });
     } catch (caught) {
       const message = handleError(caught, '删除失败');
       if (message) deleteDialog.value = { ...dialog, deleting: false, error: message };
@@ -275,8 +338,13 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
           : { directory: path.value, linkName: name, targetPath: dialog.targetPath.trim() };
       const created = await api.createEntry(session.hostId, endpoint, payload);
       createDialog.value = emptyCreateDialog();
-      if (dialog.mode === 'directory' && dialog.openAfterCreate) { await loadDirectory(created.path); return }
-      await loadDirectory(path.value);
+      if (dialog.mode === 'directory' && dialog.openAfterCreate) {
+        invalidateDirectoryCache(path.value);
+        await loadDirectory(created.path);
+        return;
+      }
+      invalidateDirectoryCache(path.value);
+      await loadDirectory(path.value, { force: true });
       const createdEntry = entries.value.find((entry) => entry.path === created.path || entry.name === created.name) ?? null;
       setSelection(createdEntry ? [createdEntry] : [], createdEntry?.path ?? '');
     } catch (caught) {
@@ -333,7 +401,8 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
         draft: { owner: ownerLabel(properties), group: groupLabel(properties), octalMode: normalizeOctalMode(properties.octalMode) }, recursive: false,
       };
       closePropertiesDialog();
-      await loadDirectory(path.value);
+      invalidateDirectoryCache(path.value);
+      await loadDirectory(path.value, { force: true });
     } catch (caught) {
       const message = handleError(caught, '属性保存失败');
       if (message) propertiesDialog.value = { ...propertiesDialog.value, saving: false, error: message };
@@ -362,7 +431,10 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
         });
       }
       const latestSession = currentSession();
-      if (latestSession?.key === sessionKey && path.value === targetDirectory) await loadDirectory(targetDirectory);
+      if (latestSession?.key === sessionKey && path.value === targetDirectory) {
+        invalidateDirectoryCache(targetDirectory);
+        await loadDirectory(targetDirectory, { force: true });
+      }
     } catch (caught) {
       if (!isTransferCancelError(caught)) error.value = handleError(caught, '文件上传失败');
     } finally { isDragOver.value = false }
@@ -484,6 +556,10 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
     currentDirectoryName, closePropertiesDialog, saveProperties, uploadFiles, downloadFile, downloadFiles, createTransferRecord,
     runTransfer, cancelTransfer, cancelAllTransfers, clearTransferRecords, closeDialogs, getDownloadUrl,
   };
+}
+
+function isAbortError(value: unknown) {
+  return Boolean(value && typeof value === 'object' && 'name' in value && (value as { name?: string }).name === 'AbortError');
 }
 
 export function getSftpSessionLoadPath(sessionChanged: boolean, followingCwd: boolean, currentCwd: string) {

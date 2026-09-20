@@ -17,6 +17,7 @@ import {
   type SftpSession,
   useSftpBrowser,
 } from '../../composables/useSftpBrowser';
+import { TERMINAL_FILE_ROW_HEIGHT } from '../../utils/virtualList';
 import FileCreateDialog from './FileCreateDialog.vue';
 import FileDownloadDialog from './FileDownloadDialog.vue';
 import FilePropertiesDialog from './FilePropertiesDialog.vue';
@@ -125,7 +126,7 @@ const fileContextMenuItems = computed<FileContextMenuItem[]>(() => {
   const targetNamesText = targetEntries.map((item) => item.name).join('\n');
   return [
     { id: 'open', label: '打开', icon: 'folder', enabled: Boolean(isDirectory) && (isSingle || isParent), action: () => { if (entry) browser.openDirectory(entry); } },
-    { id: 'refresh', label: '刷新', icon: 'refresh', enabled: true, action: () => browser.loadDirectory() },
+    { id: 'refresh', label: '刷新', icon: 'refresh', enabled: true, action: () => browser.loadDirectory(browser.path.value, { force: true }) },
     { id: 'upload', label: '上传到当前文件夹...', icon: 'upload', enabled: hasEntry && !isParent, action: openUpload },
     { id: 'download', label: isMultiple ? '下载所选到目录...' : '下载到目录...', icon: 'download', enabled: targetEntries.length > 0, action: () => browser.downloadFiles(targetEntries) },
     { id: 'rename', label: '重命名...', icon: 'edit', enabled: hasEntry && !isParent && isSingle, separatorBefore: true, action: () => { if (entry) browser.startRename(entry); } },
@@ -142,7 +143,7 @@ const fileContextMenuItems = computed<FileContextMenuItem[]>(() => {
   ];
 });
 const directoryContextMenuItems = computed<FileContextMenuItem[]>(() => [
-  { id: 'refresh', label: '刷新', icon: 'refresh', enabled: props.active, action: () => browser.loadDirectory() },
+  { id: 'refresh', label: '刷新', icon: 'refresh', enabled: props.active, action: () => browser.loadDirectory(browser.path.value, { force: true }) },
   {
     id: 'upload', label: '上传到当前文件夹...', icon: 'upload', enabled: props.active, action: () => undefined,
     children: [
@@ -319,32 +320,19 @@ function updateMarqueeSelection() {
     top: Math.min(state.startY, state.currentY),
     bottom: Math.max(state.startY, state.currentY),
   };
-  const listRect = list.getBoundingClientRect();
-  const selected = browser.entries.value.filter((entry) => {
-    if (isParentEntry(entry)) return false;
-    const row = list.querySelector<HTMLElement>(`[data-terminal-file-path="${cssEscape(entry.path)}"]`);
-    if (!row) return false;
-    const rect = row.getBoundingClientRect();
-    return boxesIntersect(box, {
-      left: rect.left - listRect.left,
-      right: rect.right - listRect.left,
-      top: rect.top - listRect.top + list.scrollTop,
-      bottom: rect.bottom - listRect.top + list.scrollTop,
-    });
-  });
+  const intersectsListWidth = box.right >= 0 && box.left <= list.clientWidth;
+  const firstIndex = Math.max(0, Math.floor(box.top / TERMINAL_FILE_ROW_HEIGHT));
+  const lastIndex = Math.min(
+    browser.entries.value.length - 1,
+    Math.floor(box.bottom / TERMINAL_FILE_ROW_HEIGHT),
+  );
+  const selected = intersectsListWidth && lastIndex >= firstIndex
+    ? browser.entries.value.slice(firstIndex, lastIndex + 1).filter((entry) => !isParentEntry(entry))
+    : [];
   const nextPaths = new Set(state.additive ? state.basePaths : []);
   for (const entry of selected) nextPaths.add(entry.path);
   const nextEntries = browser.entries.value.filter((entry) => nextPaths.has(entry.path) && !isParentEntry(entry));
   browser.setSelection(nextEntries, nextEntries[0]?.path ?? '');
-}
-function boxesIntersect(
-  first: { left: number; right: number; top: number; bottom: number },
-  second: { left: number; right: number; top: number; bottom: number },
-) {
-  return first.left <= second.right && first.right >= second.left && first.top <= second.bottom && first.bottom >= second.top;
-}
-function cssEscape(value: string) {
-  return window.CSS?.escape ? window.CSS.escape(value) : value.replace(/["\\]/g, '\\$&');
 }
 
 function startDragDownload(entry: TerminalFileEntry, event: DragEvent) {
@@ -487,7 +475,7 @@ onBeforeUnmount(() => {
       @download="browser.downloadFiles()"
       @delete="browser.openDeleteDialog()"
       @parent="browser.openParentDirectory"
-      @refresh="browser.loadDirectory()"
+      @refresh="browser.loadDirectory(browser.path.value, { force: true })"
     />
     <AppContextMenu
       :open="fileContextMenu.visible || directoryContextMenu.visible"
