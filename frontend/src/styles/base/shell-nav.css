@@ -718,12 +718,18 @@
 }
 
 .workspace-nav-menu .el-sub-menu .el-menu {
+  box-sizing: border-box;
+  width: calc(100% - 18px);
+  margin-left: 18px;
+  padding-left: 0;
   background: transparent;
   border-right: 0;
 }
 
 .workspace-nav-menu .el-sub-menu .el-menu-item {
+  width: 100%;
   margin-left: 0;
+  padding-left: 12px !important;
   background: transparent;
   box-shadow: none;
 }

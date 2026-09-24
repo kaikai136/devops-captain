@@ -101,4 +101,15 @@ describe('app shell upgrade contract', () => {
     expect(nestedActiveRule).toContain('inset 0 0 0 2px var(--ui-primary)');
     expect(nestedActiveMarker).toContain('background: var(--ui-primary)');
   });
+
+  it('visually indents nested sidebar items with a guide rail', () => {
+    const navStyles = readSource('styles/base/shell-nav.css');
+    const nestedMenuRule = navStyles.match(/\.workspace-nav-menu \.el-sub-menu \.el-menu \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const nestedItemRule = navStyles.match(/\.workspace-nav-menu \.el-sub-menu \.el-menu-item \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(nestedMenuRule).toContain('margin-left: 18px');
+    expect(nestedMenuRule).toContain('padding-left: 0');
+    expect(nestedMenuRule).not.toContain('border-left');
+    expect(nestedItemRule).toContain('padding-left: 12px !important');
+  });
 });

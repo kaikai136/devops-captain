@@ -188,6 +188,91 @@
   margin-top: 18px;
 }
 
+.account-popup-dialog .el-dialog__body {
+  padding: 22px 24px;
+}
+
+.account-popup-dialog .account-popup-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 18px 20px;
+  min-width: 0;
+  padding: 0;
+  overflow: visible;
+}
+
+.account-popup-dialog .account-popup-form > .el-form-item {
+  min-width: 0;
+  margin: 0;
+}
+
+.account-popup-dialog .account-popup-form .el-form-item__label {
+  color: var(--workspace-text-soft);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.account-popup-dialog .account-popup-form .el-form-item__content,
+.account-popup-dialog .account-key-upload {
+  min-width: 0;
+}
+
+.account-popup-dialog .el-input__wrapper,
+.account-popup-dialog .el-textarea__inner {
+  background: var(--el-bg-color, #fff);
+  box-shadow: 0 0 0 1px var(--el-border-color, #d6e3f4) inset;
+}
+
+.account-popup-dialog .el-input__wrapper:hover {
+  box-shadow: 0 0 0 1px var(--ui-primary) inset;
+}
+
+.account-popup-dialog .el-input.is-focus .el-input__wrapper,
+.account-popup-dialog .el-textarea__inner:focus {
+  box-shadow: 0 0 0 1px var(--ui-primary) inset, 0 0 0 3px color-mix(in srgb, var(--ui-ring) 12%, transparent);
+}
+
+.account-popup-dialog .account-key-upload {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+
+.account-popup-dialog .account-key-upload .el-upload {
+  flex: 0 0 auto;
+}
+
+.account-popup-dialog .account-key-upload em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.account-popup-dialog .account-popup-form > .el-form-item:last-of-type {
+  grid-column: 1 / -1;
+}
+
+.account-popup-dialog .account-popup-form > .account-message {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 640px) {
+  .account-popup-dialog .el-dialog__body {
+    padding: 18px 16px;
+  }
+
+  .account-popup-dialog .account-popup-form {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .account-popup-dialog .account-popup-form > .el-form-item:last-of-type,
+  .account-popup-dialog .account-popup-form > .account-message {
+    grid-column: auto;
+  }
+}
+
 .account-form-modal,
 .account-confirm-modal {
   position: relative;

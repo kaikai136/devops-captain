@@ -35,4 +35,15 @@ describe('AccountManager Element Plus migration', () => {
     expect(script).toContain('function uploadPrivateKey(uploadFile: { raw?: File })');
     expect(script).not.toContain('uploadPrivateKey(event: Event)');
   });
+
+  it('gives the account popup a dedicated responsive form layout and visible input borders', () => {
+    const template = parseSfc(panelSource(), { filename: 'AccountManager.vue' }).descriptor.template?.content ?? '';
+    const styles = readFileSync(fileURLToPath(new URL('../../../styles/tools/account-manager.css', import.meta.url)), 'utf8');
+
+    expect(template).toContain('account-popup-form');
+    expect(styles).toContain('.account-popup-dialog .account-popup-form');
+    expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
+    expect(styles).toContain('box-shadow: 0 0 0 1px var(--el-border-color, #d6e3f4) inset');
+    expect(styles).toContain('@media (max-width: 640px)');
+  });
 });

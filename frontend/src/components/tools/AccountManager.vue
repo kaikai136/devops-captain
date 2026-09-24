@@ -208,7 +208,7 @@ function emptyForm(): CredentialForm {
       :close-on-click-modal="false"
       @update:model-value="(visible) => { if (!visible) dialog = null; }"
     >
-      <el-form :model="form" label-position="left" label-width="92px" class="popup-body popup-form-grid">
+      <el-form :model="form" label-position="left" label-width="92px" class="popup-body popup-form-grid account-popup-form">
         <el-form-item label="账号名称" required>
           <el-input v-model="form.name" autofocus />
         </el-form-item>
