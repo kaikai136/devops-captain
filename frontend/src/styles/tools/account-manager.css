@@ -1,8 +1,7 @@
 .account-page {
   flex: 1 1 auto;
   min-height: 0;
-  margin: var(--workspace-page-gutter);
-  overflow: hidden;
+  min-width: 0;
 }
 
 .account-page.fullscreen {
@@ -15,12 +14,19 @@
   background: #eef1f5;
 }
 
+.account-page:not(.fullscreen) {
+  min-width: 0;
+}
+
 .account-panel {
   min-height: 0;
   height: 100%;
   overflow: auto;
-  padding: var(--workspace-panel-padding);
-  background: rgba(255, 255, 255, 0.88);
+  padding: 0;
+}
+
+.account-page > .system-search-panel {
+  min-height: 0;
 }
 
 .account-toolbar,
@@ -36,7 +42,9 @@
 .account-toolbar {
   justify-content: space-between;
   gap: 16px;
-  margin-bottom: 16px;
+  min-height: 40px;
+  margin-bottom: 0;
+  padding: 0;
 }
 
 .account-toolbar > input,
@@ -62,10 +70,15 @@
 
 .account-stats-line {
   gap: 10px;
-  margin-bottom: 12px;
+  margin: 0 20px 12px;
   color: #526b8a;
   font-size: 12px;
   font-weight: 800;
+}
+
+.account-list-heading {
+  min-height: 42px;
+  padding: 0 20px 8px;
 }
 
 .account-stats-line span {
@@ -81,9 +94,8 @@
   font-weight: 800;
 }
 
-.account-table {
-  min-width: 920px;
-  border-top: 1px solid #edf1f6;
+.account-table-wrap {
+  min-width: 0;
 }
 
 .account-table-row {

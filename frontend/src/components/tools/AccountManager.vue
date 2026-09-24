@@ -5,6 +5,7 @@ import { useAppContext } from '@app/context';
 import { createHostCredential, deleteHostCredential, updateHostCredential } from '../../services/hostManagement';
 import type { HostCredential } from '../../types';
 import AppIcon from '@shared/components/AppIcon.vue';
+import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 
 interface CredentialForm {
   name: string;
@@ -139,9 +140,9 @@ function emptyForm(): CredentialForm {
 </script>
 
 <template>
-  <section v-if="activeTool === 'accounts'" class="account-page" :class="{ fullscreen }">
+  <section v-if="activeTool === 'accounts'" class="account-page app-management-page" :class="{ fullscreen }">
     <template v-if="canUseAnyPageAction('accounts', ['create', 'edit', 'delete'])">
-    <article class="panel account-panel">
+    <SystemSearchPanel>
       <div class="account-toolbar">
         <el-input v-model="search" placeholder="输入账号名称/用户/备注搜索" class="account-toolbar-search" clearable />
         <div class="account-toolbar-actions">
@@ -152,6 +153,11 @@ function emptyForm(): CredentialForm {
           </el-button>
         </div>
       </div>
+    </SystemSearchPanel>
+    <article class="panel account-panel app-management-card">
+      <div class="app-management-heading account-list-heading">
+        <div><h2>账号管理</h2><span>共 {{ stats.total }} 个账号</span></div>
+      </div>
 
       <div class="account-stats-line">
         <span>共 {{ stats.total }} 个账号</span>
@@ -161,7 +167,7 @@ function emptyForm(): CredentialForm {
       </div>
       <p v-if="message" class="account-message">{{ message }}</p>
 
-      <div class="account-table">
+      <div class="account-table-wrap app-data-table-wrap">
         <el-table :data="filteredCredentials" row-key="id" class="account-table app-data-table" empty-text="没有匹配的账号">
           <el-table-column label="账号名称" min-width="150">
             <template #default="{ row }">

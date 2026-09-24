@@ -4,6 +4,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { useAppContext } from '@app/context';
 import AppIcon from '@shared/components/AppIcon.vue';
 import AppPagination from '@shared/components/AppPagination.vue';
+import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 import {
   createCompanyDevice,
   deleteCompanyDevice,
@@ -267,24 +268,29 @@ function setPageSize(size: number) {
 </script>
 
 <template>
-  <section class="device-manager-page">
-    <article class="device-list-panel">
+  <section class="device-manager-page app-management-page">
+    <SystemSearchPanel v-if="canUsePageAction('companyDevices', 'filter')">
+      <div class="system-search-form device-standard-search">
+        <el-select v-model="statusFilter" aria-label="资产状态" placeholder="资产状态" clearable>
+          <el-option value="" label="资产状态" />
+          <el-option value="using" label="使用中" />
+          <el-option value="idle" label="闲置" />
+          <el-option value="repair" label="维修" />
+          <el-option value="scrapped" label="报废" />
+        </el-select>
+        <el-select v-model="categoryFilter" aria-label="资产类别" placeholder="资产类别" clearable>
+          <el-option value="" label="资产类别" />
+          <el-option value="固定资产" label="固定资产" />
+          <el-option value="耗材" label="耗材" />
+        </el-select>
+        <el-input v-model="search" placeholder="输入名称等信息" aria-label="输入名称等信息" clearable />
+        <el-button type="danger" @click="resetFilters">重置</el-button>
+      </div>
+    </SystemSearchPanel>
+    <article class="device-list-panel app-management-card">
       <div class="device-list-toolbar">
-        <div v-if="canUsePageAction('companyDevices', 'filter')" class="device-toolbar-filters">
-          <el-select v-model="statusFilter" class="device-toolbar-select" aria-label="资产状态" placeholder="资产状态" clearable>
-            <el-option value="" label="资产状态" />
-            <el-option value="using" label="使用中" />
-            <el-option value="idle" label="闲置" />
-            <el-option value="repair" label="维修" />
-            <el-option value="scrapped" label="报废" />
-          </el-select>
-          <el-select v-model="categoryFilter" class="device-toolbar-select" aria-label="资产类别" placeholder="资产类别" clearable>
-            <el-option value="" label="资产类别" />
-            <el-option value="固定资产" label="固定资产" />
-            <el-option value="耗材" label="耗材" />
-          </el-select>
-          <el-input v-model="search" placeholder="输入名称等信息" class="device-toolbar-search" aria-label="输入名称等信息" clearable />
-          <el-button type="danger" @click="resetFilters">重置</el-button>
+        <div class="app-management-heading">
+          <div><h2>设备资产</h2><span>共 {{ filteredDevices.length }} 条资产</span></div>
         </div>
         <div class="device-toolbar-actions">
           <el-button
@@ -319,14 +325,11 @@ function setPageSize(size: number) {
         <span>{{ loadError }}</span>
         <el-button type="primary" @click="loadDevices">重试</el-button>
       </div>
-      <div v-else class="device-table-wrap">
+      <div v-else class="device-table-wrap app-data-table-wrap">
         <el-table
           :data="pagedDevices"
           row-key="id"
           class="device-table app-data-table"
-          height="100%"
-          border
-          stripe
           highlight-current-row
           empty-text="暂无资产数据"
           @selection-change="handleSelectionChange"

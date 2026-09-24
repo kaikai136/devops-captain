@@ -20,6 +20,8 @@ describe('AccountManager Element Plus migration', () => {
     expect(template).toContain('<el-button');
     expect(template).toContain('<el-input');
     expect(template).toContain('<el-upload');
+    expect(template).toContain('class="account-table-wrap app-data-table-wrap"');
+    expect(template).toContain('class="account-table app-data-table"');
 
     expect(template).not.toContain('<table');
     expect(template).not.toContain('<input');

@@ -479,7 +479,7 @@ function emptyRoleForm(): RoleForm {
 </script>
 
 <template>
-  <section v-if="activeTool === 'roles'" class="role-manager-page" @click="columnsOpen = false">
+  <section v-if="activeTool === 'roles'" class="role-manager-page app-management-page" @click="columnsOpen = false">
     <template v-if="canUseAnyPageAction('roles', ['create', 'edit', 'permissions', 'delete'])">
       <SystemSearchPanel>
         <el-form class="system-search-form" inline label-position="left" @submit.prevent="runSearch">
@@ -505,7 +505,7 @@ function emptyRoleForm(): RoleForm {
         </el-form>
       </SystemSearchPanel>
 
-      <article class="role-list-panel">
+      <article class="role-list-panel app-management-card">
         <div class="role-list-toolbar">
           <div class="role-list-heading">
             <h2>角色与权限</h2>

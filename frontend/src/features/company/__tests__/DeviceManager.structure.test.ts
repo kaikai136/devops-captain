@@ -108,7 +108,7 @@ describe('DeviceManager page structure', () => {
   it('renders closed category and status option sets for filters and form', () => {
     const source = readSource('features/company/components/DeviceManager.vue');
 
-    expect(source).toContain('<el-select v-model="categoryFilter" class="device-toolbar-select"');
+    expect(source).toContain('<el-select v-model="categoryFilter"');
     expect(source).toContain('placeholder="资产状态" clearable');
     expect(source).toContain('placeholder="资产类别" clearable');
     expect(source).toContain('<el-select v-model="deviceForm.category">');
@@ -137,12 +137,15 @@ describe('DeviceManager page structure', () => {
 
     expect(source).not.toContain('<h2><AppIcon name="hardDrive" :size="18" />资产列表</h2>');
     expect(source).not.toContain('<h2><AppIcon name="hardDrive" :size="18" />璧勪骇鍒楄〃</h2>');
-    expect(source).toContain('class="device-toolbar-filters"');
+    expect(source).toContain('class="system-search-form device-standard-search"');
     expect(source).toContain('class="device-toolbar-actions"');
+    expect(source).toContain('class="device-table-wrap app-data-table-wrap"');
+    expect(source).toContain('class="device-table app-data-table"');
+    expect(styles).not.toMatch(/\.device-table \.el-table__(?:header th|body td|cell)/);
     expect(styles).toMatch(/\.device-list-toolbar\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s*auto;/s);
     expect(styles).toMatch(/\.device-toolbar-filters\s*\{[^}]*justify-content:\s*flex-start;/s);
     expect(styles).toMatch(/\.device-toolbar-actions\s*\{[^}]*justify-content:\s*flex-end;/s);
-    expect(styles).toMatch(/\.device-list-panel\s*\{[^}]*height:\s*calc\(100dvh - 104px\);/s);
+    expect(styles).toMatch(/\.device-list-panel\s*\{[^}]*height:\s*100%;/s);
     expect(styles).toMatch(/\.device-table-wrap\s*\{[^}]*flex:\s*1 1 auto;/s);
   });
 
@@ -151,9 +154,6 @@ describe('DeviceManager page structure', () => {
     const source = readSource('features/company/components/DeviceManager.vue');
 
     expect(source).not.toContain('>查询</button>');
-    expect(source).toContain('height="100%"');
-    expect(source).toContain('border');
-    expect(source).toContain('stripe');
     expect(source).toContain('highlight-current-row');
     expect(styles).toMatch(/\.device-toolbar-actions\s*\{[^}]*flex-wrap:\s*nowrap;/s);
     expect(styles).toMatch(/\.device-toolbar-filters\s*\{[^}]*flex-wrap:\s*wrap;/s);

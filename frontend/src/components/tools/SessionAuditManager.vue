@@ -16,6 +16,7 @@ import {
 import { formatDateTime } from '../../utils/datetime';
 import AppIcon from '@shared/components/AppIcon.vue';
 import AppPagination from '@shared/components/AppPagination.vue';
+import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 
 interface SessionRecordingDialogState {
   visible: boolean;
@@ -254,9 +255,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="host-session-audit-page">
-    <article v-if="canUseSessionAudit" class="panel host-session-audit-list-panel">
-      <el-form class="host-session-audit-toolbar" inline label-position="left" @submit.prevent="applySessionAuditFilters">
+  <section class="host-session-audit-page app-management-page">
+    <SystemSearchPanel class="host-session-audit-search-panel">
+      <el-form class="system-search-form host-session-audit-toolbar" inline label-position="left" @submit.prevent="applySessionAuditFilters">
         <el-form-item label="审计搜索">
           <el-input v-model="sessionAuditSearch" placeholder="输入用户/命令/节点/IP/会话检索" clearable />
         </el-form-item>
@@ -282,10 +283,21 @@ onBeforeUnmount(() => {
           </el-tooltip>
         </el-form-item>
       </el-form>
+    </SystemSearchPanel>
 
+    <article v-if="canUseSessionAudit" class="host-session-audit-list-panel app-management-card">
+      <div class="app-management-heading host-session-audit-list-heading">
+        <div>
+          <h2>会话审计</h2>
+          <span>共 {{ sessionAuditTotal }} 条记录</span>
+        </div>
+        <el-button circle :disabled="isSessionAuditLoading" aria-label="刷新" @click="loadSessionAudits">
+          <AppIcon name="refresh" :size="16" />
+        </el-button>
+      </div>
       <p v-if="sessionAuditError" class="host-session-audit-message">{{ sessionAuditError }}</p>
 
-      <div class="host-session-audit-table-wrap">
+      <div class="host-session-audit-table-wrap app-data-table-wrap">
         <el-table :data="sessionAuditRecords" row-key="id" class="host-session-audit-table app-data-table" v-loading="isSessionAuditLoading" empty-text="暂无会话审计记录">
           <el-table-column type="expand" width="48">
             <template #default="{ row }">

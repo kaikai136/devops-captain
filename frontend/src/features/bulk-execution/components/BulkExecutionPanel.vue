@@ -4,6 +4,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useAppContext } from '@app/context';
 import AppIcon from '@shared/components/AppIcon.vue';
 import AppPagination from '@shared/components/AppPagination.vue';
+import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 import { errorMessage } from '@shared/utils/errors';
 import {
   cancelBulkExecutionTask,
@@ -995,48 +996,46 @@ function formatFileSize(value: number) {
 </script>
 
 <template>
-  <section class="bulk-execution-page">
+  <section class="bulk-execution-page app-management-page">
     <article v-if="canRefresh || canExecute" class="bulk-execution-shell">
-      <header class="bulk-execution-head">
-        <div>
-          <h2>批量执行</h2>
-          <p>面向已验证 Linux SSH 主机执行命令和文件分发任务。</p>
-        </div>
-        <el-button-group class="bulk-execution-actions">
-          <el-button v-if="canRefresh || canExecute" :type="activeBulkView === 'history' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'history' }" @click="switchBulkView('history')"><AppIcon name="rows" :size="16" />执行记录</el-button>
-          <el-button v-if="canExecute" :type="activeBulkView === 'execute' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'execute' }" @click="openCreateDialog"><AppIcon name="terminal" :size="16" />新建执行</el-button>
-          <el-button v-if="canExecute" :type="activeBulkView === 'upload' ? 'primary' : 'default'" :class="{ active: activeBulkView === 'upload' }" @click="openUploadDialog"><AppIcon name="upload" :size="16" />批量上传</el-button>
-          <el-button v-if="canRefresh" :loading="isLoading" @click="refreshAll"><AppIcon name="refresh" :size="16" />刷新</el-button>
-        </el-button-group>
-      </header>
-
       <section v-show="activeBulkView === 'history'" class="bulk-history-view">
-        <section class="bulk-record-panel">
-          <header class="bulk-record-toolbar">
-            <div class="bulk-record-heading">
-              <h3>执行列表</h3>
+        <SystemSearchPanel class="bulk-history-search-panel">
+            <header class="bulk-record-toolbar">
+              <div class="bulk-record-actions">
+                <label class="bulk-keyword-filter">
+                  <el-input v-model="keyword" clearable placeholder="搜索任务或命令" @keyup.enter="applyHistoryFilters" />
+                </label>
+                <label class="bulk-host-filter">
+                  <el-select v-model="hostFilter" aria-label="目标主机" @change="applyHistoryFilters">
+                    <el-option value="" label="全部主机" />
+                    <el-option v-for="target in targets" :key="target.id" :value="target.id" :label="`${target.name} / ${target.privateIp}`" />
+                  </el-select>
+                </label>
+                <label class="bulk-status-filter">
+                  <el-select v-model="statusFilter" aria-label="执行状态" @change="setHistoryStatus(statusFilter)">
+                    <el-option v-for="option in historyStatusOptions" :key="option.value || 'all'" :value="option.value" :label="option.label" />
+                  </el-select>
+                </label>
+                <el-button class="bulk-query-button" :loading="isLoading" @click="applyHistoryFilters"><AppIcon name="search" :size="15" />查询</el-button>
+                <el-button v-if="canRefresh" :loading="isLoading" circle aria-label="刷新" @click="refreshAll"><AppIcon name="refresh" :size="15" /></el-button>
+              </div>
+            </header>
+        </SystemSearchPanel>
+        <section class="bulk-record-panel app-management-card">
+          <header class="app-management-heading bulk-execution-head">
+            <div>
+              <h2>批量执行</h2>
+              <span>共 {{ taskTotal }} 条任务</span>
             </div>
-            <div class="bulk-record-actions">
-              <label class="bulk-keyword-filter">
-                <el-input v-model="keyword" clearable placeholder="搜索任务或命令" @keyup.enter="applyHistoryFilters" />
-              </label>
-              <label class="bulk-host-filter">
-                <el-select v-model="hostFilter" aria-label="目标主机" @change="applyHistoryFilters">
-                  <el-option value="" label="全部主机" />
-                  <el-option v-for="target in targets" :key="target.id" :value="target.id" :label="`${target.name} / ${target.privateIp}`" />
-                </el-select>
-              </label>
-              <label class="bulk-status-filter">
-                <el-select v-model="statusFilter" aria-label="执行状态" @change="setHistoryStatus(statusFilter)">
-                  <el-option v-for="option in historyStatusOptions" :key="option.value || 'all'" :value="option.value" :label="option.label" />
-                </el-select>
-              </label>
-              <el-button class="bulk-query-button" :loading="isLoading" @click="applyHistoryFilters"><AppIcon name="search" :size="15" />查询</el-button>
-              <el-button v-if="canRefresh" :loading="isLoading" circle aria-label="刷新" @click="refreshAll"><AppIcon name="refresh" :size="15" /></el-button>
-            </div>
+            <el-button-group class="bulk-execution-actions">
+              <el-button type="primary" :class="{ active: activeBulkView === 'history' }" @click="switchBulkView('history')"><AppIcon name="rows" :size="16" />执行记录</el-button>
+              <el-button v-if="canExecute" :class="{ active: activeBulkView === 'execute' }" @click="openCreateDialog"><AppIcon name="terminal" :size="16" />新建执行</el-button>
+              <el-button v-if="canExecute" :class="{ active: activeBulkView === 'upload' }" @click="openUploadDialog"><AppIcon name="upload" :size="16" />批量上传</el-button>
+              <el-button v-if="canRefresh" :loading="isLoading" @click="refreshAll"><AppIcon name="refresh" :size="16" />刷新</el-button>
+            </el-button-group>
           </header>
 
-          <div class="bulk-record-table">
+          <div class="bulk-record-table app-data-table-wrap">
             <el-table :data="taskHistory" class="bulk-record-grid app-data-table" row-key="id" empty-text="暂无批量执行任务" @row-click="(row) => selectTask(row.id, true, false)">
               <el-table-column width="54" align="center">
                 <template #header>

@@ -3,6 +3,69 @@
   --app-table-section-gutter: var(--workspace-panel-padding, 16px);
 }
 
+/* Standard management-page frame, matching RoleManager. */
+.app-management-page {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: var(--workspace-page-gap);
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--workspace-page-gutter);
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
+}
+
+.app-management-page > .app-management-card {
+  height: 100%;
+}
+
+.app-management-card {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid var(--ui-border);
+  border-radius: 8px;
+  background: var(--ui-card);
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04);
+}
+
+.app-management-page > .system-search-panel,
+.app-management-page > .app-management-card {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.app-management-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 14px 20px;
+}
+
+.app-management-heading h2,
+.app-management-heading h3,
+.app-management-heading p {
+  margin: 0;
+}
+
+.app-management-heading h2,
+.app-management-heading h3 {
+  color: var(--ui-card-foreground);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.app-management-heading span {
+  color: var(--ui-muted-foreground);
+  font-size: 12px;
+}
+
 .app-data-table-wrap {
   box-sizing: border-box;
   width: 100%;

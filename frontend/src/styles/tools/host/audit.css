@@ -1,11 +1,15 @@
 .host-session-audit-page {
-  display: grid;
   flex: 1 1 auto;
   height: auto;
   max-height: none;
   min-height: 0;
-  margin: var(--workspace-page-gutter);
-  overflow: hidden;
+  min-width: 0;
+}
+
+.host-session-audit-search-panel,
+.host-session-audit-list-panel {
+  width: 100%;
+  max-width: none;
 }
 
 .host-session-audit-list-panel {
@@ -15,9 +19,9 @@
   height: 100%;
   max-height: 100%;
   min-height: 0;
-  padding: var(--workspace-panel-padding);
+  padding: 0;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.88);
+  height: 100%;
 }
 
 .host-session-audit-toolbar,
@@ -27,10 +31,39 @@
   align-items: center;
 }
 
+.host-session-audit-search-panel {
+  min-height: 72px;
+}
+
+.host-session-audit-list-heading {
+  min-height: 72px;
+}
+
+.host-session-audit-list-heading h2 {
+  margin: 0;
+}
+
+.host-session-audit-list-heading span {
+  color: var(--ui-muted-foreground);
+  font-size: 12px;
+}
+
 .host-session-audit-toolbar {
-  justify-content: space-between;
+  grid-template-columns: minmax(320px, 1.6fr) minmax(220px, 1fr) minmax(300px, 1.4fr) auto;
+  justify-content: stretch;
   gap: var(--workspace-page-gap);
-  margin-bottom: var(--workspace-page-gap);
+  min-height: 40px;
+  margin-bottom: 0;
+  padding: 0;
+}
+
+.host-session-audit-toolbar > .el-form-item:last-child {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.host-session-audit-toolbar > .el-form-item:last-child .el-form-item__content {
+  width: auto;
 }
 
 .host-session-audit-toolbar > input {
@@ -87,7 +120,7 @@
 }
 
 .host-session-audit-message {
-  margin: 0 0 12px;
+  margin: 0 20px 12px;
   border: 1px solid #ffd4d4;
   background: #fff5f5;
   color: #d92d20;
@@ -100,16 +133,15 @@
   flex: 1 1 auto;
   min-width: 0;
   min-height: 0;
-  overflow: auto;
 }
 
 .host-session-audit-pagination {
   flex: 0 0 auto;
+  margin: 0 var(--workspace-panel-padding);
 }
 
 .host-session-audit-table {
   min-width: 1420px;
-  border-top: 1px solid #edf1f6;
 }
 
 .host-session-audit-row {
@@ -253,7 +285,7 @@
 }
 
 .host-session-audit-pagination {
-  margin-top: 14px;
+  margin-top: 0;
   padding-top: 12px;
 }
 
@@ -353,7 +385,7 @@
 
 @media (max-width: 920px) {
   .host-session-audit-page {
-    margin: 14px;
+    padding: 14px;
   }
 
   .host-session-audit-list-panel {
@@ -361,7 +393,7 @@
   }
 
   .host-session-audit-list-panel {
-    padding: 18px 16px 14px;
+    padding: 0;
   }
 }
 

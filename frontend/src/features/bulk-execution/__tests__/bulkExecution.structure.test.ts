@@ -275,7 +275,7 @@ describe('bulk execution frontend contract', () => {
   it('selects execution records with host-list style checkboxes and shows a bottom bulk delete bar', () => {
     const panel = readSource('features/bulk-execution/components/BulkExecutionPanel.vue');
     const styles = readSource('styles/tools/bulk-execution.css');
-    const recordTable = panel.match(/<div class="bulk-record-table">[\s\S]*?<\/div>\s*<footer class="bulk-record-footer">/)?.[0] ?? '';
+    const recordTable = panel.match(/<div class="bulk-record-table[^\"]*">[\s\S]*?<\/div>\s*<footer class="bulk-record-footer">/)?.[0] ?? '';
 
     expect(panel).toContain('const selectedRecordTaskIds = ref<Set<number>>(new Set())');
     expect(panel).toContain('visibleRecordTaskIds');
@@ -312,7 +312,7 @@ describe('bulk execution frontend contract', () => {
   it('numbers execution records after the selection column using the current page offset', () => {
     const panel = readSource('features/bulk-execution/components/BulkExecutionPanel.vue');
     const styles = readSource('styles/tools/bulk-execution.css');
-    const recordTable = panel.match(/<div class="bulk-record-table">[\s\S]*?<\/div>\s*<footer class="bulk-record-footer">/)?.[0] ?? '';
+    const recordTable = panel.match(/<div class="bulk-record-table[^\"]*">[\s\S]*?<\/div>\s*<footer class="bulk-record-footer">/)?.[0] ?? '';
     const selectionColumnIndex = recordTable.indexOf('width="54"');
     const numberColumnIndex = recordTable.indexOf('width="80" align="center"');
     const hostColumnIndex = recordTable.indexOf('min-width="150"');
@@ -324,8 +324,11 @@ describe('bulk execution frontend contract', () => {
     expect(selectionColumnIndex).toBeGreaterThanOrEqual(0);
     expect(numberColumnIndex).toBeGreaterThan(selectionColumnIndex);
     expect(hostColumnIndex).toBeGreaterThan(numberColumnIndex);
-    expect(styles).toContain('.bulk-record-grid .col-index { width: 68px; }');
-    expect(styles).toContain('.bulk-record-grid .cell-index');
+    expect(recordTable).toContain('class="bulk-record-table app-data-table-wrap"');
+    expect(recordTable).toContain('class="bulk-record-grid app-data-table"');
+    expect(styles).toMatch(/\.bulk-record-grid\s*\{\s*min-width:\s*1388px;/);
+    expect(styles).not.toMatch(/^\.bulk-record-grid thead th\s*\{/m);
+    expect(styles).not.toMatch(/^\.bulk-record-grid th,\s*$/m);
   });
 
   it('uses the detail modal primary action to expand or collapse all host outputs', () => {
