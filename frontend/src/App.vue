@@ -453,25 +453,29 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
 
       <section class="workspace-body">
         <template v-if="!isLocked || hasWorkspaceDataLoaded">
-          <DashboardPage v-if="activeTool === 'dashboard'" ref="dashboardPageRef" />
-          <IpScanner v-if="activeTool === 'ip'" />
-          <HostManager v-if="activeTool === 'hosts'" />
-          <SessionAuditManager v-if="activeTool === 'sessionAudits'" />
-          <BulkExecutionPanel v-if="activeTool === 'bulkExecution'" />
-          <ApplicationMarketPanel v-if="activeTool === 'applicationMarket'" />
-          <AccountManager v-if="activeTool === 'accounts'" />
-          <DeviceManager v-if="activeTool === 'companyDevices'" />
-          <MachineProbe v-if="activeTool === 'ports'" />
-          <SubnetCalculator v-if="activeTool === 'subnet'" />
-          <AuthenticatorPanel v-if="activeTool === 'auth'" />
-          <PasswordGenerator v-if="activeTool === 'password'" />
-          <SecurityScanPanel v-if="activeTool === 'securityScan'" />
-          <LoginLogManager v-if="activeTool === 'loginLogs'" />
-          <OperationLogManager v-if="activeTool === 'operationLogs'" />
-          <UserManager v-if="activeTool === 'users'" />
-          <RoleManager v-if="activeTool === 'roles'" />
-          <ProfileCenter v-if="activeTool === 'profile'" />
-          <SystemSettingsPanel v-if="activeTool === 'systemSettings'" />
+          <Transition name="fade-transform" mode="out-in" appear>
+            <div :key="activeTool" class="workspace-tool-view">
+              <DashboardPage v-if="activeTool === 'dashboard'" ref="dashboardPageRef" />
+              <IpScanner v-else-if="activeTool === 'ip'" />
+              <HostManager v-else-if="activeTool === 'hosts'" />
+              <SessionAuditManager v-else-if="activeTool === 'sessionAudits'" />
+              <BulkExecutionPanel v-else-if="activeTool === 'bulkExecution'" />
+              <ApplicationMarketPanel v-else-if="activeTool === 'applicationMarket'" />
+              <AccountManager v-else-if="activeTool === 'accounts'" />
+              <DeviceManager v-else-if="activeTool === 'companyDevices'" />
+              <MachineProbe v-else-if="activeTool === 'ports'" />
+              <SubnetCalculator v-else-if="activeTool === 'subnet'" />
+              <AuthenticatorPanel v-else-if="activeTool === 'auth'" />
+              <PasswordGenerator v-else-if="activeTool === 'password'" />
+              <SecurityScanPanel v-else-if="activeTool === 'securityScan'" />
+              <LoginLogManager v-else-if="activeTool === 'loginLogs'" />
+              <OperationLogManager v-else-if="activeTool === 'operationLogs'" />
+              <UserManager v-else-if="activeTool === 'users'" />
+              <RoleManager v-else-if="activeTool === 'roles'" />
+              <ProfileCenter v-else-if="activeTool === 'profile'" />
+              <SystemSettingsPanel v-else-if="activeTool === 'systemSettings'" />
+            </div>
+          </Transition>
         </template>
       </section>
       <footer v-if="layoutFooter.enabled" class="workspace-footer" :style="footerStyle">

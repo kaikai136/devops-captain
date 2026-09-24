@@ -92,6 +92,19 @@ describe('app shell upgrade contract', () => {
     expect(collapsedToggleRule).not.toContain('right: -');
   });
 
+  it('uses the 1Panel fade-transform transition for internal page switching', () => {
+    const app = readSource('App.vue');
+    const workspaceStyles = readSource('styles/base/workspace-header.css');
+
+    expect(app).toContain('<Transition name="fade-transform" mode="out-in" appear>');
+    expect(app).toContain('class="workspace-tool-view"');
+    expect(app).toContain(':key="activeTool"');
+    expect(workspaceStyles).toContain('.fade-transform-enter-active');
+    expect(workspaceStyles).toContain('transition: all 0.2s;');
+    expect(workspaceStyles).toContain('transform: translateX(-30px);');
+    expect(workspaceStyles).toContain('transform: translateX(30px);');
+  });
+
   it('keeps an explicit selection frame on nested sidebar menu items', () => {
     const navStyles = readSource('styles/base/shell-nav.css');
     const nestedActiveRule = navStyles.match(/\.workspace-nav-menu \.el-sub-menu \.el-menu-item\.is-active \{[\s\S]*?\n\}/)?.[0] ?? '';
