@@ -532,6 +532,14 @@ describe('HostManager component structure', () => {
     expect(findByClass(templateRoot('src/features/hosts/components/HostMoveDialog.vue'), 'el-dialog', 'host-form-modal')).toHaveLength(1);
   });
 
+  it('keeps the more-actions menu aligned and visible outside the toolbar bounds', () => {
+    const styles = readFileSync(fileURLToPath(new URL('../../../../styles/tools/host/toolbar.css', import.meta.url)), 'utf8');
+    expect(styles).toMatch(/\.host-more-actions\s*\{[\s\S]*z-index:\s*80;/);
+    expect(styles).toMatch(/\.host-more-menu\s*\{[\s\S]*z-index:\s*1000;[\s\S]*right:\s*0;[\s\S]*left:\s*auto;[\s\S]*min-width:\s*176px;/);
+    expect(styles).toContain('.host-manager-page > .host-table-panel');
+    expect(styles).toContain('overflow: visible');
+  });
+
   it('protects HostTable checkbox payloads, pagination, column settings, and permissions', () => {
     const tableRoot = templateRoot('src/features/hosts/components/HostTable.vue');
     const checkboxes = findElements(tableRoot, 'el-checkbox');

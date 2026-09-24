@@ -28,6 +28,7 @@
 .host-more-actions {
   position: relative;
   display: inline-flex;
+  z-index: 80;
 }
 
 .more-action-trigger {
@@ -40,10 +41,16 @@
 
 .host-more-menu {
   position: absolute;
-  z-index: 70;
+  z-index: 1000;
   top: calc(100% + 9px);
-  left: 0;
-  width: 156px;
+  right: 0;
+  left: auto;
+  width: 176px;
+  min-width: 176px;
+  max-width: min(240px, calc(100vw - 32px));
+  box-sizing: border-box;
+  overflow: hidden;
+  border-radius: 6px;
   padding: 7px 0;
   border: 1px solid #e2e7ef;
   background: #fff;
@@ -56,6 +63,7 @@
   align-items: center;
   width: 100%;
   min-height: 34px;
+  box-sizing: border-box;
   border: 0;
   background: transparent;
   color: #1d2f49;
@@ -63,6 +71,11 @@
   text-align: left;
   font-size: 13px;
   font-weight: 800;
+}
+
+.host-manager-page > .host-table-panel,
+.host-manager-page > .host-table-panel > .host-toolbar {
+  overflow: visible;
 }
 
 .host-more-menu button:hover:not(:disabled),
