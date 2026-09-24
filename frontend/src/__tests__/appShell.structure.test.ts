@@ -60,6 +60,45 @@ describe('app shell upgrade contract', () => {
 
     expect(menuRule).toContain('font-size: 16px');
     expect(menuRule).toContain('font-weight: 900');
-    expect(menuRule).toContain('height: 44px');
+    expect(menuRule).toContain('height: 42px');
+    expect(menuRule).toContain('border-radius: 4px');
+    expect(menuRule).toContain('margin: 7px 0');
+  });
+
+  it('keeps the 1Panel-style collapse control in the brand row and preserves shell sizing and colors', () => {
+    const app = readSource('App.vue');
+    const navStyles = readSource('styles/base/shell-nav.css');
+
+    const brandStart = app.indexOf('<div class="sidebar-brand">');
+    const brandEnd = app.indexOf('</div>', brandStart);
+    const brand = app.slice(brandStart, brandEnd);
+    expect(brand).toContain('sidebar-brand-toggle');
+    expect(brand).toContain('@click="toggleSidebar"');
+    expect(app).toContain(':collapse-transition="false"');
+    expect(app).toContain('popper-class="workspace-nav-popper"');
+    expect(app).not.toContain('class="workspace-menu-button"');
+
+    expect(navStyles).toContain('grid-template-columns: clamp(190px, 12vw, 220px) minmax(0, 1fr)');
+    expect(navStyles).toContain('grid-template-columns: 76px minmax(0, 1fr)');
+    expect(navStyles).toContain('background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)');
+    expect(navStyles).toContain('background: linear-gradient(180deg, #111827 0%, #0f172a 100%)');
+
+    const collapsedBrandRule = navStyles.match(/\.sidebar\.collapsed \.sidebar-brand \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const collapsedLogoRule = navStyles.match(/\.sidebar\.collapsed \.sidebar-brand img \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const collapsedToggleRule = navStyles.match(/\.sidebar\.collapsed \.sidebar-brand-toggle \{[\s\S]*?\n\}/)?.[0] ?? '';
+    expect(collapsedBrandRule).toContain('overflow: visible');
+    expect(collapsedLogoRule).toContain('object-fit: contain');
+    expect(collapsedToggleRule).toContain('position: relative');
+    expect(collapsedToggleRule).not.toContain('right: -');
+  });
+
+  it('keeps an explicit selection frame on nested sidebar menu items', () => {
+    const navStyles = readSource('styles/base/shell-nav.css');
+    const nestedActiveRule = navStyles.match(/\.workspace-nav-menu \.el-sub-menu \.el-menu-item\.is-active \{[\s\S]*?\n\}/)?.[0] ?? '';
+    const nestedActiveMarker = navStyles.match(/\.workspace-nav-menu \.el-sub-menu \.el-menu-item\.is-active::before \{[\s\S]*?\n\}/)?.[0] ?? '';
+
+    expect(nestedActiveRule).toContain('background: #fff');
+    expect(nestedActiveRule).toContain('inset 0 0 0 2px var(--ui-primary)');
+    expect(nestedActiveMarker).toContain('background: var(--ui-primary)');
   });
 });

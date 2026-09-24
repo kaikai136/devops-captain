@@ -12,6 +12,7 @@ env/
 deploy/config/*.local.conf
 
 # Node / Vue
+1Panel/
 node_modules/
 dist/
 .vite/

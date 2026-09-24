@@ -278,6 +278,16 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
     <aside class="sidebar" :class="{ collapsed: sidebarCollapsed }">
       <div class="sidebar-brand">
         <img :src="sidebarLogoUrl" :alt="siteIdentity.appName" />
+        <button
+          class="sidebar-brand-toggle"
+          type="button"
+          :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+          :aria-label="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
+          :aria-expanded="!sidebarCollapsed"
+          @click="toggleSidebar"
+        >
+          <AppIcon name="chevronRight" :size="16" />
+        </button>
       </div>
 
       <nav class="sidebar-nav">
@@ -285,6 +295,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
           <el-menu
             class="workspace-nav-menu"
             :collapse="sidebarCollapsed"
+            :collapse-transition="false"
             :default-active="activeTool"
             :ellipsis="false"
             :unique-opened="true"
@@ -294,7 +305,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
               <AppIcon name="dashboard" :size="18" />
               <span>{{ dashboardNavItem.label }}</span>
             </el-menu-item>
-            <el-sub-menu v-for="group in navGroups" :key="group.key" :index="group.key">
+            <el-sub-menu v-for="group in navGroups" :key="group.key" :index="group.key" popper-class="workspace-nav-popper">
               <template #title>
                 <AppIcon :name="navGroupIcon(group.key)" :size="18" />
                 <span>{{ group.label }}</span>
@@ -319,15 +330,6 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
     <section class="workspace" :class="{ 'has-workspace-footer': layoutFooter.enabled }">
       <header class="workspace-topbar">
         <div class="workspace-topbar-main">
-          <el-button
-            class="workspace-menu-button"
-            circle
-            :title="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
-            :aria-label="sidebarCollapsed ? '展开侧边栏' : '折叠侧边栏'"
-            @click="toggleSidebar"
-          >
-            <AppIcon name="menu" :size="18" />
-          </el-button>
           <el-breadcrumb class="page-breadcrumb" separator="/">
             <el-breadcrumb-item v-for="(item, index) in breadcrumbItems" :key="item.key">
               <strong v-if="index === breadcrumbItems.length - 1">{{ item.label }}</strong>
