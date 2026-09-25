@@ -33,9 +33,8 @@ const targetGroup = computed({
 </script>
 
 <template>
-  <el-dialog :model-value="props.open" class="host-form-modal" :title="props.mode === 'selected' ? '更新所选' : '移动主机'" width="520px" :close-on-click-modal="false" @close="emit('close')">
-    <form class="popup-body popup-form-grid" @submit.prevent="emit('submit')">
-      <h2>{{ props.mode === 'selected' ? '更新所选' : '移动主机' }}</h2>
+  <el-dialog :model-value="props.open" class="host-move-dialog" :title="props.mode === 'selected' ? '更新所选' : '移动主机'" :close-on-click-modal="false" @close="emit('close')">
+    <form id="host-move-form" class="host-move-form" @submit.prevent="emit('submit')">
       <p v-if="props.mode === 'selected'" class="host-move-hint">仅支持更换主机分组，已选择 {{ props.selectedCount }} 台主机。</p>
       <label v-if="props.mode === 'single'">
         <span>选择主机</span>
@@ -50,10 +49,12 @@ const targetGroup = computed({
           <el-option v-for="group in props.groups" :key="group.key" :value="group.key" :label="`${'　'.repeat(group.level)}${group.label}`" />
         </el-select>
       </label>
-      <div class="host-form-actions popup-footer popup-actions">
-        <el-button @click="emit('close')">取消</el-button>
-        <el-button class="primary" native-type="submit" type="primary">{{ props.mode === 'selected' ? '更新' : '移动' }}</el-button>
-      </div>
     </form>
+    <template #footer>
+      <div class="popup-actions">
+        <el-button @click="emit('close')">取消</el-button>
+        <el-button class="primary" type="primary" @click="emit('submit')">{{ props.mode === 'selected' ? '更新' : '移动' }}</el-button>
+      </div>
+    </template>
   </el-dialog>
 </template>

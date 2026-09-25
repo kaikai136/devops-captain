@@ -528,7 +528,10 @@ describe('HostManager component structure', () => {
     expect(findElements(editorRoot, 'DialogPortal')).toHaveLength(1);
     expect(findByClass(editorRoot, 'DialogOverlay', 'host-editor-overlay')).toHaveLength(1);
     expect(findByClass(editorRoot, 'DialogContent', 'host-editor-dialog')).toHaveLength(1);
-    expect(findByClass(templateRoot('src/features/hosts/components/HostMoveDialog.vue'), 'el-dialog', 'host-form-modal')).toHaveLength(1);
+    const moveDialogRoot = templateRoot('src/features/hosts/components/HostMoveDialog.vue');
+    expect(findByClass(moveDialogRoot, 'el-dialog', 'host-move-dialog')).toHaveLength(1);
+    expect(findByClass(moveDialogRoot, 'form', 'host-move-form')).toHaveLength(1);
+    expect(findElements(moveDialogRoot, 'h2')).toHaveLength(0);
   });
 
   it('keeps the more-actions menu aligned and visible outside the toolbar bounds', () => {

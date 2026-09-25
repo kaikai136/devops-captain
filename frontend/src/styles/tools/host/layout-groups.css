@@ -618,11 +618,45 @@
   font-size: 18px;
 }
 
-.host-move-hint {
-  margin: -4px 0 0;
-  color: #526b8a;
+.host-move-dialog.el-dialog {
+  width: min(560px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+}
+
+.host-move-dialog .el-dialog__body {
+  overflow: visible;
+  padding: 24px;
+}
+
+.host-move-form {
+  display: grid;
+  min-width: 0;
+  gap: 18px;
+}
+
+.host-move-form > label {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  color: var(--ui-card-foreground);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 700;
+}
+
+.host-move-form .el-select {
+  width: 100%;
+}
+
+.host-move-hint {
+  margin: 0;
+  border: 1px solid var(--ui-primary-border);
+  border-radius: 6px;
+  background: var(--ui-primary-soft);
+  color: var(--ui-muted-foreground);
+  padding: 10px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
 }
 
 .host-form-modal label {
