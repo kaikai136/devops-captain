@@ -335,11 +335,51 @@
 }
 
 .host-session-recording-player {
-  height: clamp(360px, 62vh, 560px);
+  height: clamp(480px, 70vh, 760px);
   min-height: 0;
   overflow: hidden;
   border: 1px solid #d8e2ee;
   background: #121314;
+}
+
+/* Recording playback needs a wide, tall viewport so terminal frames are readable. */
+.host-session-recording-dialog.el-dialog {
+  width: min(1280px, calc(100vw - 48px));
+  max-width: calc(100vw - 48px);
+  height: min(900px, calc(100dvh - 24px));
+  max-height: calc(100dvh - 24px);
+}
+
+.host-session-recording-dialog .el-dialog__body {
+  overflow: hidden;
+  padding: 18px 20px;
+}
+
+.host-session-recording-body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.host-session-recording-title {
+  flex: 0 0 auto;
+  margin: 0;
+  overflow: hidden;
+  color: #173252;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.host-session-recording-dialog .host-session-recording-player {
+  flex: 1 1 auto;
+  width: 100%;
+  height: auto;
+  min-height: 0;
 }
 
 .host-session-recording-player .ap-wrapper {
@@ -417,6 +457,17 @@
   }
 
   .host-session-recording-player {
-    height: clamp(280px, 56vh, 420px);
+    height: clamp(300px, 58vh, 520px);
+  }
+
+  .host-session-recording-dialog.el-dialog {
+    width: calc(100vw - 24px);
+    max-width: calc(100vw - 24px);
+    height: calc(100dvh - 16px);
+    max-height: calc(100dvh - 16px);
+  }
+
+  .host-session-recording-dialog .el-dialog__body {
+    padding: 14px;
   }
 }

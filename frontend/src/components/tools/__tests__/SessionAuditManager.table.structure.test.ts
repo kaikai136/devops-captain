@@ -16,4 +16,11 @@ describe('SessionAuditManager shared table presentation', () => {
     expect(sharedTableStyles).toContain('.el-table.app-data-table th.el-table__cell');
     expect(sharedTableStyles).toContain('.el-table.app-data-table td.el-table__cell');
   });
+
+  it('uses a large responsive viewport for readable operation recordings', () => {
+    expect(component).toContain('class="host-session-recording-dialog"');
+    expect(component).not.toContain('width="920px"');
+    expect(auditStyles).toMatch(/\.host-session-recording-dialog\.el-dialog\s*\{[\s\S]*width:\s*min\(1280px, calc\(100vw - 48px\)\);[\s\S]*height:\s*min\(900px, calc\(100dvh - 24px\)\);/);
+    expect(auditStyles).toMatch(/\.host-session-recording-dialog \.host-session-recording-player\s*\{[\s\S]*width:\s*100%;[\s\S]*height:\s*auto;/);
+  });
 });

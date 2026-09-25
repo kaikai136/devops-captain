@@ -367,7 +367,6 @@ onBeforeUnmount(() => {
     <el-dialog
       :model-value="sessionRecordingDialog.visible"
       title="操作录像"
-      width="920px"
       class="host-session-recording-dialog"
       :close-on-click-modal="false"
       @update:model-value="(visible) => { if (!visible) closeSessionRecording(); }"
