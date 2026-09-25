@@ -45,7 +45,9 @@ export function useAppState() {
   const session = useSessionState({
     loadWorkspaceData,
     clearSessionUi,
-    onAuthenticated: () => pages.selectDefaultTool(),
+    onAuthenticated: (restorePreviousPage) => {
+      if (!restorePreviousPage) pages.selectDefaultTool();
+    },
   });
 
   pages = usePageState(session, {

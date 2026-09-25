@@ -67,7 +67,7 @@ describe('DeviceManager page structure', () => {
     expect(shell).not.toContain("companyDevices: 'hardDrive'");
     expect(shell).not.toContain("company: 'users'");
     expect(app).toContain("const DeviceManager = defineAsyncComponent(() => import('./features/company/components/DeviceManager.vue'))");
-    expect(app).toContain("<DeviceManager v-if=\"activeTool === 'companyDevices'\" />");
+    expect(app).toContain("<DeviceManager v-else-if=\"activeTool === 'companyDevices'\" />");
     expect(styles).toContain('@import "./styles/tools/device-manager.css";');
   });
 

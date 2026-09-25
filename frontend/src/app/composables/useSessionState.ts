@@ -5,7 +5,7 @@ import { useAuthSession } from '../../composables/app/useAuthSession';
 type UseSessionStateOptions = {
   loadWorkspaceData: () => Promise<void>;
   clearSessionUi: () => void;
-  onAuthenticated: () => void;
+  onAuthenticated: (restorePreviousPage: boolean) => void;
 };
 
 export function useSessionState({ loadWorkspaceData, clearSessionUi, onAuthenticated }: UseSessionStateOptions) {
@@ -16,6 +16,7 @@ export function useSessionState({ loadWorkspaceData, clearSessionUi, onAuthentic
     hasWorkspaceDataLoaded,
     isAuthReady,
     isAuthenticated,
+    shouldRestorePageAfterLogin,
     loadCurrentUser,
     login: authLogin,
     verifyTwoFactorLogin: authVerifyTwoFactorLogin,
@@ -40,20 +41,26 @@ export function useSessionState({ loadWorkspaceData, clearSessionUi, onAuthentic
 
   async function login(...args: Parameters<typeof authLogin>) {
     const result = await authLogin(...args);
-    if ('user' in result) onAuthenticated();
+    if ('user' in result) finishAuthentication();
     return result;
   }
 
   async function verifyTwoFactorLogin(...args: Parameters<typeof authVerifyTwoFactorLogin>) {
     const user = await authVerifyTwoFactorLogin(...args);
-    onAuthenticated();
+    finishAuthentication();
     return user;
   }
 
   async function verifyTwoFactorSetupLogin(...args: Parameters<typeof authVerifyTwoFactorSetupLogin>) {
     const user = await authVerifyTwoFactorSetupLogin(...args);
-    onAuthenticated();
+    finishAuthentication();
     return user;
+  }
+
+  function finishAuthentication() {
+    const restorePreviousPage = shouldRestorePageAfterLogin.value;
+    shouldRestorePageAfterLogin.value = false;
+    onAuthenticated(restorePreviousPage);
   }
 
   function canUsePageAction(pageKey: string, actionKey: string) {

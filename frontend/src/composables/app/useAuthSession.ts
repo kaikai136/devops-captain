@@ -1,5 +1,6 @@
-import { computed, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 
+import { AUTH_EXPIRED_EVENT } from '../../api';
 import * as authApi from '../../services/auth';
 import type { AccountUser, LoginPayload, LoginResult } from '../../types';
 
@@ -11,6 +12,23 @@ export function useAuthSession({ loadWorkspaceData, clearSessionUi }: { loadWork
   const hasWorkspaceDataLoaded = ref(false);
   const isAuthReady = ref(false);
   const isAuthenticated = computed(() => Boolean(currentUser.value));
+  const shouldRestorePageAfterLogin = ref(false);
+
+  function expireSession() {
+    if (!currentUser.value) return;
+    shouldRestorePageAfterLogin.value = true;
+    currentUser.value = null;
+    isLocked.value = false;
+    hasWorkspaceDataLoaded.value = false;
+    clearSessionUi();
+  }
+
+  onMounted(() => {
+    if (typeof window !== 'undefined') window.addEventListener(AUTH_EXPIRED_EVENT, expireSession);
+  });
+  onUnmounted(() => {
+    if (typeof window !== 'undefined') window.removeEventListener(AUTH_EXPIRED_EVENT, expireSession);
+  });
 
   async function loadCurrentUser() {
     try {
@@ -90,6 +108,7 @@ export function useAuthSession({ loadWorkspaceData, clearSessionUi }: { loadWork
     try {
       await authApi.logout();
     } finally {
+      shouldRestorePageAfterLogin.value = false;
       currentUser.value = null;
       isLocked.value = false;
       hasWorkspaceDataLoaded.value = false;
@@ -106,6 +125,7 @@ export function useAuthSession({ loadWorkspaceData, clearSessionUi }: { loadWork
     hasWorkspaceDataLoaded,
     isAuthReady,
     isAuthenticated,
+    shouldRestorePageAfterLogin,
     loadCurrentUser,
     login,
     verifyTwoFactorLogin,

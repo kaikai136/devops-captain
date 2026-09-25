@@ -1,4 +1,7 @@
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
+export const AUTH_EXPIRED_EVENT = 'ops-tool.auth.expired';
+
+const AUTH_ENDPOINTS = ['/api/auth/login/', '/api/auth/login/2fa/', '/api/auth/login/2fa/setup/'];
 
 export class ApiResponseError extends Error {
   constructor(
@@ -53,16 +56,19 @@ async function apiJsonRequest<T>(method: string, url: string, payload: unknown, 
 
 async function apiRequest<T>(url: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(url, { credentials: 'include', ...options });
-  return readResponse<T>(response);
+  return readResponse<T>(response, url);
 }
 
-async function readResponse<T>(response: Response): Promise<T> {
+async function readResponse<T>(response: Response, url: string): Promise<T> {
   const text = await response.text();
   const payload = parseResponsePayload(response, text);
 
   if (!response.ok) {
     const error = extractErrorMessage(payload) || '请求失败，请确认后端服务已启动';
     if (response.status === 401) {
+      if (typeof window !== 'undefined' && !AUTH_ENDPOINTS.some((endpoint) => url.startsWith(endpoint))) {
+        window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+      }
       throw new ApiUnauthorizedError(error);
     }
     throw new ApiResponseError(error, response.status, payload);

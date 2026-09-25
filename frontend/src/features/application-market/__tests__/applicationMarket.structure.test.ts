@@ -20,7 +20,7 @@ describe('application market frontend contract', () => {
     expect(shell).toContain('market: true');
     expect(shell).toMatch(/applicationMarket:\s*'(server|dashboard|settings|globe)'/);
     expect(app).toContain('ApplicationMarketPanel');
-    expect(app).toContain("<ApplicationMarketPanel v-if=\"activeTool === 'applicationMarket'\" />");
+    expect(app).toContain("<ApplicationMarketPanel v-else-if=\"activeTool === 'applicationMarket'\" />");
     expect(styles).toContain('@import "./styles/tools/application-market.css";');
   });
 
