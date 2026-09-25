@@ -61,4 +61,23 @@ describe('login page Element Plus structure', () => {
     expect(loginTemplate).not.toContain("activePanel === 'layout'");
     expect(loginTemplate).not.toContain('login-layout-choice');
   });
+
+  it('uses the Yantr canvas background without the legacy shape layer', () => {
+    const loginPage = readSource('components/auth/LoginPage.vue');
+    const loginTemplate = template('components/auth/LoginPage.vue');
+    const styles = readSource('styles/auth-login.css');
+    const background = readSource('components/auth/login/LoginYantrBackground.vue');
+
+    expect(loginPage).toContain("import LoginYantrBackground from './login/LoginYantrBackground.vue';");
+    expect(loginTemplate).toContain('<LoginYantrBackground :dark="effectiveDark" />');
+    expect(loginTemplate).not.toContain('login-bg-grid');
+    expect(loginTemplate).not.toContain('login-bg-shape');
+    expect(background).toContain('requestAnimationFrame');
+    expect(background).toContain('devicePixelRatio');
+    expect(background).toContain('prefers-reduced-motion');
+    expect(background).toContain('visibilitychange');
+    expect(background).toContain('window.removeEventListener');
+    expect(styles).toContain('.login-yantr-background');
+    expect(styles).toContain('pointer-events: none');
+  });
 });

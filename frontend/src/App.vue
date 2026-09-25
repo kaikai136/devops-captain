@@ -262,12 +262,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
 }
 </script>
 <template>
-  <main v-if="!isAuthReady" class="auth-loading">
-    <div>
-      <span></span>
-      <strong>正在检查登录状态</strong>
-    </div>
-  </main>
+  <main v-if="!isAuthReady" class="auth-loading" aria-hidden="true"></main>
   <LoginPage
     v-else-if="!isAuthenticated"
     :login="login"

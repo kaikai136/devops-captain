@@ -13,6 +13,8 @@ deploy/config/*.local.conf
 
 # Node / Vue
 1Panel/
+yantr/
+x-hub/
 node_modules/
 dist/
 .vite/

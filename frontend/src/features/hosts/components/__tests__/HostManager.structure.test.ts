@@ -538,6 +538,8 @@ describe('HostManager component structure', () => {
     const styles = readFileSync(fileURLToPath(new URL('../../../../styles/tools/host/toolbar.css', import.meta.url)), 'utf8');
     expect(styles).toMatch(/\.host-more-actions\s*\{[\s\S]*z-index:\s*80;/);
     expect(styles).toMatch(/\.host-more-menu\s*\{[\s\S]*z-index:\s*1000;[\s\S]*right:\s*0;[\s\S]*left:\s*auto;[\s\S]*min-width:\s*176px;/);
+    expect(styles).toMatch(/\.host-more-menu \.el-button\s*\{[\s\S]*justify-content:\s*flex-start;[\s\S]*margin:\s*0;/);
+    expect(styles).toMatch(/\.host-more-menu \.el-button > span\s*\{[\s\S]*grid-template-columns:\s*18px minmax\(0, 1fr\);[\s\S]*gap:\s*8px;/);
     expect(styles).toContain('.host-manager-page > .host-table-panel');
     expect(styles).toContain('overflow: visible');
   });

@@ -4,30 +4,7 @@
 }
 
 .auth-loading {
-  display: grid;
-  place-items: center;
   background: #f5f7fb;
-  color: #303846;
-}
-
-.auth-loading div {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  padding: 16px 20px;
-  border: 1px solid rgba(255, 255, 255, 0.78);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.86);
-  box-shadow: 0 18px 45px rgba(38, 87, 150, 0.12);
-}
-
-.auth-loading span {
-  width: 18px;
-  height: 18px;
-  border: 3px solid color-mix(in srgb, var(--ui-primary) 20%, transparent);
-  border-top-color: var(--ui-primary);
-  border-radius: 999px;
-  animation: authSpin 0.8s linear infinite;
 }
 
 .login-shell {
@@ -90,24 +67,28 @@
 .login-bg {
   position: absolute;
   inset: 0;
-  z-index: -1;
+  z-index: 0;
   pointer-events: none;
 }
 
-.login-bg-grid {
-  position: absolute;
+.login-yantr-background {
+  position: fixed;
+  z-index: 0;
   inset: 0;
-  background-image:
-    linear-gradient(color-mix(in srgb, var(--login-border) 50%, transparent) 1px, transparent 1px),
-    linear-gradient(90deg, color-mix(in srgb, var(--login-border) 50%, transparent) 1px, transparent 1px);
-  background-size: 36px 36px;
-  opacity: 0.55;
-  mask-image: radial-gradient(88% 78% at 50% 42%, #000 12%, transparent 80%);
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  background: transparent;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+  will-change: contents;
+  pointer-events: none;
 }
 
 .login-bg-vignette {
   position: absolute;
   inset: 0;
+  z-index: 1;
   background: radial-gradient(ellipse 75% 70% at 50% 50%, transparent 40%, rgba(226, 232, 240, 0.42) 100%);
 }
 
@@ -115,53 +96,17 @@
   background: radial-gradient(75% 70% at 50% 50%, transparent 35%, rgba(0, 0, 0, 0.38) 100%);
 }
 
-.login-bg-shape {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(96px);
-  opacity: 0.32;
-  animation: loginFloat 24s ease-in-out infinite;
-}
+@media (prefers-reduced-motion: reduce) {
+  .login-yantr-background {
+    opacity: 0.72;
+    will-change: auto;
+  }
 
-.login-bg-shape-1 {
-  top: -14%;
-  left: -10%;
-  width: 560px;
-  height: 560px;
-  background: var(--login-primary-light-5);
-}
-
-.login-bg-shape-2 {
-  right: -8%;
-  bottom: -12%;
-  width: 480px;
-  height: 480px;
-  background: var(--login-primary-light-7);
-  animation-delay: -8s;
-}
-
-.login-bg-shape-3 {
-  top: 22%;
-  right: 12%;
-  width: 280px;
-  height: 280px;
-  background: color-mix(in srgb, var(--login-primary-light-3) 50%, transparent);
-  opacity: 0.28;
-  animation-delay: -14s;
-}
-
-.login-bg-shape-4 {
-  bottom: 12%;
-  left: 10%;
-  width: 220px;
-  height: 220px;
-  background: color-mix(in srgb, var(--login-primary-light-5) 45%, transparent);
-  opacity: 0.26;
-  animation-delay: -20s;
-}
-
-.login-dark .login-bg-shape {
-  opacity: 0.22;
+  .login-card-border,
+  .login-koi-shape,
+  .login-koi-science {
+    animation: none;
+  }
 }
 
 .login-toolbar {
@@ -1102,22 +1047,6 @@
   backdrop-filter: blur(30px);
 }
 
-@keyframes authSpin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes loginFloat {
-  0%,
-  100% {
-    transform: translate(0);
-  }
-
-  50% {
-    transform: translate(10px, 18px);
-  }
-}
 
 @keyframes loginBorderFlow {
   to {
@@ -1349,7 +1278,7 @@
     radial-gradient(ellipse 600px 450px at 85% 20%, rgba(var(--login-accent-rgb), 0.14), transparent 70%),
     radial-gradient(500px circle at 25% 80%, rgba(var(--login-accent-rgb), 0.1), transparent 65%),
     radial-gradient(350px circle at 50% 50%, rgba(var(--login-accent-rgb), 0.08), transparent 60%),
-    #f8f9fd;
+    rgba(248, 249, 253, 0.78);
   color: #1f2937;
 }
 
@@ -1516,7 +1445,7 @@
 
 .login-layout-koi .login-right-panel {
   border-radius: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.84);
   backdrop-filter: blur(22px) saturate(1.1);
 }
 
@@ -1604,7 +1533,7 @@
   background:
     radial-gradient(ellipse 600px 450px at 85% 20%, rgba(var(--login-accent-rgb), 0.25), transparent 70%),
     radial-gradient(500px circle at 25% 80%, rgba(var(--login-accent-rgb), 0.18), transparent 65%),
-    #080b16;
+    rgba(8, 11, 22, 0.78);
 }
 
 .login-dark.login-layout-koi .login-koi-brand strong,
@@ -1624,7 +1553,7 @@
 }
 
 .login-dark.login-layout-koi .login-right-panel {
-  background: rgba(17, 24, 39, 0.92);
+  background: rgba(17, 24, 39, 0.84);
 }
 
 .login-dark.login-layout-koi .login-form-glass {

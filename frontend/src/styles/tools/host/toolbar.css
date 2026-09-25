@@ -1,4 +1,6 @@
 .host-toolbar {
+  position: relative;
+  z-index: 90;
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 16px;
@@ -45,7 +47,7 @@
   top: calc(100% + 9px);
   right: 0;
   left: auto;
-  width: 176px;
+  width: 184px;
   min-width: 176px;
   max-width: min(240px, calc(100vw - 32px));
   box-sizing: border-box;
@@ -53,24 +55,47 @@
   border-radius: 6px;
   padding: 7px 0;
   border: 1px solid #e2e7ef;
-  background: #fff;
+  background: var(--ui-card);
   box-shadow: 0 14px 32px rgba(31, 45, 71, 0.16);
 }
 
-.host-more-menu button {
-  display: grid;
-  grid-template-columns: 22px 1fr;
+.host-more-menu .el-button {
+  display: flex;
   align-items: center;
+  justify-content: flex-start;
   width: 100%;
-  min-height: 34px;
+  min-height: 38px;
   box-sizing: border-box;
+  margin: 0;
   border: 0;
   background: transparent;
-  color: #1d2f49;
+  color: var(--ui-foreground);
   padding: 0 12px;
   text-align: left;
   font-size: 13px;
   font-weight: 800;
+  line-height: 1.3;
+}
+
+.host-more-menu .el-button > span {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+}
+
+.host-more-menu .el-button .app-icon {
+  justify-self: center;
+}
+
+.host-more-menu .el-button > span > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .host-manager-page > .host-table-panel,
@@ -78,19 +103,19 @@
   overflow: visible;
 }
 
-.host-more-menu button:hover:not(:disabled),
-.host-more-menu button.active {
-  background: #f3f7ff;
+.host-more-menu .el-button:hover:not(:disabled),
+.host-more-menu .el-button.active {
+  background: var(--ui-primary-soft);
   color: var(--ui-primary);
 }
 
-.host-more-menu button:disabled {
+.host-more-menu .el-button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
 }
 
-.host-more-menu button.danger,
-.host-more-menu button.danger span {
+.host-more-menu .el-button.danger,
+.host-more-menu .el-button.danger span {
   color: #ff4058;
 }
 

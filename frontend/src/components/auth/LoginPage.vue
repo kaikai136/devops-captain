@@ -2,10 +2,13 @@
 import { computed, ref, watch } from 'vue';
 
 import { useLoginForm } from '../../composables/auth/useLoginForm';
+import { useLoginWelcomeSplash } from '../../composables/auth/useLoginWelcomeSplash';
 import type { LoginPayload, LoginResult } from '../../types';
 import AppIcon from '@shared/components/AppIcon.vue';
 import LoginFormCard from './login/LoginFormCard.vue';
 import LoginVisualPanel from './login/LoginVisualPanel.vue';
+import LoginWelcomeSplash from './login/LoginWelcomeSplash.vue';
+import LoginYantrBackground from './login/LoginYantrBackground.vue';
 
 const props = defineProps<{
   login: (payload: LoginPayload) => Promise<LoginResult>;
@@ -49,6 +52,7 @@ const {
 } = useLoginForm(props.login, props.verifyTwoFactorLogin, props.verifyTwoFactorSetupLogin);
 
 const appearance = ref<LoginAppearance>(readStoredAppearance());
+const { isVisible: isWelcomeVisible, isExiting: isWelcomeExiting } = useLoginWelcomeSplash();
 const effectiveDark = computed(() => appearance.value.mode === 'dark');
 const modeButtonIcon = computed(() => (effectiveDark.value ? 'sun' : 'moon'));
 const modeButtonLabel = computed(() => (effectiveDark.value ? '切换明亮模式' : '切换暗黑模式'));
@@ -92,14 +96,16 @@ watch(
 </script>
 
 <template>
-  <main class="login-shell" :class="[`login-layout-${appearance.layout}`, { 'login-dark': effectiveDark }]">
+  <LoginWelcomeSplash v-if="isWelcomeVisible" :exiting="isWelcomeExiting" />
+  <main
+    class="login-shell"
+    :class="[`login-layout-${appearance.layout}`, { 'login-dark': effectiveDark }]"
+    :inert="isWelcomeVisible"
+    :aria-hidden="isWelcomeVisible ? true : undefined"
+  >
     <div class="login-bg" aria-hidden="true">
-      <div class="login-bg-grid"></div>
+      <LoginYantrBackground :dark="effectiveDark" />
       <div class="login-bg-vignette"></div>
-      <div class="login-bg-shape login-bg-shape-1"></div>
-      <div class="login-bg-shape login-bg-shape-2"></div>
-      <div class="login-bg-shape login-bg-shape-3"></div>
-      <div class="login-bg-shape login-bg-shape-4"></div>
     </div>
 
     <nav class="login-toolbar" aria-label="登录页外观设置">
