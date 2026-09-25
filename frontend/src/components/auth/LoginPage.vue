@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue';
 
 import { useLoginForm } from '../../composables/auth/useLoginForm';
 import { useLoginWelcomeSplash } from '../../composables/auth/useLoginWelcomeSplash';
+import { useLoginCharacterFormState } from '../../composables/auth/useLoginCharacterFormState';
 import type { LoginPayload, LoginResult } from '../../types';
 import AppIcon from '@shared/components/AppIcon.vue';
 import LoginFormCard from './login/LoginFormCard.vue';
@@ -53,6 +54,12 @@ const {
 
 const appearance = ref<LoginAppearance>(readStoredAppearance());
 const { isVisible: isWelcomeVisible, isExiting: isWelcomeExiting } = useLoginWelcomeSplash();
+const loginFormCard = ref<InstanceType<typeof LoginFormCard> | null>(null);
+const { isTyping, showPassword, passwordLength } = useLoginCharacterFormState({
+  getUsernameInput: () => loginFormCard.value?.getUsernameInputElement() ?? null,
+  getPasswordInput: () => loginFormCard.value?.getPasswordInputElement() ?? null,
+  getPasswordLength: () => password.value.length,
+});
 const effectiveDark = computed(() => appearance.value.mode === 'dark');
 const modeButtonIcon = computed(() => (effectiveDark.value ? 'sun' : 'moon'));
 const modeButtonLabel = computed(() => (effectiveDark.value ? '切换明亮模式' : '切换暗黑模式'));
@@ -123,8 +130,14 @@ watch(
     <section class="login-card-shell">
       <div class="login-card-border" aria-hidden="true"></div>
       <div class="login-card">
-        <LoginVisualPanel />
+        <LoginVisualPanel
+          :active="!isWelcomeVisible"
+          :is-typing="isTyping"
+          :show-password="showPassword"
+          :password-length="passwordLength"
+        />
         <LoginFormCard
+          ref="loginFormCard"
           v-model:account="account"
           v-model:password="password"
           v-model:remember="remember"
