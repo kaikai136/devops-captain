@@ -407,14 +407,15 @@
   position: absolute;
   z-index: 50;
   left: 50%;
-  bottom: 24px;
+  bottom: 76px;
   display: grid;
-  width: 640px;
+  width: min(640px, calc(100% - 48px));
   max-width: calc(100% - 48px);
-  min-height: 108px;
-  align-content: center;
-  gap: 12px;
-  padding: 18px 24px 18px 22px;
+  min-height: 0;
+  align-content: start;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 14px 18px;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
   background: #fff;
@@ -467,8 +468,8 @@
 }
 
 .host-bulk-action-buttons {
-  flex-wrap: nowrap;
-  padding-left: 36px;
+  flex-wrap: wrap;
+  padding-left: 26px;
   justify-content: flex-start;
   gap: 10px;
 }
@@ -509,10 +510,6 @@
   background: #0f8f6b;
 }
 
-.host-bulk-action-bar .host-bulk-button-upload {
-  background: var(--ui-primary);
-}
-
 .host-bulk-action-bar .host-bulk-button-delete {
   background: #ff3f35;
 }
@@ -538,10 +535,6 @@
 
 .host-bulk-action-bar .host-bulk-button-execute:disabled {
   background: #38a884;
-}
-
-.host-bulk-action-bar .host-bulk-button-upload:disabled {
-  background: #4b94f5;
 }
 
 .host-bulk-action-bar .host-bulk-button-delete:disabled {
@@ -590,7 +583,7 @@
 
 @media (max-width: 980px) {
   .host-bulk-action-bar {
-    width: 560px;
+    width: min(560px, calc(100% - 28px));
     max-width: calc(100% - 28px);
     padding: 16px 18px;
   }
@@ -616,7 +609,12 @@
   }
 
   .host-bulk-action-bar {
-    bottom: 42px;
+    right: 14px;
+    left: 14px;
+    bottom: 72px;
+    width: auto;
+    max-width: none;
+    transform: none;
   }
 
   .host-bulk-action-buttons {

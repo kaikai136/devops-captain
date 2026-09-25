@@ -71,7 +71,7 @@ describe('bulk execution frontend contract', () => {
     expect(manager).toContain("setActiveTool('bulkExecution')");
     expect(manager).toContain("canUsePageAction('bulkExecution', 'execute')");
     expect(table).toContain('bulk-execute-selected');
-    expect(table).toContain('upload-file-selected');
+    expect(table).not.toContain('upload-file-selected');
     expect(toolbar).toContain('canBulkExecute');
     expect(toolbar).toContain('bulk-execute-selected');
     expect(toolbar).toContain('upload-file-selected');

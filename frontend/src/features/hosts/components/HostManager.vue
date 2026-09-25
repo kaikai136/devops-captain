@@ -63,7 +63,7 @@ const defaultVisibleHostColumnKeys = [
   'machine',
   'spec',
   'platformType',
-  'remark',
+  'updatedAt',
   'status',
   'actions',
 ] as const satisfies readonly HostColumnKey[];
@@ -729,7 +729,6 @@ function hostPlatformType(value: string | null | undefined) {
         @status-filter="setHostStatusFilter"
         @verify-selected="runVerifySelectedHosts"
         @bulk-execute-selected="openBulkExecutionForSelectedHosts"
-        @upload-file-selected="openBulkFileUploadForSelectedHosts"
         @move-selected="runMoveSelectedHosts"
         @delete-selected="runDeleteSelectedHosts"
         @import="openHostTransferDialog('import')"

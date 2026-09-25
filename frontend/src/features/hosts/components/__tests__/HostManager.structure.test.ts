@@ -73,7 +73,7 @@ const componentContracts: Record<string, { props: string[]; emits: string[] }> =
   },
   'HostTable.vue': {
     props: ['hosts', 'visibleHostCount', 'selectedIds', 'visibleIds', 'tableStyle', 'page', 'pageSize'],
-    emits: ['toggle-all-visible', 'toggle-host', 'sort', 'open-simple-terminal', 'page-change', 'page-size-change', 'clear-selection', 'upload-file-selected'],
+    emits: ['toggle-all-visible', 'toggle-host', 'sort', 'open-simple-terminal', 'page-change', 'page-size-change', 'clear-selection'],
   },
   'HostToolbar.vue': {
     props: ['search', 'statusFilter', 'selectedCount', 'moreActionsOpen', 'columnSettingsOpen', 'fullscreen'],
@@ -305,7 +305,6 @@ describe('HostManager component structure', () => {
       create: 'addManagedHost()',
       'open-quick-commands': 'openHostQuickCommandManager',
       'status-filter': 'setHostStatusFilter',
-      'upload-file-selected': 'openBulkFileUploadForSelectedHosts',
       'toggle-all-columns': 'toggleAllHostColumns',
       'update-column': 'updateHostColumnVisibility',
       import: "openHostTransferDialog('import')",
@@ -629,10 +628,10 @@ describe('HostManager component structure', () => {
 
     expect(defaultVisibleMatch).toBeTruthy();
     const defaultVisibleBlock = defaultVisibleMatch?.[1] ?? '';
-    for (const key of ['group', 'name', 'ip', 'machine', 'spec', 'platformType', 'remark', 'status', 'actions']) {
+    for (const key of ['group', 'name', 'ip', 'machine', 'spec', 'platformType', 'updatedAt', 'status', 'actions']) {
       expect(defaultVisibleBlock).toContain(`'${key}',`);
     }
-    for (const key of ['user', 'port', 'createdAt', 'updatedAt', 'creator']) {
+    for (const key of ['user', 'port', 'createdAt', 'creator', 'remark']) {
       expect(defaultVisibleBlock).not.toContain(`'${key}',`);
     }
     expect(managerScript).toContain('defaultVisibleKeys: defaultVisibleHostColumnKeys');
@@ -669,7 +668,7 @@ describe('HostManager component structure', () => {
     expect(styles).toMatch(/\.host-table-row\s*\{[\s\S]*gap:\s*6px;[\s\S]*padding:\s*0 10px;/);
   });
 
-  it('wires selected host file upload through the bulk execution handoff key', () => {
+  it('keeps selected host file upload in the toolbar and removes it from the batch bar', () => {
     const managerScript = readSfc('src/features/hosts/components/HostManager.vue').scriptSetup?.content ?? '';
     const tableRoot = templateRoot('src/features/hosts/components/HostTable.vue');
     const toolbarRoot = templateRoot('src/features/hosts/components/HostToolbar.vue');
@@ -679,8 +678,7 @@ describe('HostManager component structure', () => {
     expect(managerScript).toContain("window.sessionStorage.setItem(bulkExecutionUploadTargetIdsKey, JSON.stringify(executableIds))");
 
     const bulkButtons = findByClass(tableRoot, 'el-button', 'host-bulk-button-upload');
-    expect(bulkButtons).toHaveLength(1);
-    expectDirective(bulkButtons[0], 'on', 'click', "emit('upload-file-selected')");
+    expect(bulkButtons).toHaveLength(0);
 
     const toolbarUploadButton = findElements(toolbarRoot, 'el-button').find((button) =>
       directiveExpression(button, 'on', 'click') === "emit('upload-file-selected')",
@@ -691,7 +689,7 @@ describe('HostManager component structure', () => {
   it('keeps the selected-host batch action bar roomy enough for file upload actions', () => {
     const styles = readStyle('../../../../styles/tools/host/table.css');
 
-    expect(styles).toMatch(/\.host-bulk-action-bar\s*\{[\s\S]*width:\s*640px;[\s\S]*min-height:\s*108px;[\s\S]*padding:\s*18px 24px 18px 22px;/);
+    expect(styles).toMatch(/\.host-bulk-action-bar\s*\{[\s\S]*width:\s*min\(640px, calc\(100% - 48px\)\);[\s\S]*min-height:\s*0;[\s\S]*padding:\s*14px 18px;/);
     expect(styles).toMatch(/\.host-bulk-action-buttons\s*\{[\s\S]*gap:\s*10px;/);
     expect(styles).toMatch(/\.host-bulk-action-bar \.host-bulk-button\s*\{[\s\S]*min-height:\s*28px;[\s\S]*padding:\s*0 14px;[\s\S]*line-height:\s*28px;/);
   });

@@ -51,7 +51,6 @@ const emit = defineEmits<{
   'clear-selection': [];
   'verify-selected': [];
   'bulk-execute-selected': [];
-  'upload-file-selected': [];
   'move-selected': [];
   'delete-selected': [];
 }>();
@@ -250,10 +249,6 @@ function formatHostSystem(host: ManagedHost) {
       <el-button v-if="props.canBulkExecute" class="host-bulk-button host-bulk-button-execute" @click="emit('bulk-execute-selected')">
         <AppIcon name="terminal" :size="14" />
         批量执行
-      </el-button>
-      <el-button v-if="props.canBulkExecute" class="host-bulk-button host-bulk-button-upload" @click="emit('upload-file-selected')">
-        <AppIcon name="upload" :size="14" />
-        上传文件
       </el-button>
       <el-button v-if="props.canMove" class="host-bulk-button host-bulk-button-update" @click="emit('move-selected')">更新所选</el-button>
       <el-button v-if="props.canDelete" class="host-bulk-button host-bulk-button-delete" @click="emit('delete-selected')">删除所选</el-button>
