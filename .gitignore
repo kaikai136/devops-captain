@@ -15,6 +15,7 @@ deploy/config/*.local.conf
 1Panel/
 yantr/
 x-hub/
+hexhub/
 node_modules/
 dist/
 .vite/
