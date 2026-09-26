@@ -1476,18 +1476,19 @@
 
 .bulk-target-group-tree {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 3px;
   overflow: auto;
   padding: 8px;
 }
 
-.bulk-target-group-row {
-  display: grid;
-  min-height: 34px;
-  grid-template-columns: 18px 20px minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 4px;
+.bulk-target-group-row.el-button {
+  width: 100%;
+  min-width: 0;
+  height: 38px;
+  margin: 0;
+  padding: 0 8px;
   border: 0;
   border-radius: 5px;
   background: transparent;
@@ -1499,15 +1500,45 @@
   text-align: left;
 }
 
-.bulk-target-group-row.active {
-  background: #eaf2ff;
+.bulk-target-group-row.el-button > span {
+  width: 100%;
+  min-width: 0;
+}
+
+.bulk-target-group-content {
+  display: grid;
+  width: 100%;
+  min-width: 0;
+  grid-template-columns: 16px 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 5px;
+}
+
+.bulk-target-group-content strong {
+  font-weight: 600;
+  line-height: 22px;
+}
+
+.bulk-target-group-row.el-button:hover {
+  background: var(--el-fill-color-light);
+}
+
+.bulk-target-group-row.el-button.active {
+  background: var(--el-color-primary-light-9);
   color: var(--ui-primary-hover);
+  box-shadow: inset 3px 0 var(--el-color-primary);
+}
+
+.bulk-target-group-row.el-button:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: -2px;
 }
 
 .bulk-target-group-row em {
   min-width: 24px;
+  padding: 0 5px;
   border-radius: 999px;
-  background: #edf2f7;
+  background: var(--el-fill-color);
   color: var(--bulk-muted);
   font-size: 11px;
   font-style: normal;
@@ -1516,7 +1547,7 @@
 }
 
 .bulk-target-group-row.active em {
-  background: #dbeafe;
+  background: var(--el-color-primary-light-8);
   color: var(--ui-primary-hover);
 }
 
@@ -1531,6 +1562,12 @@
 
 .bulk-target-group-row .folder-caret.expandable {
   cursor: pointer;
+  border-radius: 4px;
+}
+
+.bulk-target-group-row .folder-caret.expandable:hover {
+  background: var(--el-color-primary-light-8);
+  color: var(--el-color-primary);
 }
 
 .bulk-target-picker-list-panel {

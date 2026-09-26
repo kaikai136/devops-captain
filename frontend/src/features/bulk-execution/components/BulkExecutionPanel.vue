@@ -1314,27 +1314,36 @@ function formatFileSize(value: number) {
           </header>
           <div class="bulk-target-picker-body popup-body">
             <aside class="bulk-target-group-tree" aria-label="目标分组树">
-              <el-button class="bulk-target-group-row bulk-target-group-root" :class="{ active: targetGroupFilter === null }" text @click="selectTargetGroup(null)">
-                <span class="folder-caret"><AppIcon name="chevronDown" :size="15" /></span>
-                <span class="folder-icon"><AppIcon name="folder" :size="16" /></span>
-                <strong>全部分组</strong>
-                <em>{{ targets.length }}</em>
+              <el-button class="bulk-target-group-row bulk-target-group-root" :class="{ active: targetGroupFilter === null }" :aria-pressed="targetGroupFilter === null" text @click="selectTargetGroup(null)">
+                <span class="bulk-target-group-content">
+                  <span class="folder-caret" aria-hidden="true"></span>
+                  <span class="folder-icon"><AppIcon name="folder" :size="16" /></span>
+                  <strong>全部分组</strong>
+                  <em :title="`${targets.length} 台主机`">{{ targets.length }}</em>
+                </span>
               </el-button>
               <el-button
                 v-for="row in targetGroupRows"
                 :key="row.group.key"
                 class="bulk-target-group-row"
                 :class="{ active: targetGroupFilter === row.group.key }"
-                :style="{ paddingLeft: `${10 + row.level * 10}px` }"
+                :style="{ paddingLeft: `${8 + (row.level + 1) * 16}px` }"
+                :title="row.group.label"
+                :aria-pressed="targetGroupFilter === row.group.key"
+                :aria-expanded="row.hasChildren ? row.expanded : undefined"
                 text
                 @click="selectTargetGroup(row.group.key)"
+                @keydown.left.prevent="row.hasChildren && row.expanded && toggleTargetGroupCollapsed(row.group.key)"
+                @keydown.right.prevent="row.hasChildren && !row.expanded && toggleTargetGroupCollapsed(row.group.key)"
               >
-                <span class="folder-caret" :class="{ expandable: row.hasChildren }" @click.stop="row.hasChildren && toggleTargetGroupCollapsed(row.group.key)">
-                  <AppIcon v-if="row.hasChildren" :name="row.expanded ? 'chevronDown' : 'chevronRight'" :size="15" />
+                <span class="bulk-target-group-content">
+                  <span class="folder-caret" :class="{ expandable: row.hasChildren }" :title="row.hasChildren ? (row.expanded ? '收起分组' : '展开分组') : undefined" @click.stop="row.hasChildren && toggleTargetGroupCollapsed(row.group.key)">
+                    <AppIcon v-if="row.hasChildren" :name="row.expanded ? 'chevronDown' : 'chevronRight'" :size="15" />
+                  </span>
+                  <span class="folder-icon"><AppIcon name="folder" :size="16" /></span>
+                  <strong>{{ row.group.label }}</strong>
+                  <em :title="`${row.group.count} 台主机`">{{ row.group.count }}</em>
                 </span>
-                <span class="folder-icon"><AppIcon name="folder" :size="16" /></span>
-                <strong>{{ row.group.label }}</strong>
-                <em>{{ row.group.count }}</em>
               </el-button>
               <div v-if="!targetGroupRows.length" class="bulk-empty">{{ isTargetsLoading ? '加载中...' : '暂无可执行分组' }}</div>
             </aside>
