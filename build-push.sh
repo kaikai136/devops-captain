@@ -5,9 +5,9 @@ set -e
 # ==============================
 # 配置
 # ==============================
-PROJECT_DIR="/opt/devops-tools"
+PROJECT_DIR="/opt/devops-captain"
 BUILD_SCRIPT_DIR="${PROJECT_DIR}/deploy/scripts"
-IMAGE_REPO="registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools"
+IMAGE_REPO="registry.cn-beijing.aliyuncs.com/kaikai136/devops-captain"
 
 # ==============================
 # 参数检查
