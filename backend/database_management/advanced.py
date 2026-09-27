@@ -303,13 +303,25 @@ def redis_zset_mapping(value):
     return mapping
 
 
+def selected_redis_database(asset, value):
+    try:
+        database = int(value if value is not None and value != "" else (asset.options or {}).get("db", 0))
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Redis DB 编号必须是 0 至 255") from exc
+    if not 0 <= database <= 255:
+        raise ValueError("Redis DB 编号必须是 0 至 255")
+    return database
+
+
 @api_view(["GET", "POST", "DELETE"])
 def asset_redis(request, asset_id):
     asset, denied = checked(request, asset_id, "view_data" if request.method == "GET" else "redis_command")
     if denied: return denied
     if asset.db_type != "redis": return bad_request("该资产不是 Redis")
     try:
-        with adapters.connection(asset) as client:
+        requested_db = request.query_params.get("db") if request.method == "GET" else request.data.get("db")
+        database = selected_redis_database(asset, requested_db)
+        with adapters.connection(asset, database=database) as client:
             if request.method == "GET":
                 key = request.query_params.get("key")
                 if key:
@@ -320,7 +332,9 @@ def asset_redis(request, asset_id):
                     keys.append({"key": item, "type": client.type(item), "ttl": client.ttl(item),
                                  "size": redis_key_size(client, item)})
                     if len(keys) == 500: break
-                return Response({"keys": keys})
+                keyspace = client.info("keyspace")
+                counts = [int(keyspace.get(f"db{number}", {}).get("keys", 0)) for number in range(16)]
+                return Response({"keys": keys, "counts": counts})
             if request.method == "DELETE":
                 count = client.delete(request.data.get("key", ""))
                 record_operation_log(request, "应用管理", "删除 Redis 键", asset.name, f"数量={count}")
@@ -391,7 +405,7 @@ def asset_export(request, asset_id):
     try:
         if asset.db_type == "redis":
             if fmt not in {"json", "csv"}: return bad_request("Redis 仅支持 JSON/CSV")
-            with adapters.connection(asset) as client:
+            with adapters.connection(asset, database=selected_redis_database(asset, request.query_params.get("database"))) as client:
                 rows = []
                 for key in client.scan_iter(count=200):
                     if len(rows) >= 500:
@@ -487,7 +501,7 @@ def asset_import(request, asset_id):
             if denied: return denied
             rows = json.loads(content) if fmt == "json" else list(csv.DictReader(io.StringIO(content)))
             if not isinstance(rows, list) or len(rows) > 10000: raise ValueError("导入数量不得超过 10000")
-            with adapters.connection(asset) as client:
+            with adapters.connection(asset, database=selected_redis_database(asset, request.data.get("database"))) as client:
                 for row in rows:
                     key, kind = row["key"], row.get("type") or "string"
                     value = row["value"]

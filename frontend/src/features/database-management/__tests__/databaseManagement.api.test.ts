@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   executeDatabaseSql, getDatabaseIndexes, getDatabaseTableData, getDatabaseTree,
-  listDatabaseTypes, modifyDatabaseRow, modifyDatabaseSchema, testDatabaseAsset,
+  getRedisKeys, getRedisValue, listDatabaseTypes, modifyDatabaseRow, modifyDatabaseSchema, testDatabaseAsset,
 } from '../api/databaseManagement';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -17,6 +17,13 @@ function mockResponse(payload: unknown) {
 }
 
 describe('database management API', () => {
+  it('scopes Redis keys and values to the selected DB', async () => {
+    const fetch = mockResponse({ keys: [], counts: Array(16).fill(0) });
+    await getRedisKeys(7, '*', 5);
+    await getRedisValue(7, 'sample', 5);
+    expect(fetch.mock.calls[0][0]).toContain('db=5');
+    expect(fetch.mock.calls[1][0]).toContain('db=5');
+  });
   it('loads connection types and tests an asset only on explicit request', async () => {
     const fetch = mockResponse({ types: [] });
     await listDatabaseTypes();

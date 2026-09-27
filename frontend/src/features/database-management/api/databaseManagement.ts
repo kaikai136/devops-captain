@@ -37,11 +37,11 @@ export const getDatabaseIndexes = (id: number, database: string, table: string, 
 export const modifyDatabaseSchema = (id: number, data: Record<string, unknown>) => apiPost<{ ok: boolean }>(`${base}/assets/${id}/schema/`, data);
 export const getDatabaseTableData = (id: number, params: Record<string, unknown>) => apiGet<DatabaseDataResult>(`${base}/assets/${id}/data/${query(params)}`);
 export const executeDatabaseSql = (id: number, sql: string, database: string, signal?: AbortSignal) => apiPost<{ rows: Record<string, unknown>[]; affected: number; columns: string[]; elapsedMs: number }>(`${base}/assets/${id}/sql/`, { sql, database }, { signal });
-export const runRedisCommand = (id: number, command: string[]) => apiPost<{ result: unknown }>(`${base}/assets/${id}/redis/`, { command });
+export const runRedisCommand = (id: number, command: string[], db?: number) => apiPost<{ result: unknown }>(`${base}/assets/${id}/redis/`, { command, db });
 export const updateRedisKey = (id: number, payload: Record<string, unknown>) => apiPost<{ result: unknown }>(`${base}/assets/${id}/redis/`, payload);
-export const deleteRedisKey = (id: number, key: string) => apiDelete<{ deleted: number }>(`${base}/assets/${id}/redis/`, { body: JSON.stringify({ key }), headers: { 'Content-Type': 'application/json' } });
-export const getRedisKeys = (id: number, pattern = '*') => apiGet<{ keys: { key: string; type: string; ttl: number; size: number }[] }>(`${base}/assets/${id}/redis/${query({ pattern })}`);
-export const getRedisValue = (id: number, key: string) => apiGet<{ key: string; type: string; ttl: number; value: unknown }>(`${base}/assets/${id}/redis/${query({ key })}`);
+export const deleteRedisKey = (id: number, key: string, db?: number) => apiDelete<{ deleted: number }>(`${base}/assets/${id}/redis/`, { body: JSON.stringify({ key, db }), headers: { 'Content-Type': 'application/json' } });
+export const getRedisKeys = (id: number, pattern = '*', db?: number) => apiGet<{ keys: { key: string; type: string; ttl: number; size: number }[]; counts: number[] }>(`${base}/assets/${id}/redis/${query({ pattern, db })}`);
+export const getRedisValue = (id: number, key: string, db?: number) => apiGet<{ key: string; type: string; ttl: number; value: unknown }>(`${base}/assets/${id}/redis/${query({ key, db })}`);
 export const modifyDatabaseRow = (id: number, data: Record<string, unknown>) => apiPost<{ affected: number }>(`${base}/assets/${id}/rows/`, data);
 export const commitDatabaseRows = (id: number, data: Record<string, unknown>) => apiPost<{ affected: number }>(`${base}/assets/${id}/transaction/`, { action: 'commit', ...data });
 export const importDatabaseFile = (id: number, body: FormData) => apiPostForm<{ imported: number }>(`${base}/assets/${id}/import/`, body);

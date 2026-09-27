@@ -295,6 +295,47 @@ class DatabasePermissionTests(TestCase):
 
 
 class RedisAdapterTests(SimpleTestCase):
+    def test_redis_key_list_returns_sixteen_database_counts(self):
+        asset = SimpleNamespace(db_type="redis", options={"db": 0})
+        client = SimpleNamespace(scan_iter=lambda **_kwargs: iter(()),
+                                 info=lambda section: {"db0": {"keys": 1}, "db5": {"keys": 3}})
+        with patch.object(advanced, "checked", return_value=(asset, None)), \
+             patch.object(advanced.adapters, "connection") as connection:
+            connection.return_value.__enter__.return_value = client
+            response = advanced.asset_redis(APIRequestFactory().get("/redis/?db=5"), 1)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["counts"], [1, 0, 0, 0, 0, 3] + [0] * 10)
+        connection.assert_called_once_with(asset, database=5)
+
+    def test_redis_database_number_is_limited_to_visible_range(self):
+        asset = SimpleNamespace(options={"db": 0})
+        self.assertEqual(advanced.selected_redis_database(asset, "15"), 15)
+        self.assertEqual(advanced.selected_redis_database(asset, "255"), 255)
+        with self.assertRaises(ValueError):
+            advanced.selected_redis_database(asset, "256")
+
+    def test_connect_uses_redis_username_parameter(self):
+        asset = SimpleNamespace(db_type="redis", host="redis.example", port=6379,
+                                username="admin", password_encrypted="", options={"db": 2})
+        fake_module = SimpleNamespace(Redis=lambda **kwargs: kwargs)
+        with patch.object(adapters, "module_for", return_value=fake_module):
+            options = adapters.connect(asset)
+        self.assertEqual(options["username"], "admin")
+        self.assertEqual(options["password"], None)
+        self.assertEqual(options["db"], 2)
+        with patch.object(adapters, "module_for", return_value=fake_module):
+            selected = adapters.connect(asset, database=5)
+        self.assertEqual(selected["db"], 5)
+
+    def test_connect_omits_empty_redis_credentials(self):
+        asset = SimpleNamespace(db_type="redis", host="redis.example", port=6379,
+                                username="", password_encrypted="", options={})
+        fake_module = SimpleNamespace(Redis=lambda **kwargs: kwargs)
+        with patch.object(adapters, "module_for", return_value=fake_module):
+            options = adapters.connect(asset)
+        self.assertIsNone(options["username"])
+        self.assertIsNone(options["password"])
+
     def test_export_refuses_truncated_collection_values(self):
         client = SimpleNamespace(llen=lambda _key: 501)
         with self.assertRaisesMessage(ValueError, "超过 500 个成员"):

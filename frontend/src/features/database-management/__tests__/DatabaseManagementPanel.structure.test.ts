@@ -42,7 +42,10 @@ describe('database management HexHub asset tree', () => {
 
     expect(panel).toContain('isRedisType(entry.asset!.dbType)');
     expect(panel).toContain('db-asset-icon redis');
-    expect(panel).toContain('{{ redisKeys.length }}');
+    expect(panel).toContain('v-for="db in 16"');
+    expect(panel).toContain('{{ redisDbCounts[db - 1] }}');
+    expect(panel).toContain('selectRedisDatabase(db - 1)');
+    expect(panel).not.toContain('键空间');
     expect(panel).toContain('.db-asset-icon.redis');
     expect(panel).toContain('.db-workspace{grid-template-columns:284px');
   });
@@ -55,5 +58,13 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain("objectCounts[category.key as ObjectCategory] ?? '-'");
     expect(panel).toContain('objectCountVersion++');
     expect(panel).toContain('class="db-tree-count">0</small>');
+  });
+
+  it('keeps the workspace fitted to the available content height', () => {
+    const panel = readPanel();
+
+    expect(panel).toContain('.db-workspace{height:100%;min-height:0');
+    expect(panel).toContain('.db-workspace{width:100%;align-self:stretch;min-height:0}');
+    expect(panel).not.toContain('min-height:600px');
   });
 });

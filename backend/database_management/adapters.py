@@ -113,7 +113,8 @@ def connect(asset, database=None):
         return module.connect(server=server, port=asset.port, user=asset.username,
                               password=password, database=database or asset.database or "master", login_timeout=5, timeout=20)
     if kind == "redis":
-        return module.Redis(**common, db=int(options.get("db", 0)), socket_connect_timeout=5,
+        return module.Redis(host=asset.host, port=asset.port, username=asset.username or None,
+                            password=password or None, db=int(database if database is not None and database != "" else options.get("db", 0)), socket_connect_timeout=5,
                             socket_timeout=20, decode_responses=True, ssl=bool(options.get("ssl")))
     if kind == "clickhouse":
         return module.get_client(**common, database=database or asset.database or "default",

@@ -88,6 +88,8 @@ let connectVersion = 0;
 let workspaceVersion = 0;
 let assetListVersion = 0;
 const redisKeys = ref<{ key: string; type: string; ttl: number; size: number }[]>([]);
+const redisDbCounts = ref<number[]>(Array(16).fill(0));
+const redisDb = ref(0);
 const redisPattern = ref('*');
 const redisDetail = ref<{ key: string; type: string; ttl: number; value: unknown } | null>(null);
 const redisCommand = ref('');
@@ -322,6 +324,7 @@ function resetWorkspace() {
   tables.value = []; objectCategory.value = 'table'; activeTable.value = ''; columns.value = []; indexes.value = []; rows.value = []; total.value = 0;
   sql.value = ''; sqlRows.value = []; sqlMessage.value = ''; redisKeys.value = []; redisDetail.value = null;
   redisValueDraft.value = ''; redisResult.value = ''; redisPattern.value = '*'; tab.value = 'tables';
+  redisDb.value = 0; redisDbCounts.value = Array(16).fill(0);
   transaction.value = false; stagedChanges.value = []; selectedFields.value = []; whereField.value = ''; whereValue.value = '';
   sort.value = ''; direction.value = 'asc'; page.value = 1; loading.value = false;
   sqlRequestVersion++; sqlController?.abort(); sqlController = null; sqlRunning.value = false;
@@ -349,7 +352,7 @@ async function connectAsset(asset: DatabaseAsset) {
     await testDatabaseAsset(asset.id);
     if (version !== connectVersion) return;
     connected.value = true;
-    if (asset.dbType === 'redis') { await loadRedis(); return; }
+    if (asset.dbType === 'redis') { const configuredDb = Number(asset.options.db || 0); await loadRedis(configuredDb < 16 ? configuredDb : 0); return; }
     databases.value = (await getDatabaseTree(asset.id)).databases;
     if (version !== connectVersion) return;
     activeDatabase.value = asset.databaseName || databases.value[0] || '';
@@ -511,7 +514,7 @@ async function runTreeAction(action: 'open' | 'refresh' | 'disconnect') {
   if (action === 'disconnect') { connectVersion++; resetWorkspace(); return; }
   if (item.kind === 'asset') { const asset = assets.value.find(value => value.id === item.assetId); if (asset) await connectAsset(asset); return; }
   if (!selected.value) return;
-  if (item.kind === 'database') { await selectDatabase(item.name); return; }
+  if (item.kind === 'database') { if (isRedis.value) await selectRedisDatabase(Number(item.name)); else await selectDatabase(item.name); return; }
   if (item.kind === 'schema') { await selectSchema(item.name); return; }
   if (item.kind === 'category') { selectCategory(item.name as 'table' | 'view' | 'procedure' | 'function'); return; }
   if (item.kind === 'object') { await selectTable(item.name); return; }
@@ -610,41 +613,49 @@ async function commitRows() {
   catch (error) { showToast('提交失败', errorMessage(error)); }
 }
 function rollbackRows() { stagedChanges.value = []; transaction.value = false; showToast('已回滚', '暂存修改已清除'); }
-async function loadRedis() {
+async function selectRedisDatabase(db: number) {
+  redisKeys.value = []; redisDetail.value = null; redisPattern.value = '*';
+  activeDatabase.value = String(db);
+  await loadRedis(db);
+}
+async function loadRedis(db = redisDb.value) {
   if (!selected.value) return;
   const assetId = selected.value.id, version = workspaceVersion, pattern = redisPattern.value;
-  try { const result = await getRedisKeys(assetId, pattern); if (version === workspaceVersion && selected.value?.id === assetId && redisPattern.value === pattern) redisKeys.value = result.keys; }
+  redisDb.value = db;
+  activeDatabase.value = String(db);
+  try { const result = await getRedisKeys(assetId, pattern, db); if (version === workspaceVersion && selected.value?.id === assetId && redisPattern.value === pattern && redisDb.value === db) { redisKeys.value = result.keys; redisDbCounts.value = result.counts; } }
   catch (error) { showToast('读取 Redis 失败', errorMessage(error)); }
 }
 async function selectRedisKey(key: string) {
   if (!selected.value) return;
   const assetId = selected.value.id, version = workspaceVersion;
-  try { const result = await getRedisValue(assetId, key); if (version !== workspaceVersion || selected.value?.id !== assetId) return; redisDetail.value = result; redisValueDraft.value = typeof result.value === 'string' ? result.value : JSON.stringify(result.value, null, 2); redisTtl.value = result.ttl; }
+  const db = redisDb.value;
+  try { const result = await getRedisValue(assetId, key, db); if (version !== workspaceVersion || selected.value?.id !== assetId || redisDb.value !== db) return; redisDetail.value = result; redisValueDraft.value = typeof result.value === 'string' ? result.value : JSON.stringify(result.value, null, 2); redisTtl.value = result.ttl; }
   catch (error) { showToast('读取键失败', errorMessage(error)); }
 }
 async function saveRedisValue() {
   if (!selected.value || !redisDetail.value) return;
   try {
     const value = redisDetail.value.type === 'string' ? redisValueDraft.value : JSON.parse(redisValueDraft.value);
-    await updateRedisKey(selected.value.id, { action: 'set_value', key: redisDetail.value.key, value });
+    await updateRedisKey(selected.value.id, { action: 'set_value', key: redisDetail.value.key, value, db: redisDb.value });
     await selectRedisKey(redisDetail.value.key); await loadRedis();
   } catch (error) { showToast('保存键失败', errorMessage(error)); }
 }
 async function saveRedisTtl() {
   if (!selected.value || !redisDetail.value) return;
-  try { await updateRedisKey(selected.value.id, { action: 'set_ttl', key: redisDetail.value.key, ttl: redisTtl.value }); await selectRedisKey(redisDetail.value.key); await loadRedis(); }
+  try { await updateRedisKey(selected.value.id, { action: 'set_ttl', key: redisDetail.value.key, ttl: redisTtl.value, db: redisDb.value }); await selectRedisKey(redisDetail.value.key); await loadRedis(); }
   catch (error) { showToast('更新 TTL 失败', errorMessage(error)); }
 }
 function removeRedisKey() {
   if (!selected.value || !redisDetail.value) return;
   requestConfirm('删除 Redis 键', `确定删除“${redisDetail.value.key}”吗？`, '删除', async () => {
-    try { await deleteRedisKey(selected.value!.id, redisDetail.value!.key); redisDetail.value = null; await loadRedis(); }
+    try { await deleteRedisKey(selected.value!.id, redisDetail.value!.key, redisDb.value); redisDetail.value = null; await loadRedis(); }
     catch (error) { showToast('删除键失败', errorMessage(error)); }
   });
 }
 async function runRedis() {
   if (!selected.value) return;
-  try { const result = await runRedisCommand(selected.value.id, redisCommand.value.trim().split(/\s+/)); redisResult.value = JSON.stringify(result.result, null, 2); await loadRedis(); }
+  try { const result = await runRedisCommand(selected.value.id, redisCommand.value.trim().split(/\s+/), redisDb.value); redisResult.value = JSON.stringify(result.result, null, 2); await loadRedis(); }
   catch (error) { showToast('命令失败', errorMessage(error)); }
 }
 async function onImport(event: Event) {
@@ -652,7 +663,7 @@ async function onImport(event: Event) {
   if (!file || !selected.value) return;
   const format = file.name.split('.').pop()?.toLowerCase() || 'csv';
   const body = new FormData(); body.set('file', file); body.set('format', format); body.set('database', activeDatabase.value); body.set('schema', schema.value); body.set('table', activeTable.value);
-  try { const result = await importDatabaseFile(selected.value.id, body); showToast('导入完成', `已处理 ${result.imported} 条`); await loadData(); }
+  try { const result = await importDatabaseFile(selected.value.id, body); showToast('导入完成', `已处理 ${result.imported} 条`); if (isRedis.value) await loadRedis(); else await loadData(); }
   catch (error) { showToast('导入失败', errorMessage(error)); }
   (event.target as HTMLInputElement).value = '';
 }
@@ -698,7 +709,12 @@ onUnmounted(() => {
           <template v-if="entry.directory"><div class="db-catalog-row"><button class="db-tree-toggle" @click.stop="toggleDirectory(entry.directory.id)"><ChevronDown v-if="expandedDirectories.includes(entry.directory.id)" :size="14" /><ChevronRight v-else :size="14" /></button><Folder class="db-folder-icon" :size="15" /><button class="db-catalog-label" @click="toggleDirectory(entry.directory.id)">{{ entry.directory.name }}</button></div></template>
           <template v-else><div class="db-catalog-row" :class="{ active: selected?.id === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="selected?.id === entry.asset!.id && connected && expandedAssets.includes(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseZap v-if="isRedisType(entry.asset!.dbType)" class="db-asset-icon redis" :size="15" /><Database v-else class="db-asset-icon" :size="15" /><button class="db-catalog-label" :class="{ active: selected?.id === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span>{{ entry.asset!.name }}</span><small>{{ selected?.id === entry.asset!.id && connected ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)"><MoreHorizontal :size="15" /></button></div>
             <div v-if="selected?.id === entry.asset!.id && connected && expandedAssets.includes(entry.asset!.id)" class="db-asset-children">
-              <template v-if="isRedisType(entry.asset!.dbType)"><button class="db-tree-node active" @contextmenu.stop.prevent="openTreeMenu($event, 'database', String(entry.asset!.options.db || 0))">DB {{ entry.asset!.options.db || 0 }}</button><div class="db-tree-branch"><button class="db-tree-category active" @click="loadRedis"><span>键空间</span><small class="db-tree-count">{{ redisKeys.length }}</small></button><button v-for="item in redisKeys" :key="item.key" class="db-tree-node" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)" @contextmenu.prevent="openTreeMenu($event, 'redis', item.key)">{{ item.key }}</button></div></template>
+              <template v-if="isRedisType(entry.asset!.dbType)">
+                <div v-for="db in 16" :key="db" class="db-tree-row db-redis-db-row" :class="{ active: redisDb === db - 1 }" @contextmenu.stop.prevent="openTreeMenu($event, 'database', String(db - 1))">
+                  <Database class="db-tree-database-icon" :size="15" />
+                  <button class="db-tree-label" @click="selectRedisDatabase(db - 1)"><span>db{{ db - 1 }}</span><small class="db-tree-count">{{ redisDbCounts[db - 1] }}</small></button>
+                </div>
+              </template>
               <template v-else>
                 <div class="db-tree-level db-database-level">
                   <div v-for="name in databases" :key="name" class="db-tree-item">
@@ -753,7 +769,7 @@ onUnmounted(() => {
       <template v-if="!selected || !connected"><div class="db-center-empty"><Database :size="36" /><strong>{{ connecting ? '正在连接数据库' : '选择左侧连接资产' }}</strong></div></template>
       <template v-else-if="isRedis">
         <header class="db-main-head"><div><h2>{{ selected.name }}</h2><p>Redis · 键值数据</p></div><div class="db-actions"><el-button v-if="can('import_export')" @click="importInput?.click()"><Upload :size="15" />导入</el-button><el-dropdown v-if="can('import_export')" @command="exportFile"><el-button><Download :size="15" />导出</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item command="json">JSON</el-dropdown-item><el-dropdown-item command="csv">CSV</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div></header>
-        <div class="db-redis-layout"><div class="db-redis-list"><div class="db-inline"><el-input v-model="redisPattern" placeholder="匹配键名" @keyup.enter="loadRedis" /><el-button title="搜索" @click="loadRedis"><Search :size="16" /></el-button></div><button v-for="item in redisKeys" :key="item.key" class="db-redis-key" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)"><strong>{{ item.key }}</strong><small>{{ item.type }} · TTL {{ item.ttl }} · {{ item.size }} B</small></button></div>
+        <div class="db-redis-layout"><div class="db-redis-list"><div class="db-inline"><el-input v-model="redisPattern" placeholder="匹配键名" @keyup.enter="loadRedis()" /><el-button title="搜索" @click="loadRedis()"><Search :size="16" /></el-button></div><button v-for="item in redisKeys" :key="item.key" class="db-redis-key" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)"><strong>{{ item.key }}</strong><small>{{ item.type }} · TTL {{ item.ttl }} · {{ item.size }} B</small></button></div>
           <div class="db-redis-detail"><template v-if="redisDetail"><div class="db-redis-title"><div><h3>{{ redisDetail.key }}</h3><p>{{ redisDetail.type }} · TTL {{ redisDetail.ttl }}</p></div><el-button v-if="can('redis_command')" type="danger" text @click="removeRedisKey">删除</el-button></div><el-input v-model="redisValueDraft" type="textarea" :rows="8" :disabled="!can('redis_command')" /><div class="db-redis-edit"><el-input-number v-model="redisTtl" :min="-1" /><el-button v-if="can('redis_command')" @click="saveRedisTtl">更新 TTL</el-button><el-button v-if="can('redis_command')" type="primary" @click="saveRedisValue">保存值</el-button></div></template><div v-else class="db-center-empty">选择键查看数据</div><div v-if="can('redis_command')" class="db-command"><el-input v-model="redisCommand" placeholder="Redis 命令" @keyup.enter="runRedis" /><el-button type="primary" @click="runRedis"><Play :size="15" /></el-button><pre v-if="redisResult">{{ redisResult }}</pre></div></div>
         </div>
       </template>
@@ -785,7 +801,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.db-workspace{height:100%;min-height:600px;display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr);border:1px solid var(--border-color,#dce2e9);background:var(--panel-bg,#fff);overflow:hidden}.db-sidebar{min-width:0;border-right:1px solid var(--border-color,#dce2e9);display:flex;flex-direction:column;padding:14px;gap:12px}.db-sidebar-head,.db-main-head,.db-actions,.db-inline,.db-data-tools,.db-sql-toolbar{display:flex;align-items:center;gap:8px}.db-sidebar-head,.db-main-head{justify-content:space-between}.db-sidebar-head strong{font-size:16px}.db-actions .el-button+.el-button{margin-left:0}.db-asset-scroll{min-height:0;overflow:auto;flex:1}.db-asset-line{display:flex;align-items:center;border-radius:5px}.db-asset-line.active,.db-tree-node.active,.db-redis-key.active{background:var(--el-color-primary-light-9,#edf4ff)}.db-asset-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;text-align:left;border:0;background:none;padding:8px;cursor:pointer;color:inherit}.db-asset-main span{min-width:0}.db-asset-main strong,.db-asset-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-asset-main small{color:var(--el-text-color-secondary,#778);font-size:11px}.db-type-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px;border:0;background:none;text-align:left;cursor:pointer;color:inherit}.db-type-option:hover{background:var(--el-fill-color-light,#eee)}.db-tree{padding-left:22px}.db-tree-branch{padding-left:15px;border-left:1px solid var(--border-color,#ddd)}.db-tree-node,.db-tree-category{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 8px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit}.db-tree-category{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-main{min-width:0;display:flex;flex-direction:column}.db-main-head{padding:14px 18px;border-bottom:1px solid var(--border-color,#ddd);min-height:64px}.db-main-head h2{margin:0;font-size:16px}.db-main-head p{margin:3px 0 0;font-size:12px;color:var(--el-text-color-secondary,#778)}.db-tabs{display:flex;border-bottom:1px solid var(--border-color,#ddd);overflow:auto}.db-tabs button{border:0;border-bottom:2px solid transparent;background:none;color:inherit;padding:10px 16px;white-space:nowrap;cursor:pointer}.db-tabs button.active{border-bottom-color:var(--el-color-primary,#409eff);color:var(--el-color-primary,#409eff)}.db-content{flex:1;min-height:0;padding:12px 16px;display:flex;flex-direction:column;gap:10px}.db-content>.el-table{flex:1}.db-data-tools .el-select{width:145px}.db-sql-toolbar{justify-content:flex-start}.db-sql-toolbar span{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-center-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--el-text-color-secondary,#778)}.db-redis-layout{display:grid;grid-template-columns:260px minmax(0,1fr);flex:1;min-height:0}.db-redis-list{border-right:1px solid var(--border-color,#ddd);padding:12px;overflow:auto}.db-redis-key{width:100%;display:block;text-align:left;padding:8px;border:0;background:none;color:inherit;cursor:pointer}.db-redis-key strong,.db-redis-key small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-redis-key small{font-size:11px;color:var(--el-text-color-secondary,#778)}.db-redis-detail{min-width:0;overflow:auto;padding:18px;display:flex;flex-direction:column}.db-redis-detail h3{margin:0}.db-redis-detail pre,.db-command pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--el-fill-color-light,#f3f4f6);padding:10px;border-radius:4px}.db-command{margin-top:auto;padding-top:18px;display:flex;gap:8px;flex-wrap:wrap}.db-command .el-input{flex:1}.db-command pre{width:100%}.db-hidden{display:none}.db-empty{padding:20px;text-align:center;color:var(--el-text-color-secondary,#778)}@media(max-width:720px){.db-workspace{display:flex;flex-direction:column;min-height:700px}.db-sidebar{height:230px;border-right:0;border-bottom:1px solid var(--border-color,#ddd)}.db-main{min-height:470px}.db-main-head{flex-wrap:wrap}.db-redis-layout{grid-template-columns:38% minmax(0,1fr)}.db-data-tools{flex-wrap:wrap}}
+.db-workspace{height:100%;min-height:0;display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr);border:1px solid var(--border-color,#dce2e9);background:var(--panel-bg,#fff);overflow:hidden}.db-sidebar{min-width:0;border-right:1px solid var(--border-color,#dce2e9);display:flex;flex-direction:column;padding:14px;gap:12px}.db-sidebar-head,.db-main-head,.db-actions,.db-inline,.db-data-tools,.db-sql-toolbar{display:flex;align-items:center;gap:8px}.db-sidebar-head,.db-main-head{justify-content:space-between}.db-sidebar-head strong{font-size:16px}.db-actions .el-button+.el-button{margin-left:0}.db-asset-scroll{min-height:0;overflow:auto;flex:1}.db-asset-line{display:flex;align-items:center;border-radius:5px}.db-asset-line.active,.db-tree-node.active,.db-redis-key.active{background:var(--el-color-primary-light-9,#edf4ff)}.db-asset-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;text-align:left;border:0;background:none;padding:8px;cursor:pointer;color:inherit}.db-asset-main span{min-width:0}.db-asset-main strong,.db-asset-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-asset-main small{color:var(--el-text-color-secondary,#778);font-size:11px}.db-type-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px;border:0;background:none;text-align:left;cursor:pointer;color:inherit}.db-type-option:hover{background:var(--el-fill-color-light,#eee)}.db-tree{padding-left:22px}.db-tree-branch{padding-left:15px;border-left:1px solid var(--border-color,#ddd)}.db-tree-node,.db-tree-category{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 8px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit}.db-tree-category{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-main{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}.db-main-head{flex:none;padding:14px 18px;border-bottom:1px solid var(--border-color,#ddd);min-height:64px}.db-main-head h2{margin:0;font-size:16px}.db-main-head p{margin:3px 0 0;font-size:12px;color:var(--el-text-color-secondary,#778)}.db-tabs{flex:none;display:flex;border-bottom:1px solid var(--border-color,#ddd);overflow:auto}.db-tabs button{border:0;border-bottom:2px solid transparent;background:none;color:inherit;padding:10px 16px;white-space:nowrap;cursor:pointer}.db-tabs button.active{border-bottom-color:var(--el-color-primary,#409eff);color:var(--el-color-primary,#409eff)}.db-content{flex:1;min-height:0;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}.db-content>.el-table{flex:1}.db-data-tools .el-select{width:145px}.db-sql-toolbar{justify-content:flex-start}.db-sql-toolbar span{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-center-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--el-text-color-secondary,#778)}.db-redis-layout{display:grid;grid-template-columns:260px minmax(0,1fr);flex:1;min-height:0}.db-redis-list{border-right:1px solid var(--border-color,#ddd);padding:12px;overflow:auto}.db-redis-key{width:100%;display:block;text-align:left;padding:8px;border:0;background:none;color:inherit;cursor:pointer}.db-redis-key strong,.db-redis-key small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-redis-key small{font-size:11px;color:var(--el-text-color-secondary,#778)}.db-redis-detail{min-width:0;overflow:auto;padding:18px;display:flex;flex-direction:column}.db-redis-detail h3{margin:0}.db-redis-detail pre,.db-command pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--el-fill-color-light,#f3f4f6);padding:10px;border-radius:4px}.db-command{margin-top:auto;padding-top:18px;display:flex;gap:8px;flex-wrap:wrap}.db-command .el-input{flex:1}.db-command pre{width:100%}.db-hidden{display:none}.db-empty{padding:20px;text-align:center;color:var(--el-text-color-secondary,#778)}@media(max-width:720px){.db-workspace{display:flex;flex-direction:column;min-height:0}.db-sidebar{flex:0 0 250px;height:auto;border-right:0;border-bottom:1px solid var(--border-color,#ddd)}.db-main{flex:1;min-height:0}.db-main-head{flex-wrap:wrap}.db-redis-layout{grid-template-columns:38% minmax(0,1fr)}.db-data-tools{flex-wrap:wrap}}
 .db-data-tools,.db-sql-toolbar,.db-redis-edit,.db-redis-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .db-data-tools .el-input{width:140px}
 .db-redis-title{justify-content:space-between}
@@ -861,6 +877,7 @@ onUnmounted(() => {
 .db-tree-label>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .db-tree-count{flex:none;margin-left:auto;min-width:22px;padding:1px 4px;border:1px solid var(--el-border-color,#dce2e9);border-radius:3px;background:var(--el-fill-color-lighter,#f7f9fb);color:var(--el-text-color-secondary,#64748b);font-size:10px;font-weight:500;line-height:16px;text-align:center}
 .db-tree-database-icon{flex:none;color:#65a84b}.db-tree-schema-icon{flex:none;color:#70b34f}.db-tree-object-icon{flex:none;color:#4da7a0}.db-tree-query-icon{flex:none;color:#5798ed}
+.db-redis-db-row{padding-left:6px}.db-redis-db-row .db-tree-label{padding-right:6px}
 .db-tree-object-row{display:flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;width:100%;min-height:28px;padding:3px 5px 3px 7px;border:0;border-radius:3px;background:none;color:inherit;text-align:left;cursor:pointer;font-size:12px}
 .db-tree-object-row:hover,.db-tree-object-row.active{background:var(--el-color-primary-light-9,#edf4ff)}
 .db-tree-object-row svg{flex:none;color:#8aa1a5}.db-tree-object-row span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -915,4 +932,8 @@ onUnmounted(() => {
 .db-sidebar .db-tree-toggle:hover,
 .db-sidebar .db-asset-more:hover{background:var(--el-fill-color,#e5e7eb) !important}
 .db-sidebar .db-asset-more:hover{color:var(--el-text-color-primary,#293344) !important}
+.db-workspace{width:100%;align-self:stretch;min-height:0}
+.db-sidebar{min-height:0;overflow:hidden}
+.db-asset-scroll{min-height:0;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--el-border-color-darker,#b8c0c8) transparent}
+@media(max-width:720px){.db-sidebar{flex:0 0 250px}.db-asset-children{max-height:none;overflow:visible}}
 </style>
