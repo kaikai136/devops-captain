@@ -94,6 +94,7 @@ function navItemIcon(key: ToolKey): IconName {
     sessionAudits: 'scan',
     bulkExecution: 'terminal',
     applicationMarket: 'server',
+    databaseManagement: 'server',
     accounts: 'users',
     companyDevices: 'laptop',
     ports: 'gauge',

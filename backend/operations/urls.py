@@ -13,6 +13,7 @@ urlpatterns = [
     path("", include("security_scanner.urls")),
     path("", include("bulk_execution.urls")),
     path("", include("application_market.urls")),
+    path("", include("database_management.urls")),
     path("", include("company_assets.urls")),
     path("", include("system_management.urls")),
 ]

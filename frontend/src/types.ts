@@ -5,6 +5,7 @@ export type ToolKey =
   | 'sessionAudits'
   | 'bulkExecution'
   | 'applicationMarket'
+  | 'databaseManagement'
   | 'accounts'
   | 'companyDevices'
   | 'ports'

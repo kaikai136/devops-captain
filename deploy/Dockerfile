@@ -23,6 +23,7 @@ RUN apt-get update \
         iputils-ping \
         openssh-client \
         sshpass \
+        freetds-bin \
     && rm -rf /var/lib/apt/lists/*
 
 COPY backend/requirements.txt /tmp/requirements.txt

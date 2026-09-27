@@ -33,6 +33,7 @@ FEATURE_PERMISSION_DEFINITIONS = [
     ("host", "主机管理", "hosts", "主机管理"),
     ("host", "主机管理", "bulkExecution", "批量执行"),
     ("host", "主机管理", "applicationMarket", "应用市场"),
+    ("host", "主机管理", "databaseManagement", "应用管理"),
     ("host", "主机管理", "accounts", "账号管理"),
     ("company", "设备管理", "companyDevices", "设备资产"),
     ("security", "安全工具", "auth", "双因子认证"),
@@ -81,6 +82,18 @@ PAGE_ACTION_PERMISSION_DEFINITIONS = [
     ("applicationMarket", "restart", "重启应用"),
     ("applicationMarket", "view_tasks", "查看应用任务"),
     ("applicationMarket", "manage_sources", "管理应用源"),
+    ("databaseManagement", "view", "查看应用管理"),
+    ("databaseManagement", "create", "新增数据库资产"),
+    ("databaseManagement", "edit", "编辑数据库资产"),
+    ("databaseManagement", "delete", "删除数据库资产"),
+    ("databaseManagement", "test_connection", "测试数据库连接"),
+    ("databaseManagement", "view_data", "查看数据库数据"),
+    ("databaseManagement", "execute_sql", "执行数据库 SQL"),
+    ("databaseManagement", "modify_data", "修改数据库数据"),
+    ("databaseManagement", "manage_schema", "管理数据库结构"),
+    ("databaseManagement", "import_export", "导入导出数据库数据"),
+    ("databaseManagement", "redis_command", "执行 Redis 命令"),
+    ("databaseManagement", "database_admin", "管理数据库级对象"),
     ("accounts", "create", "新增账号"),
     ("accounts", "edit", "编辑账号"),
     ("accounts", "delete", "删除账号"),
@@ -424,6 +437,8 @@ def inherit_created_action_permissions(page_permissions_by_key: dict[str, Permis
             continue
         for role in Group.objects.filter(permissions=page_permission).prefetch_related("permissions"):
             role.permissions.add(*action_permissions)
+        for user in get_user_model().objects.filter(user_permissions=page_permission):
+            user.user_permissions.add(*action_permissions)
 
 
 def user_feature_permission_codes(user) -> list[str]:

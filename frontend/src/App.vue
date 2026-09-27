@@ -20,6 +20,7 @@ type DashboardPageExpose = {
 const AccountManager = defineAsyncComponent(() => import('./components/tools/AccountManager.vue'));
 const AuthenticatorPanel = defineAsyncComponent(() => import('./components/tools/AuthenticatorPanel.vue'));
 const BulkExecutionPanel = defineAsyncComponent(() => import('./features/bulk-execution/components/BulkExecutionPanel.vue'));
+const DatabaseManagementPanel = defineAsyncComponent(() => import('./features/database-management/components/DatabaseManagementPanel.vue'));
 const ApplicationMarketPanel = defineAsyncComponent(() => import('./features/application-market/components/ApplicationMarketPanel.vue'));
 const DashboardPage = defineAsyncComponent(() => import('./components/tools/DashboardPage.vue'));
 const DeviceManager = defineAsyncComponent(() => import('./features/company/components/DeviceManager.vue'));
@@ -368,7 +369,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
             <template v-else-if="activeTool === 'ip' && ipScanMessage">
               <span class="inline-status">{{ ipScanMessage }}</span>
             </template>
-            <template v-else-if="activeTool === 'dashboard' || activeTool === 'sessionAudits' || activeTool === 'bulkExecution' || activeTool === 'applicationMarket' || activeTool === 'accounts' || activeTool === 'companyDevices' || activeTool === 'users' || activeTool === 'loginLogs' || activeTool === 'operationLogs' || activeTool === 'roles' || activeTool === 'profile' || activeTool === 'systemSettings' || activeTool === 'securityScan'"></template>
+            <template v-else-if="activeTool === 'dashboard' || activeTool === 'sessionAudits' || activeTool === 'bulkExecution' || activeTool === 'databaseManagement' || activeTool === 'applicationMarket' || activeTool === 'accounts' || activeTool === 'companyDevices' || activeTool === 'users' || activeTool === 'loginLogs' || activeTool === 'operationLogs' || activeTool === 'roles' || activeTool === 'profile' || activeTool === 'systemSettings' || activeTool === 'securityScan'"></template>
             <template v-else>
               <article><span>本机 IP</span><strong>{{ localIp }}</strong></article>
               <article class="selected-host-card" title="双击使用选中 IP" @dblclick="useSelectedIpForPing">
@@ -452,6 +453,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
             <div :key="activeTool" class="workspace-tool-view">
               <DashboardPage v-if="activeTool === 'dashboard'" ref="dashboardPageRef" />
               <IpScanner v-else-if="activeTool === 'ip'" />
+              <DatabaseManagementPanel v-else-if="activeTool === 'databaseManagement'" />
               <HostManager v-else-if="activeTool === 'hosts'" />
               <SessionAuditManager v-else-if="activeTool === 'sessionAudits'" />
               <BulkExecutionPanel v-else-if="activeTool === 'bulkExecution'" />

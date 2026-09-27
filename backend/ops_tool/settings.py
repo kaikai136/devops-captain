@@ -151,6 +151,7 @@ INSTALLED_APPS = [
     "bulk_execution",
     "company_assets",
     "application_market",
+    "database_management",
     "operations",
     "system_management",
 ]
@@ -202,6 +203,7 @@ FRONTEND_DIST_DIR = config_path("DJANGO_FRONTEND_DIST_DIR", BASE_DIR / "frontend
 STATICFILES_DIRS = [FRONTEND_DIST_DIR] if FRONTEND_DIST_DIR.exists() else []
 MEDIA_URL = config_value("DJANGO_MEDIA_URL", "/media/")
 MEDIA_ROOT = config_path("DJANGO_MEDIA_ROOT", BASE_DIR / "media")
+DATABASE_ASSET_SQLITE_ROOT = config_path("DATABASE_ASSET_SQLITE_ROOT", BASE_DIR / "data" / "database_assets")
 SERVE_MEDIA_FILES = config_bool("DJANGO_SERVE_MEDIA_FILES", DEBUG)
 GUACD_HOST = config_value("GUACD_HOST", "127.0.0.1")
 GUACD_PORT = config_int("GUACD_PORT", 4822)
