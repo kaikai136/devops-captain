@@ -26,7 +26,12 @@
 
 .host-groups-panel {
   position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
   padding: 14px;
+  gap: 12px;
+  overflow: hidden;
 }
 
 .host-table-panel {
@@ -50,72 +55,107 @@
 
 .host-group-head {
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 18px;
+  min-height: 32px;
+  gap: 8px;
 }
 
 .host-group-head h2 {
   margin: 0;
-  font-size: 18px;
+  color: var(--workspace-text, #173252);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: left;
 }
 
 .group-add-button {
   display: inline-grid;
   place-items: center;
-  width: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  border: 1px solid #2c65ff;
-  border-radius: 0;
-  background: var(--ui-primary);
-  color: #fff;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--ui-primary, #7657e8);
+  color: var(--ui-primary-foreground, #fff);
   padding: 0;
-  font-size: 21px;
-  font-weight: 900;
+  box-shadow: 0 2px 7px rgb(72 47 161 / 22%);
+  transition: background-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.group-add-button:hover {
+  background: var(--ui-primary-hover, #6547d8);
+  box-shadow: 0 4px 10px rgb(72 47 161 / 28%);
+  transform: translateY(-1px);
+}
+
+.group-add-button:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px var(--ui-card, #fff), 0 0 0 4px var(--ui-ring, #8b72f2);
 }
 
 .host-group-list,
 .host-subgroup-list {
   display: grid;
-  gap: 6px;
+  gap: 2px;
+  align-content: start;
+  grid-auto-rows: max-content;
+}
+
+.host-group-list {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 2px 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--workspace-border, #d7e0ed) transparent;
 }
 
 .host-subgroup-list {
-  margin: 6px 0 0 22px;
+  margin: 2px 0 0 12px;
 }
 
 .host-group-row {
   justify-content: flex-start;
   width: 100%;
-  min-height: 34px;
-  gap: 7px;
+  min-height: 32px;
+  gap: 6px;
   border: 0;
-  border-radius: 0;
+  border-radius: 5px;
   background: transparent;
-  color: #173252;
-  padding: 0 4px;
+  color: var(--workspace-text-soft, #173252);
+  padding: 0 6px;
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .host-group-row strong {
   flex: 1;
   min-width: 0;
   overflow: hidden;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: left;
 }
 
 .host-group-row em {
   flex: 0 0 auto;
-  color: inherit;
+  min-width: 18px;
+  color: var(--workspace-muted, #7b8ba2);
   font-style: normal;
-  font-weight: 900;
+  font-size: 11px;
+  font-weight: 700;
+  text-align: right;
 }
 
 .host-group-row:hover {
-  background: #f2f7ff;
+  background: var(--ui-primary-soft, #f2f0ff);
+  color: var(--ui-primary, #7657e8);
 }
 
 .host-group-row:active {
@@ -123,17 +163,18 @@
 }
 
 .host-group-row.active {
-  background: #2764f6;
-  color: #fff;
+  background: var(--ui-primary-soft, #eeeaff);
+  color: var(--ui-primary, #7657e8);
+  box-shadow: inset 2px 0 0 var(--ui-primary, #7657e8);
 }
 
 .host-group-row.host-group-root {
-  padding-left: 4px;
-  font-weight: 900;
+  padding-left: 6px;
+  font-weight: 700;
 }
 
 .host-group-row.host-group-root:not(.active) {
-  color: #0b2446;
+  color: var(--workspace-text, #0b2446);
 }
 
 .host-group-row.dragging {
@@ -147,7 +188,7 @@
 .host-group-row.drop-inside {
   outline: 1px dashed #16b8d6;
   outline-offset: -3px;
-  background: #eaf8ff;
+  background: color-mix(in srgb, #16b8d6 10%, transparent);
 }
 
 .host-group-row.drop-after {
@@ -208,12 +249,14 @@
 .folder-caret,
 .folder-icon {
   display: inline-grid;
+  flex: 0 0 auto;
   place-items: center;
   color: inherit;
 }
 
 .folder-caret {
   width: 12px;
+  height: 16px;
   font-size: 12px;
 }
 
@@ -224,6 +267,31 @@
 .folder-icon {
   width: 16px;
   font-size: 13px;
+}
+
+.host-group-row .folder-icon {
+  color: var(--ui-primary, #7657e8);
+}
+
+/* Keep the compact tree readable in the dark workspace as well. */
+.workspace-dark .host-groups-panel .host-group-row {
+  border-color: transparent;
+  background: transparent;
+  color: var(--workspace-text-soft);
+}
+
+.workspace-dark .host-groups-panel .host-group-row:hover {
+  background: color-mix(in srgb, var(--ui-primary) 12%, transparent);
+  color: var(--ui-primary);
+}
+
+.workspace-dark .host-groups-panel .host-group-row.active {
+  background: color-mix(in srgb, var(--ui-primary) 20%, transparent);
+  color: var(--ui-primary);
+}
+
+.workspace-dark .host-groups-panel .host-group-row.host-group-root:not(.active) {
+  color: var(--workspace-text);
 }
 
 .host-group-menu {
