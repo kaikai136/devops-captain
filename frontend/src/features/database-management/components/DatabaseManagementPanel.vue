@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { ChevronDown, ChevronRight, Database, DatabaseZap, Download, Folder, FolderPlus, LayoutList, Link2, MoreHorizontal, Play, Plus, RefreshCw, Search, Table2, Trash2, Upload } from '@lucide/vue';
+import { ChevronDown, ChevronRight, Database, DatabaseZap, Download, Folder, FolderPlus, LayoutList, Link2, List as ListIcon, MoreHorizontal, Play, Plus, RefreshCw, Search, Table2, Trash2, Upload } from '@lucide/vue';
 import { useAppContext } from '@app/context';
 import { errorMessage } from '@shared/utils/errors';
 import { compressSqlText, formatSqlText } from '../utils/sqlText';
+import DatabaseWorkspaceTabs, { type DatabaseWorkspaceTab } from './DatabaseWorkspaceTabs.vue';
 import {
   commitDatabaseRows, createDatabaseAsset, deleteDatabaseAsset, deleteRedisKey, executeDatabaseSql, exportDatabaseUrl, getDatabaseColumns,
   getDatabaseTableData, getDatabaseTree, getRedisKeys, getRedisValue, importDatabaseFile,
@@ -41,6 +42,32 @@ const files = ref<string[]>([]);
 const keyword = ref('');
 const searchExpanded = ref(false);
 const selected = ref<DatabaseAsset | null>(null);
+const workspaceTabs = ref<DatabaseWorkspaceTab[]>([{ id: 'list', kind: 'list', label: '列表', sticky: true }]);
+const activeWorkspaceTabId = ref('list');
+type WorkspaceSnapshot = {
+  database: string;
+  schema: string;
+  table: string;
+  tab: Tab;
+  objectCategory: ObjectCategory;
+  expandedDatabase: string;
+  expandedSchema: string;
+  expandedCategory: 'table' | 'view' | 'procedure' | 'function' | '';
+  expandedQuery: boolean;
+  tableView: 'list' | 'table';
+  objectSearch: string;
+  sql: string;
+  redisDb: number;
+  redisPattern: string;
+  page: number;
+  pageSize: number;
+  sort: string;
+  direction: string;
+  whereField: string;
+  whereValue: string;
+  selectedFields: string[];
+};
+const workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
 const expandedAssets = ref<number[]>([]);
 const expandedDatabase = ref('');
 const expandedSchema = ref('');
@@ -82,6 +109,7 @@ const sql = ref('');
 const sqlRows = ref<Record<string, unknown>[]>([]);
 const sqlMessage = ref('');
 const sqlRunning = ref(false);
+const connectionError = ref('');
 let sqlController: AbortController | null = null;
 let sqlRequestVersion = 0;
 let connectVersion = 0;
@@ -132,13 +160,121 @@ function toggleSearch() {
   searchExpanded.value = !searchExpanded.value;
   if (!searchExpanded.value) keyword.value = '';
 }
+function workspaceTabId(assetId: number) { return `asset-${assetId}`; }
+function saveWorkspaceSnapshot() {
+  if (!selected.value || activeWorkspaceTabId.value === 'list') return;
+  workspaceSnapshots.set(selected.value.id, {
+    database: activeDatabase.value,
+    schema: schema.value,
+    table: activeTable.value,
+    tab: tab.value,
+    objectCategory: objectCategory.value,
+    expandedDatabase: expandedDatabase.value,
+    expandedSchema: expandedSchema.value,
+    expandedCategory: expandedCategory.value,
+    expandedQuery: expandedQuery.value,
+    tableView: tableView.value,
+    objectSearch: objectSearch.value,
+    sql: sql.value,
+    redisDb: redisDb.value,
+    redisPattern: redisPattern.value,
+    page: page.value,
+    pageSize: pageSize.value,
+    sort: sort.value,
+    direction: direction.value,
+    whereField: whereField.value,
+    whereValue: whereValue.value,
+    selectedFields: [...selectedFields.value],
+  });
+}
+function updateWorkspaceTabLabel(asset: DatabaseAsset) {
+  const item = workspaceTabs.value.find(tabItem => tabItem.id === workspaceTabId(asset.id));
+  if (item) { item.label = asset.name; item.dbType = asset.dbType; }
+}
+function pruneWorkspaceTabs(nextAssets: DatabaseAsset[]) {
+  const ids = new Set(nextAssets.map(asset => asset.id));
+  const stale = workspaceTabs.value.filter(item => item.kind === 'asset' && item.assetId && !ids.has(item.assetId)).map(item => item.id);
+  const activeWasRemoved = stale.includes(activeWorkspaceTabId.value);
+  stale.forEach(id => workspaceSnapshots.delete(Number(id.replace('asset-', ''))));
+  workspaceTabs.value = workspaceTabs.value.filter(item => item.kind === 'list' || !item.assetId || ids.has(item.assetId));
+  if (activeWasRemoved || !workspaceTabs.value.some(item => item.id === activeWorkspaceTabId.value)) {
+    activeWorkspaceTabId.value = 'list';
+    if (activeWasRemoved) selected.value = null;
+    connectVersion++;
+    resetWorkspace();
+  }
+}
+async function activateWorkspaceTab(id: string) {
+  if (id === activeWorkspaceTabId.value) return;
+  saveWorkspaceSnapshot();
+  activeWorkspaceTabId.value = id;
+  const target = workspaceTabs.value.find(item => item.id === id);
+  if (!target || target.kind === 'list') {
+    connectVersion++;
+    resetWorkspace();
+    return;
+  }
+  const asset = assets.value.find(item => item.id === target.assetId);
+  if (asset) await connectAsset(asset, workspaceSnapshots.get(asset.id));
+}
+async function openAssetWorkspace(asset: DatabaseAsset) {
+  saveWorkspaceSnapshot();
+  const id = workspaceTabId(asset.id);
+  if (!workspaceTabs.value.some(item => item.id === id)) workspaceTabs.value.push({ id, kind: 'asset', label: asset.name, assetId: asset.id, dbType: asset.dbType });
+  activeWorkspaceTabId.value = id;
+  if (selected.value?.id === asset.id && connected.value) {
+    expandedAssets.value = expandedAssets.value.includes(asset.id) ? expandedAssets.value : [...expandedAssets.value, asset.id];
+    return;
+  }
+  await connectAsset(asset, workspaceSnapshots.get(asset.id));
+}
+function closeWorkspaceTab(id: string) {
+  const index = workspaceTabs.value.findIndex(item => item.id === id);
+  if (index < 0 || workspaceTabs.value[index].sticky) return;
+  const wasActive = activeWorkspaceTabId.value === id;
+  workspaceTabs.value.splice(index, 1);
+  workspaceSnapshots.delete(Number(id.replace('asset-', '')));
+  if (!wasActive) return;
+  const next = workspaceTabs.value[Math.max(0, index - 1)] || workspaceTabs.value[0];
+  void activateWorkspaceTab(next.id);
+}
+function closeOtherWorkspaceTabs(id: string) {
+  workspaceTabs.value.filter(item => item.kind === 'asset' && item.id !== id).forEach(item => workspaceSnapshots.delete(item.assetId || 0));
+  workspaceTabs.value = workspaceTabs.value.filter(item => item.sticky || item.id === id);
+  if (activeWorkspaceTabId.value !== id) void activateWorkspaceTab(id);
+}
+function closeAllWorkspaceTabs() {
+  workspaceSnapshots.clear();
+  workspaceTabs.value = workspaceTabs.value.filter(item => item.sticky);
+  void activateWorkspaceTab('list');
+}
+function reorderWorkspaceTabs(payload: { id: string; beforeId: string }) {
+  const sourceIndex = workspaceTabs.value.findIndex(item => item.id === payload.id);
+  const targetIndex = workspaceTabs.value.findIndex(item => item.id === payload.beforeId);
+  if (sourceIndex < 0 || targetIndex <= 0 || sourceIndex === targetIndex) return;
+  const [source] = workspaceTabs.value.splice(sourceIndex, 1);
+  const nextIndex = workspaceTabs.value.findIndex(item => item.id === payload.beforeId);
+  workspaceTabs.value.splice(nextIndex, 0, source);
+}
+async function handleWorkspaceContextAction(payload: { action: 'close' | 'close-others' | 'close-all' | 'copy'; id: string }) {
+  if (payload.action === 'close') closeWorkspaceTab(payload.id);
+  else if (payload.action === 'close-others') closeOtherWorkspaceTabs(payload.id);
+  else if (payload.action === 'close-all') closeAllWorkspaceTabs();
+  else {
+    const item = workspaceTabs.value.find(tabItem => tabItem.id === payload.id);
+    if (item) {
+      try { await navigator.clipboard?.writeText(item.label); showToast('已复制', item.label); }
+      catch { showToast('复制失败', item.label); }
+    }
+  }
+}
 function toggleAsset(asset: DatabaseAsset) {
   if (connecting.value) return;
-  if (selected.value?.id === asset.id && connected.value) {
+  if (selected.value?.id === asset.id && connected.value && activeWorkspaceTabId.value === workspaceTabId(asset.id)) {
     expandedAssets.value = expandedAssets.value.includes(asset.id) ? expandedAssets.value.filter(id => id !== asset.id) : [...expandedAssets.value, asset.id];
     return;
   }
-  void connectAsset(asset);
+  void openAssetWorkspace(asset);
 }
 function toggleDatabase(name: string) {
   if (expandedDatabase.value === name) {
@@ -175,7 +311,15 @@ function emptyForm(kind: string): DatabaseAssetPayload {
 async function loadAssets() {
   if (!can('view')) return;
   const version = ++assetListVersion;
-  try { const result = await listDatabaseAssets(keyword.value); if (version === assetListVersion) assets.value = result; }
+  try {
+    const result = await listDatabaseAssets(keyword.value);
+    if (version === assetListVersion) {
+      assets.value = result;
+      if (!keyword.value) pruneWorkspaceTabs(result);
+      if (selected.value) selected.value = result.find(asset => asset.id === selected.value?.id) || selected.value;
+      result.forEach(updateWorkspaceTabLabel);
+    }
+  }
   catch (error) { showToast('加载资产失败', errorMessage(error)); }
 }
 async function loadDirectories() {
@@ -326,7 +470,8 @@ function resetWorkspace() {
   redisValueDraft.value = ''; redisResult.value = ''; redisPattern.value = '*'; tab.value = 'tables';
   redisDb.value = 0; redisDbCounts.value = Array(16).fill(0);
   transaction.value = false; stagedChanges.value = []; selectedFields.value = []; whereField.value = ''; whereValue.value = '';
-  sort.value = ''; direction.value = 'asc'; page.value = 1; loading.value = false;
+  sort.value = ''; direction.value = 'asc'; page.value = 1; loading.value = false; connecting.value = false;
+  connectionError.value = '';
   sqlRequestVersion++; sqlController?.abort(); sqlController = null; sqlRunning.value = false;
 }
 function openCreate(kind: string) { editing.value = null; form.value = { ...emptyForm(kind), directoryId: activeDirectoryId.value }; createMenu.value = false; dialog.value = true; }
@@ -340,24 +485,63 @@ async function saveAsset() {
     dialog.value = false; await loadAssets(); showToast('已保存', '连接资产已保存');
   } catch (error) { showToast('保存失败', errorMessage(error)); }
 }
-async function connectAsset(asset: DatabaseAsset) {
+async function restoreWorkspaceSnapshot(snapshot?: WorkspaceSnapshot) {
+  if (!snapshot || !selected.value || !connected.value) return;
+  tableView.value = snapshot.tableView;
+  objectSearch.value = snapshot.objectSearch;
+  sql.value = snapshot.sql;
+  redisPattern.value = snapshot.redisPattern;
+  page.value = snapshot.page;
+  pageSize.value = snapshot.pageSize;
+  sort.value = snapshot.sort;
+  direction.value = snapshot.direction;
+  whereField.value = snapshot.whereField;
+  whereValue.value = snapshot.whereValue;
+  selectedFields.value = [...snapshot.selectedFields];
+  objectCategory.value = snapshot.objectCategory;
+  if (isRedis.value) {
+    await selectRedisDatabase(snapshot.redisDb);
+    tab.value = snapshot.tab;
+    return;
+  }
+  const database = databases.value.includes(snapshot.database) ? snapshot.database : activeDatabase.value;
+  if (database) await selectDatabase(database);
+  if (snapshot.schema && schemas.value.includes(snapshot.schema)) await selectSchema(snapshot.schema);
+  expandedDatabase.value = snapshot.expandedDatabase || database;
+  expandedSchema.value = snapshot.expandedSchema || schema.value;
+  expandedCategory.value = snapshot.expandedCategory;
+  expandedQuery.value = snapshot.expandedQuery;
+  if (snapshot.expandedCategory && snapshot.expandedCategory !== objectCategory.value) {
+    objectCategory.value = snapshot.expandedCategory;
+    await loadObjects();
+  }
+  if (snapshot.table && tables.value.some(item => item.name === snapshot.table)) await selectTable(snapshot.table);
+  tab.value = snapshot.tab;
+}
+async function connectAsset(asset: DatabaseAsset, snapshot?: WorkspaceSnapshot) {
   if (stagedChanges.value.length) {
-    requestConfirm('切换连接资产', '当前暂存修改尚未提交，切换后会丢弃，确定继续吗？', '切换', async () => { stagedChanges.value = []; await connectAsset(asset); });
+    requestConfirm('切换连接资产', '当前暂存修改尚未提交，切换后会丢弃，确定继续吗？', '切换', async () => { stagedChanges.value = []; await connectAsset(asset, snapshot); });
     return;
   }
   const version = ++connectVersion;
-  selected.value = asset; resetWorkspace(); connecting.value = true;
+  selected.value = asset; resetWorkspace(); connecting.value = true; connectionError.value = '';
   expandedAssets.value = [asset.id];
   try {
     await testDatabaseAsset(asset.id);
     if (version !== connectVersion) return;
     connected.value = true;
-    if (asset.dbType === 'redis') { const configuredDb = Number(asset.options.db || 0); await loadRedis(configuredDb < 16 ? configuredDb : 0); return; }
+    if (asset.dbType === 'redis') {
+      const configuredDb = Number(asset.options.db || 0);
+      await loadRedis(snapshot ? snapshot.redisDb : configuredDb < 16 ? configuredDb : 0);
+      await restoreWorkspaceSnapshot(snapshot);
+      return;
+    }
     databases.value = (await getDatabaseTree(asset.id)).databases;
     if (version !== connectVersion) return;
     activeDatabase.value = asset.databaseName || databases.value[0] || '';
     await selectDatabase(activeDatabase.value);
-  } catch (error) { if (version === connectVersion) { connected.value = false; expandedAssets.value = expandedAssets.value.filter(id => id !== asset.id); showToast('连接失败', errorMessage(error)); } }
+    await restoreWorkspaceSnapshot(snapshot);
+  } catch (error) { if (version === connectVersion) { connected.value = false; connectionError.value = errorMessage(error); expandedAssets.value = expandedAssets.value.filter(id => id !== asset.id); showToast('连接失败', connectionError.value); } }
   finally { if (version === connectVersion) connecting.value = false; }
 }
 async function selectDatabase(name: string) {
@@ -512,7 +696,7 @@ async function runTreeAction(action: 'open' | 'refresh' | 'disconnect') {
   treeMenu.value = null;
   if (!item) return;
   if (action === 'disconnect') { connectVersion++; resetWorkspace(); return; }
-  if (item.kind === 'asset') { const asset = assets.value.find(value => value.id === item.assetId); if (asset) await connectAsset(asset); return; }
+  if (item.kind === 'asset') { const asset = assets.value.find(value => value.id === item.assetId); if (asset) await openAssetWorkspace(asset); return; }
   if (!selected.value) return;
   if (item.kind === 'database') { if (isRedis.value) await selectRedisDatabase(Number(item.name)); else await selectDatabase(item.name); return; }
   if (item.kind === 'schema') { await selectSchema(item.name); return; }
@@ -679,7 +863,12 @@ async function exportFile(format: string) {
 }
 function removeAsset(asset: DatabaseAsset) {
   requestConfirm('删除连接资产', `确定删除“${asset.name}”吗？`, '删除', async () => {
-    try { await deleteDatabaseAsset(asset.id); if (selected.value?.id === asset.id) { selected.value = null; resetWorkspace(); } await loadAssets(); }
+    try {
+      await deleteDatabaseAsset(asset.id);
+      closeWorkspaceTab(workspaceTabId(asset.id));
+      if (selected.value?.id === asset.id) { selected.value = null; resetWorkspace(); }
+      await loadAssets();
+    }
     catch (error) { showToast('删除失败', errorMessage(error)); }
   });
 }
@@ -693,12 +882,14 @@ onMounted(() => {
 function closeTreeMenu() { treeMenu.value = null; }
 onUnmounted(() => {
   objectCountVersion++;
+  workspaceSnapshots.clear();
   window.removeEventListener('click', closeTreeMenu);
   connectVersion++; workspaceVersion++; assetListVersion++; sqlRequestVersion++; sqlController?.abort();
 });
 </script>
 
 <template>
+  <div class="db-shell">
   <div class="db-workspace">
     <aside class="db-sidebar">
       <header class="db-sidebar-head"><strong>资产列表</strong><div class="db-actions"><el-input v-if="searchExpanded" v-model="keyword" class="db-sidebar-search" placeholder="搜索资产" clearable @clear="searchExpanded = false" /><el-button text circle title="搜索资产" :class="{ active: searchExpanded }" @click="toggleSearch"><Search :size="15" /></el-button><el-button text circle title="刷新资产" @click="refreshCatalog"><RefreshCw :size="15" /></el-button><el-button v-if="can('create')" text circle title="导入连接配置" @click="chooseConnectionImport(activeDirectoryId)"><Download :size="15" /></el-button><el-button v-if="can('create')" text circle title="新建目录" @click="openDirectory(activeDirectoryId)"><FolderPlus :size="15" /></el-button><el-popover v-if="can('create')" v-model:visible="createMenu" placement="bottom-end" trigger="click" :width="190"><template #reference><el-button type="primary" circle title="链接数据库"><Link2 :size="15" /></el-button></template><button v-for="kind in types" :key="kind.key" class="db-type-option" @click="openCreate(kind.key)"><Database :size="15" />{{ kind.label }}</button></el-popover></div></header>
@@ -766,7 +957,16 @@ onUnmounted(() => {
     </div>
 
     <main class="db-main">
-      <template v-if="!selected || !connected"><div class="db-center-empty"><Database :size="36" /><strong>{{ connecting ? '正在连接数据库' : '选择左侧连接资产' }}</strong></div></template>
+      <DatabaseWorkspaceTabs
+        :model-value="activeWorkspaceTabId"
+        :items="workspaceTabs"
+        @close="closeWorkspaceTab"
+        @reorder="reorderWorkspaceTabs"
+        @context-action="handleWorkspaceContextAction"
+        @update:model-value="activateWorkspaceTab"
+      />
+      <template v-if="activeWorkspaceTabId === 'list'"><div class="db-center-empty"><ListIcon :size="36" /><strong>选择资产打开工作区</strong><span>连接标签会显示在顶部，可随时切换</span></div></template>
+      <template v-else-if="!selected || !connected"><div class="db-center-empty"><Database :size="36" /><strong>{{ connecting ? '正在连接数据库' : connectionError || '选择左侧连接资产' }}</strong></div></template>
       <template v-else-if="isRedis">
         <header class="db-main-head"><div><h2>{{ selected.name }}</h2><p>Redis · 键值数据</p></div><div class="db-actions"><el-button v-if="can('import_export')" @click="importInput?.click()"><Upload :size="15" />导入</el-button><el-dropdown v-if="can('import_export')" @command="exportFile"><el-button><Download :size="15" />导出</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item command="json">JSON</el-dropdown-item><el-dropdown-item command="csv">CSV</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div></header>
         <div class="db-redis-layout"><div class="db-redis-list"><div class="db-inline"><el-input v-model="redisPattern" placeholder="匹配键名" @keyup.enter="loadRedis()" /><el-button title="搜索" @click="loadRedis()"><Search :size="16" /></el-button></div><button v-for="item in redisKeys" :key="item.key" class="db-redis-key" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)"><strong>{{ item.key }}</strong><small>{{ item.type }} · TTL {{ item.ttl }} · {{ item.size }} B</small></button></div>
@@ -797,6 +997,7 @@ onUnmounted(() => {
     <el-dialog v-model="dialog" :close-on-click-modal="false" :title="editing ? '编辑连接' : '新建连接'" width="min(520px, 94vw)"><el-form label-position="top"><el-form-item label="数据库类型"><el-select v-model="form.dbType" :disabled="!!editing" @change="form = emptyForm(form.dbType)"><el-option v-for="kind in types" :key="kind.key" :label="kind.label" :value="kind.key" /></el-select></el-form-item><el-form-item label="名称"><el-input v-model="form.name" /></el-form-item><template v-if="form.dbType === 'sqlite'"><el-form-item label="SQLite 文件"><el-select v-model="form.options.file" placeholder="选择服务器文件"><el-option v-for="file in files" :key="file" :label="file" :value="file" /></el-select></el-form-item></template><template v-else><el-form-item label="主机"><el-input v-model="form.host" /></el-form-item><el-form-item label="端口"><el-input-number v-model="form.port" :min="1" :max="65535" /></el-form-item><el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item><el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editing ? '留空保持原密码' : ''" /></el-form-item><el-form-item v-if="form.dbType !== 'redis'" label="默认数据库"><el-input v-model="form.databaseName" /></el-form-item><el-form-item v-for="field in activeType?.fields.filter(item => !['file'].includes(item))" :key="field" :label="({ db: 'Redis DB 编号', https: 'HTTPS', service: 'Oracle Service Name', sid: 'Oracle SID', schema: '默认 Schema', instance: '实例名', ssl: 'SSL' } as Record<string, string>)[field] || field"><el-switch v-if="['ssl', 'https'].includes(field)" v-model="form.options[field]" /><el-input-number v-else-if="field === 'db'" v-model="form.options[field]" :min="0" :max="255" /><el-input v-else v-model="form.options[field]" /></el-form-item></template><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" /></el-form-item></el-form><template #footer><el-button @click="dialog = false">取消</el-button><el-button type="primary" @click="saveAsset">保存</el-button></template></el-dialog>
     <el-dialog v-model="rowDialog" :close-on-click-modal="false" :title="editMode === 'insert' ? '新增数据行' : '编辑数据行'" width="min(520px, 94vw)"><el-form v-if="editingRow" label-position="top"><el-form-item v-for="field in allDataColumns" :key="field" :label="field"><el-input v-model="editingRow[field]" /></el-form-item></el-form><template #footer><el-button @click="rowDialog = false">取消</el-button><el-button type="primary" @click="saveRow">保存</el-button></template></el-dialog>
     <el-dialog v-model="schemaDialog" :close-on-click-modal="false" title="表结构操作" width="min(520px, 94vw)"><el-form label-position="top"><el-form-item v-if="['drop_column', 'drop_index'].includes(schemaAction)" label="名称"><el-input v-model="schemaForm.name" disabled /></el-form-item><template v-if="schemaAction === 'add_column'"><el-form-item label="字段名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段类型"><el-input v-model="schemaForm.columnType" placeholder="例如 VARCHAR(255)" /></el-form-item></template><template v-else-if="schemaAction === 'create_index'"><el-form-item label="索引名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段"><el-select v-model="schemaForm.columns" multiple><el-option v-for="column in columns" :key="column.name" :label="column.name" :value="column.name" /></el-select></el-form-item><el-form-item label="唯一索引"><el-switch v-model="schemaForm.unique" /></el-form-item></template></el-form><template #footer><el-button @click="schemaDialog = false">取消</el-button><el-button type="primary" @click="saveSchema">执行</el-button></template></el-dialog>
+  </div>
   </div>
 </template>
 
@@ -932,7 +1133,10 @@ onUnmounted(() => {
 .db-sidebar .db-tree-toggle:hover,
 .db-sidebar .db-asset-more:hover{background:var(--el-fill-color,#e5e7eb) !important}
 .db-sidebar .db-asset-more:hover{color:var(--el-text-color-primary,#293344) !important}
-.db-workspace{width:100%;align-self:stretch;min-height:0}
+.db-shell{width:100%;height:100%;min-height:0;display:flex;flex-direction:column}
+.db-shell>.db-workspace{width:100%;height:auto;flex:1 1 auto;align-self:stretch;min-height:0}
+.db-main>.db-workspace-tabs{flex:none;border:0;border-bottom:1px solid var(--el-border-color,#dcdfe6)}
+.db-center-empty span{font-size:12px;color:var(--el-text-color-secondary,#778)}
 .db-sidebar{min-height:0;overflow:hidden}
 .db-asset-scroll{min-height:0;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--el-border-color-darker,#b8c0c8) transparent}
 @media(max-width:720px){.db-sidebar{flex:0 0 250px}.db-asset-children{max-height:none;overflow:visible}}

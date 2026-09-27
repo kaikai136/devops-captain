@@ -37,6 +37,21 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain('MoreHorizontal');
   });
 
+  it('adds a HexHub-style workspace tab strip without changing the asset tree', () => {
+    const panel = readPanel();
+
+    expect(panel).toContain('DatabaseWorkspaceTabs');
+    expect(panel).toContain("[{ id: 'list', kind: 'list', label: '列表', sticky: true }]");
+    expect(panel).toContain('activeWorkspaceTabId');
+    expect(panel).toContain('workspaceSnapshots');
+    expect(panel).toContain('handleWorkspaceContextAction');
+    expect(panel).toContain('openAssetWorkspace(asset)');
+    expect(panel).toContain("activeWorkspaceTabId === 'list'");
+    expect(panel).toContain('表列表');
+    expect(panel.indexOf('<main class="db-main">')).toBeLessThan(panel.indexOf('<DatabaseWorkspaceTabs'));
+    expect(panel).toContain('.db-main>.db-workspace-tabs{flex:none');
+  });
+
   it('maps Redis and relational assets to distinct local icon styles', () => {
     const panel = readPanel();
 
@@ -64,7 +79,7 @@ describe('database management HexHub asset tree', () => {
     const panel = readPanel();
 
     expect(panel).toContain('.db-workspace{height:100%;min-height:0');
-    expect(panel).toContain('.db-workspace{width:100%;align-self:stretch;min-height:0}');
+    expect(panel).toContain('.db-shell>.db-workspace{width:100%;height:auto;flex:1 1 auto;align-self:stretch;min-height:0}');
     expect(panel).not.toContain('min-height:600px');
   });
 });
