@@ -42,7 +42,18 @@ describe('database management HexHub asset tree', () => {
 
     expect(panel).toContain('isRedisType(entry.asset!.dbType)');
     expect(panel).toContain('db-asset-icon redis');
+    expect(panel).toContain('{{ redisKeys.length }}');
     expect(panel).toContain('.db-asset-icon.redis');
     expect(panel).toContain('.db-workspace{grid-template-columns:284px');
+  });
+
+  it('shows category totals for the selected database and schema', () => {
+    const panel = readPanel();
+
+    expect(panel).toContain("const objectCategories: ObjectCategory[] = ['table', 'view', 'procedure', 'function']");
+    expect(panel).toContain('listDatabaseObjects(assetId, database, owner || undefined, category)');
+    expect(panel).toContain("objectCounts[category.key as ObjectCategory] ?? '-'");
+    expect(panel).toContain('objectCountVersion++');
+    expect(panel).toContain('class="db-tree-count">0</small>');
   });
 });

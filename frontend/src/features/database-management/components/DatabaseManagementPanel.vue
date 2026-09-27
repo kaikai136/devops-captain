@@ -57,6 +57,10 @@ const schemas = ref<string[]>([]);
 const activeDatabase = ref('');
 const schema = ref('');
 const tables = ref<DatabaseTable[]>([]);
+type ObjectCategory = 'table' | 'view' | 'procedure' | 'function';
+const objectCategories: ObjectCategory[] = ['table', 'view', 'procedure', 'function'];
+const objectCounts = ref<Record<ObjectCategory, number | null>>({ table: null, view: null, procedure: null, function: null });
+let objectCountVersion = 0;
 const objectCategory = ref<'table' | 'view' | 'procedure' | 'function'>('table');
 const activeTable = ref('');
 const columns = ref<DatabaseColumn[]>([]);
@@ -308,6 +312,7 @@ async function exportDatabase(name: string) {
 }
 function resetWorkspace() {
   workspaceVersion++;
+  resetObjectCounts();
   expandedAssets.value = [];
   expandedDatabase.value = '';
   expandedSchema.value = '';
@@ -359,6 +364,7 @@ async function selectDatabase(name: string) {
     return;
   }
   const version = ++workspaceVersion;
+  resetObjectCounts();
   const assetId = selected.value.id;
   activeDatabase.value = name; schema.value = ''; activeTable.value = ''; tables.value = []; rows.value = []; columns.value = []; indexes.value = [];
   expandedDatabase.value = name;
@@ -370,6 +376,7 @@ async function selectDatabase(name: string) {
     if (version !== workspaceVersion || selected.value?.id !== assetId || activeDatabase.value !== name) return;
     schemas.value = result.schemas;
     schema.value = schemas.value.find(item => item === String(selected.value?.options.schema || '')) || schemas.value[0] || '';
+    if (!schemas.value.length) void loadObjectCounts();
     await loadObjects();
   } catch (error) { showToast('加载数据库失败', errorMessage(error)); }
 }
@@ -378,7 +385,24 @@ async function selectSchema(name: string) {
     requestConfirm('切换 Schema', '当前暂存修改尚未提交，切换后会丢弃，确定继续吗？', '切换', async () => { stagedChanges.value = []; await selectSchema(name); });
     return;
   }
-  schema.value = name; expandedSchema.value = name; expandedCategory.value = ''; expandedQuery.value = false; await loadObjects();
+  resetObjectCounts();
+  schema.value = name; expandedSchema.value = name; expandedCategory.value = ''; expandedQuery.value = false;
+  void loadObjectCounts();
+  await loadObjects();
+}
+function resetObjectCounts() {
+  objectCountVersion++;
+  objectCounts.value = { table: null, view: null, procedure: null, function: null };
+}
+async function loadObjectCounts() {
+  if (!selected.value || !connected.value) return;
+  const version = ++objectCountVersion;
+  const assetId = selected.value.id, database = activeDatabase.value, owner = schema.value;
+  const results = await Promise.allSettled(objectCategories.map(category => listDatabaseObjects(assetId, database, owner || undefined, category)));
+  if (version !== objectCountVersion || selected.value?.id !== assetId || activeDatabase.value !== database || schema.value !== owner) return;
+  const counts = { ...objectCounts.value };
+  objectCategories.forEach((category, index) => { counts[category] = results[index].status === 'fulfilled' ? results[index].value.objects.length : null; });
+  objectCounts.value = counts;
 }
 async function loadObjects() {
   if (!selected.value || !connected.value) return;
@@ -389,6 +413,7 @@ async function loadObjects() {
     const result = await listDatabaseObjects(assetId, database, owner || undefined, category);
     if (version !== workspaceVersion || selected.value?.id !== assetId || activeDatabase.value !== database || schema.value !== owner || objectCategory.value !== category) return;
     tables.value = result.objects;
+    objectCounts.value = { ...objectCounts.value, [category]: result.objects.length };
   }
   catch (error) { showToast('加载对象失败', errorMessage(error)); }
 }
@@ -656,6 +681,7 @@ onMounted(() => {
 });
 function closeTreeMenu() { treeMenu.value = null; }
 onUnmounted(() => {
+  objectCountVersion++;
   window.removeEventListener('click', closeTreeMenu);
   connectVersion++; workspaceVersion++; assetListVersion++; sqlRequestVersion++; sqlController?.abort();
 });
@@ -668,11 +694,11 @@ onUnmounted(() => {
       <div class="db-asset-scroll" @dragover.prevent @drop="dropItem($event, null)" @contextmenu.prevent="openTreeMenu($event, 'root', '根目录')">
         <div class="db-catalog-root" @click="activeDirectoryId = null" @contextmenu.stop.prevent="openTreeMenu($event, 'root', '根目录')"><Folder :size="15" /><span>根目录</span></div>
         <div v-if="!catalogEntries.length" class="db-empty">暂无连接资产</div>
-        <div v-for="entry in catalogEntries" :key="entry.key" class="db-catalog-entry" :style="{ paddingLeft: `${10 + entry.depth * 16}px` }" draggable="true" @dragstart="dragItem($event, entry.directory ? 'directory' : 'asset', entry.directory?.id || entry.asset!.id)" @dragover.prevent @drop.stop="entry.directory && dropItem($event, entry.directory.id)" @contextmenu.stop.prevent="entry.directory ? openTreeMenu($event, 'directory', entry.directory.name, undefined, entry.directory.id) : openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)">
+        <div v-for="entry in catalogEntries" :key="entry.key" class="db-catalog-entry" :style="{ paddingLeft: `${10 + entry.depth * 12}px` }" draggable="true" @dragstart="dragItem($event, entry.directory ? 'directory' : 'asset', entry.directory?.id || entry.asset!.id)" @dragover.prevent @drop.stop="entry.directory && dropItem($event, entry.directory.id)" @contextmenu.stop.prevent="entry.directory ? openTreeMenu($event, 'directory', entry.directory.name, undefined, entry.directory.id) : openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)">
           <template v-if="entry.directory"><div class="db-catalog-row"><button class="db-tree-toggle" @click.stop="toggleDirectory(entry.directory.id)"><ChevronDown v-if="expandedDirectories.includes(entry.directory.id)" :size="14" /><ChevronRight v-else :size="14" /></button><Folder class="db-folder-icon" :size="15" /><button class="db-catalog-label" @click="toggleDirectory(entry.directory.id)">{{ entry.directory.name }}</button></div></template>
           <template v-else><div class="db-catalog-row" :class="{ active: selected?.id === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="selected?.id === entry.asset!.id && connected && expandedAssets.includes(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseZap v-if="isRedisType(entry.asset!.dbType)" class="db-asset-icon redis" :size="15" /><Database v-else class="db-asset-icon" :size="15" /><button class="db-catalog-label" :class="{ active: selected?.id === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span>{{ entry.asset!.name }}</span><small>{{ selected?.id === entry.asset!.id && connected ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)"><MoreHorizontal :size="15" /></button></div>
             <div v-if="selected?.id === entry.asset!.id && connected && expandedAssets.includes(entry.asset!.id)" class="db-asset-children">
-              <template v-if="isRedisType(entry.asset!.dbType)"><button class="db-tree-node active" @contextmenu.stop.prevent="openTreeMenu($event, 'database', String(entry.asset!.options.db || 0))">DB {{ entry.asset!.options.db || 0 }}</button><div class="db-tree-branch"><button class="db-tree-category active" @click="loadRedis">键空间</button><button v-for="item in redisKeys" :key="item.key" class="db-tree-node" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)" @contextmenu.prevent="openTreeMenu($event, 'redis', item.key)">{{ item.key }}</button></div></template>
+              <template v-if="isRedisType(entry.asset!.dbType)"><button class="db-tree-node active" @contextmenu.stop.prevent="openTreeMenu($event, 'database', String(entry.asset!.options.db || 0))">DB {{ entry.asset!.options.db || 0 }}</button><div class="db-tree-branch"><button class="db-tree-category active" @click="loadRedis"><span>键空间</span><small class="db-tree-count">{{ redisKeys.length }}</small></button><button v-for="item in redisKeys" :key="item.key" class="db-tree-node" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)" @contextmenu.prevent="openTreeMenu($event, 'redis', item.key)">{{ item.key }}</button></div></template>
               <template v-else>
                 <div class="db-tree-level db-database-level">
                   <div v-for="name in databases" :key="name" class="db-tree-item">
@@ -688,12 +714,12 @@ onUnmounted(() => {
                           <Database class="db-tree-schema-icon" :size="14" />
                           <button class="db-tree-label" @click="toggleSchema(item)">{{ item }}</button>
                         </div>
-                        <div v-if="expandedSchema === item || (!schemas.length && expandedDatabase === name)" class="db-tree-children db-object-level">
+                        <div v-if="expandedSchema === item || (!schemas.length && expandedDatabase === name)" class="db-tree-children db-object-level" :class="{ 'db-object-level-flat': !item }">
                           <div v-for="category in [{ key: 'table', label: '表' }, { key: 'view', label: '视图' }, { key: 'procedure', label: '存储过程' }, { key: 'function', label: '函数' }]" :key="category.key" class="db-tree-item">
                             <div class="db-tree-row" :class="{ active: expandedCategory === category.key }">
                               <button class="db-tree-toggle" :aria-label="`${expandedCategory === category.key ? '收起' : '展开'}${category.label}`" :aria-expanded="expandedCategory === category.key" @click.stop="toggleCategory(category.key as 'table' | 'view' | 'procedure' | 'function')"><ChevronDown v-if="expandedCategory === category.key" :size="13" /><ChevronRight v-else :size="13" /></button>
                               <Table2 class="db-tree-object-icon" :size="14" />
-                              <button class="db-tree-label" @click="toggleCategory(category.key as 'table' | 'view' | 'procedure' | 'function')">{{ category.label }}</button>
+                              <button class="db-tree-label" @click="toggleCategory(category.key as ObjectCategory)"><span>{{ category.label }}</span><small class="db-tree-count">{{ objectCounts[category.key as ObjectCategory] ?? '-' }}</small></button>
                             </div>
                             <div v-if="expandedCategory === category.key" class="db-tree-children db-object-items">
                               <button v-for="object in tables" :key="object.name" class="db-tree-object-row" :class="{ active: activeTable === object.name }" @click="selectTable(object.name)" @contextmenu.prevent="openTreeMenu($event, 'object', object.name)"><Table2 :size="13" /><span>{{ object.name }}</span></button>
@@ -701,7 +727,7 @@ onUnmounted(() => {
                             </div>
                           </div>
                           <div class="db-tree-item">
-                            <div class="db-tree-row" :class="{ active: expandedQuery && tab === 'sql' }"><button class="db-tree-toggle" :aria-label="expandedQuery ? '收起查询' : '展开查询'" :aria-expanded="expandedQuery" @click.stop="toggleQuery"><ChevronDown v-if="expandedQuery" :size="13" /><ChevronRight v-else :size="13" /></button><Search class="db-tree-query-icon" :size="14" /><button class="db-tree-label" @click="toggleQuery">查询</button></div>
+                            <div class="db-tree-row" :class="{ active: expandedQuery && tab === 'sql' }"><button class="db-tree-toggle" :aria-label="expandedQuery ? '收起查询' : '展开查询'" :aria-expanded="expandedQuery" @click.stop="toggleQuery"><ChevronDown v-if="expandedQuery" :size="13" /><ChevronRight v-else :size="13" /></button><Search class="db-tree-query-icon" :size="14" /><button class="db-tree-label" @click="toggleQuery"><span>查询</span><small class="db-tree-count">0</small></button></div>
                             <div v-if="expandedQuery" class="db-tree-children"><button class="db-tree-object-row" :class="{ active: tab === 'sql' }" @click="tab = 'sql'"><Search :size="13" /><span>SQL 编辑器</span></button></div>
                           </div>
                         </div>
@@ -818,9 +844,9 @@ onUnmounted(() => {
 .db-asset-icon.redis{color:#d84a4a}
 .db-asset-more{display:grid;place-items:center;flex:none;width:22px;height:24px;padding:0;border:0;border-radius:3px;background:none;color:var(--el-text-color-secondary,#64748b);cursor:pointer}
 .db-asset-more:hover{background:var(--el-fill-color,#e5e7eb);color:var(--el-text-color-primary,#293344)}
-.db-asset-children{margin:0 0 3px 20px;padding:2px 0 2px 9px;border-left:1px solid var(--el-border-color,#dce2e9)}
+.db-asset-children{margin:0 0 3px 10px;padding:2px 0 2px 6px;border-left:1px solid var(--el-border-color,#dce2e9)}
 .db-asset-children .db-tree-node,.db-asset-children .db-tree-category{min-height:26px;padding:4px 6px;font-size:11px}
-.db-asset-children .db-tree-branch{padding-left:10px}
+.db-asset-children .db-tree-branch{padding-left:8px}
 .db-asset-children .db-tree-node.active,.db-asset-children .db-tree-category.active{background:var(--el-color-primary-light-9,#edf4ff);border-radius:3px}
 @media(max-width:720px){.db-workspace{grid-template-columns:1fr}.db-sidebar-head .db-sidebar-search{width:130px}.db-asset-children{max-height:150px;overflow:auto}}
 .db-tree-level,.db-tree-children{display:flex;flex-direction:column;min-width:0}
@@ -828,9 +854,12 @@ onUnmounted(() => {
 .db-tree-row{display:flex;align-items:center;gap:4px;min-width:0;min-height:28px;padding:0 3px;border-radius:3px}
 .db-tree-row:hover,.db-tree-row.active{background:var(--el-fill-color-light,#e9eff4)}
 .db-tree-row.active{color:var(--el-color-primary,#287f69)}
-.db-tree-children{margin-left:10px;padding-left:10px;border-left:1px solid var(--el-border-color,#dce2e9)}
-.db-object-level{margin-left:10px}
+.db-tree-children{margin-left:5px;padding-left:7px;border-left:1px solid var(--el-border-color,#dce2e9)}
+.db-object-level{margin-left:5px}
+.db-object-level-flat{margin-left:0;padding-left:0;border-left:0}
 .db-tree-label{display:flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;flex:1;border:0;background:none;padding:3px 0;color:inherit;text-align:left;cursor:pointer;font-size:12px;line-height:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-tree-label>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.db-tree-count{flex:none;margin-left:auto;min-width:22px;padding:1px 4px;border:1px solid var(--el-border-color,#dce2e9);border-radius:3px;background:var(--el-fill-color-lighter,#f7f9fb);color:var(--el-text-color-secondary,#64748b);font-size:10px;font-weight:500;line-height:16px;text-align:center}
 .db-tree-database-icon{flex:none;color:#65a84b}.db-tree-schema-icon{flex:none;color:#70b34f}.db-tree-object-icon{flex:none;color:#4da7a0}.db-tree-query-icon{flex:none;color:#5798ed}
 .db-tree-object-row{display:flex;align-items:center;justify-content:flex-start;gap:6px;min-width:0;width:100%;min-height:28px;padding:3px 5px 3px 7px;border:0;border-radius:3px;background:none;color:inherit;text-align:left;cursor:pointer;font-size:12px}
 .db-tree-object-row:hover,.db-tree-object-row.active{background:var(--el-color-primary-light-9,#edf4ff)}
