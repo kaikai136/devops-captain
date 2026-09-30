@@ -154,7 +154,18 @@ def test(asset):
                 cursor.close()
 
 
-def run(conn, sql, params=(), *, db_type=None, max_rows=500):
+def json_safe_value(value):
+    """Convert driver-specific values into values that DRF can serialize."""
+    if isinstance(value, (bytes, bytearray, memoryview)):
+        return "0x" + bytes(value).hex()
+    if isinstance(value, dict):
+        return {str(key): json_safe_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [json_safe_value(item) for item in value]
+    return value
+
+
+def run(conn, sql, params=(), *, db_type=None, max_rows=500, json_safe=True):
     if db_type == "clickhouse":
         if re.match(r"^\s*(SELECT|WITH|SHOW|DESCRIBE|EXPLAIN)\b", sql, re.I):
             if isinstance(params, (tuple, list)):
@@ -170,6 +181,8 @@ def run(conn, sql, params=(), *, db_type=None, max_rows=500):
             if len(result.result_rows) > max_rows:
                 raise ValueError(f"单次查询最多返回 {max_rows} 行")
             rows = [dict(zip(result.column_names, row)) for row in result.result_rows]
+            if json_safe:
+                rows = [json_safe_value(row) for row in rows]
             if len(json.dumps(rows, default=str)) > 2_000_000:
                 raise ValueError("单次查询结果不得超过 2MB")
             return rows, len(rows)
@@ -185,6 +198,8 @@ def run(conn, sql, params=(), *, db_type=None, max_rows=500):
         if len(rows) > max_rows:
             raise ValueError(f"单次查询最多返回 {max_rows} 行")
         result = [dict(row) if isinstance(row, dict) else dict(zip(columns, row)) for row in rows]
+        if json_safe:
+            result = [json_safe_value(row) for row in result]
         if len(json.dumps(result, default=str)) > 2_000_000:
             raise ValueError("单次查询结果不得超过 2MB")
         return result, len(rows)
@@ -253,7 +268,7 @@ def object_list(asset, database, schema=None, object_type=None):
         with connection(asset, database if kind not in {"oracle", "dameng"} else None) as conn:
             rows, _ = run(conn, sql, params, db_type=kind)
         rows = metadata_rows(rows)
-        return [{"name": row["name"], "type": row["type"], "rows_count": None, "comment": ""} for row in rows]
+        return [_object_metadata(row) for row in rows]
     if kind in {"postgresql", "kingbase"}:
         sql = "SELECT table_name AS name, table_type AS type FROM information_schema.tables WHERE table_schema=%s ORDER BY table_name"
         params = (schema or "public",)
@@ -262,12 +277,15 @@ def object_list(asset, database, schema=None, object_type=None):
         params = ()
     elif kind in {"mysql", "mariadb"}:
         sql = ("SELECT table_name AS name, table_type AS type, table_rows AS rows_count, "
-               "engine, update_time FROM information_schema.tables WHERE table_schema=" +
+               "data_length, index_length, auto_increment, engine, table_collation AS charset, "
+               "update_time, create_time, table_comment AS comment "
+               "FROM information_schema.tables WHERE table_schema=" +
                marker(kind) + " ORDER BY table_name")
         params = (database or asset.database,)
     elif kind == "clickhouse":
         sql = ("SELECT name, if(engine IN ('View', 'MaterializedView', 'LiveView'), 'VIEW', 'TABLE') AS type, "
-               "total_rows AS rows_count, engine, metadata_modification_time AS update_time "
+               "total_rows AS rows_count, total_bytes AS data_length, engine, "
+               "metadata_modification_time AS update_time "
                "FROM system.tables WHERE database={db:String} ORDER BY name")
         params = {"db": database or asset.database or "default"}
     elif kind == "sqlserver":
@@ -282,9 +300,73 @@ def object_list(asset, database, schema=None, object_type=None):
     rows = metadata_rows(rows)
     if object_type in {"table", "view"}:
         rows = [row for row in rows if ("VIEW" in str(row["type"]).upper()) == (object_type == "view")]
-    return [{"name": row["name"], "type": row["type"], "rows_count": row.get("rows_count"),
-             "engine": row.get("engine"), "update_time": row.get("update_time"), "comment": ""}
-            for row in rows]
+    return [_object_metadata(row) for row in rows]
+
+
+OBJECT_FIELDS = ("name", "type", "rows_count", "data_length", "index_length", "auto_increment",
+                 "engine", "charset", "update_time", "create_time", "comment")
+
+
+def _object_metadata(row):
+    """Normalize object metadata so every adapter exposes the same response shape."""
+    item = {str(key).lower(): value for key, value in row.items()}
+    return {field: item.get(field) for field in OBJECT_FIELDS}
+
+
+def table_ddl(asset, database, table, schema=None):
+    """Return a database-native CREATE statement for one table."""
+    kind = asset.db_type
+    table = str(table or "").strip()
+    if not IDENTIFIER.fullmatch(table):
+        raise ValueError("表名格式不正确")
+    if kind in {"mysql", "mariadb"}:
+        with connection(asset, database) as conn:
+            rows, _ = run(conn, f"SHOW CREATE TABLE {quote(table, kind)}", db_type=kind)
+        if not rows:
+            raise ValueError("未找到表定义")
+        row = rows[0]
+        return str(row.get("Create Table") or row.get("create table") or next(iter(row.values()), ""))
+    if kind == "sqlite":
+        with connection(asset) as conn:
+            rows, _ = run(conn, "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,), db_type=kind)
+        if not rows or not rows[0].get("sql"):
+            raise ValueError("未找到表定义")
+        return str(rows[0]["sql"])
+    if kind == "clickhouse":
+        with connection(asset, database or asset.database or "default") as conn:
+            rows, _ = run(conn, "SELECT create_table_query AS ddl FROM system.tables WHERE database={db:String} AND name={table:String}", {"db": database or asset.database or "default", "table": table}, db_type=kind)
+        if not rows or not rows[0].get("ddl"):
+            raise ValueError("未找到表定义")
+        return str(rows[0]["ddl"])
+    if kind in {"postgresql", "kingbase"}:
+        owner = schema or "public"
+        with connection(asset, database) as conn:
+            rows, _ = run(conn, "SELECT column_name, data_type, is_nullable, column_default FROM information_schema.columns WHERE table_schema=%s AND table_name=%s ORDER BY ordinal_position", (owner, table), db_type=kind)
+        if not rows:
+            raise ValueError("未找到表定义")
+        columns_sql = []
+        for row in rows:
+            nullable = "" if str(row.get("is_nullable", "YES")).upper() == "YES" else " NOT NULL"
+            default = f" DEFAULT {row['column_default']}" if row.get("column_default") is not None else ""
+            columns_sql.append(f'"{row["column_name"]}" {row["data_type"]}{nullable}{default}')
+        return f'CREATE TABLE "{owner}"."{table}" (\n  ' + ",\n  ".join(columns_sql) + "\n);"
+    if kind == "sqlserver":
+        owner = schema or "dbo"
+        with connection(asset, database or asset.database or "master") as conn:
+            rows, _ = run(conn, "SELECT COLUMN_NAME AS column_name, DATA_TYPE AS data_type, IS_NULLABLE AS is_nullable FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY ORDINAL_POSITION", (owner, table), db_type=kind)
+        if not rows:
+            raise ValueError("未找到表定义")
+        cols = [f'[{row["column_name"]}] {row["data_type"]}' + (" NOT NULL" if str(row.get("is_nullable")).upper() == "NO" else "") for row in rows]
+        return f'CREATE TABLE [{owner}].[{table}] (\n  ' + ",\n  ".join(cols) + "\n);"
+    if kind in {"oracle", "dameng"}:
+        owner = schema or asset.username.upper()
+        with connection(asset) as conn:
+            rows, _ = run(conn, f"SELECT DBMS_METADATA.GET_DDL('TABLE', {marker(kind)}, {marker(kind, 2)}) AS ddl FROM DUAL", (table.upper(), owner.upper()), db_type=kind)
+        rows = metadata_rows(rows)
+        if not rows or not rows[0].get("ddl"):
+            raise ValueError("未找到表定义")
+        return str(rows[0]["ddl"])
+    raise ValueError(f"{TYPE_INFO.get(kind, (kind,))[0]} 暂不支持读取 DDL")
 
 
 def columns(asset, database, table, schema=None):
@@ -368,7 +450,7 @@ def indexes(asset, database, table, schema=None):
 
 def table_data(asset, database, table, schema=None, page=1, page_size=25, sort=None,
                direction="asc", fields=None, where_field=None, where_value=None,
-               max_rows=500):
+               max_rows=500, json_safe=True):
     kind = asset.db_type
     qualified = ".".join(quote(item, kind) for item in (schema, table) if item) if schema else quote(table, kind)
     selected = ", ".join(quote(field, kind) for field in fields) if fields else "*"
@@ -381,7 +463,7 @@ def table_data(asset, database, table, schema=None, page=1, page_size=25, sort=N
     else:
         sql = f"SELECT {selected} FROM {qualified}{where}{order} LIMIT {page_size} OFFSET {offset}"
     with connection(asset, database) as conn:
-        rows, _ = run(conn, sql, params, db_type=kind, max_rows=max_rows)
+        rows, _ = run(conn, sql, params, db_type=kind, max_rows=max_rows, json_safe=json_safe)
         count, _ = run(conn, f"SELECT COUNT(*) AS total FROM {qualified}{where}", params, db_type=kind)
     total = int(next(iter(count[0].values()))) if count else 0
     return {"rows": rows, "total": total, "page": page, "pageSize": page_size,

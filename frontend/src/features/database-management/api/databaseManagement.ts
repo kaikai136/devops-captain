@@ -5,7 +5,7 @@ export interface DatabaseAssetPayload { name: string; directoryId?: number | nul
 export interface AssetDirectory { id: number; name: string; parentId: number | null; }
 export interface ConnectionManifest { version: number; directories: string[][]; assets: Array<Record<string, unknown>>; }
 export interface DatabaseType { key: string; label: string; defaultPort: number; fields: string[]; capabilities: string[]; }
-export interface DatabaseTable { name: string; type: string; rows_count: number | null; engine?: string | null; update_time?: string | null; comment: string; }
+export interface DatabaseTable { name: string; type: string; rows_count: number | null; data_length?: number | null; index_length?: number | null; auto_increment?: number | null; engine?: string | null; charset?: string | null; update_time?: string | null; create_time?: string | null; comment: string; }
 export interface DatabaseColumn { name: string; type: string; nullable: string; column_key: string; comment: string; default?: unknown; }
 export interface DatabaseIndex { name: string; columns: string[]; unique: boolean; definition?: string; }
 export interface DatabaseDataResult { rows: Record<string, unknown>[]; total: number; page: number; pageSize: number; hasNext: boolean; }
@@ -32,6 +32,7 @@ export const deleteDatabaseAsset = (id: number) => apiDelete<{ deleted: boolean 
 export const testDatabaseAsset = (id: number) => apiPost<{ ok: boolean; message: string }>(`${base}/assets/${id}/test/`, {});
 export const getDatabaseTree = (id: number, database = '') => apiGet<{ databases: string[]; schemas: string[]; kind: string }>(`${base}/assets/${id}/tree/${query({ database })}`);
 export const listDatabaseObjects = (id: number, database: string, schema?: string, type?: string) => apiGet<{ objects: DatabaseTable[] }>(`${base}/assets/${id}/objects/${query({ database, schema, type })}`);
+export const getDatabaseDdl = (id: number, database: string, table: string, schema?: string) => apiGet<{ ddl: string }>(`${base}/assets/${id}/ddl/${query({ database, table, schema })}`);
 export const getDatabaseColumns = (id: number, database: string, table: string, schema?: string) => apiGet<{ columns: DatabaseColumn[] }>(`${base}/assets/${id}/columns/${query({ database, table, schema })}`);
 export const getDatabaseIndexes = (id: number, database: string, table: string, schema?: string) => apiGet<{ indexes: DatabaseIndex[] }>(`${base}/assets/${id}/indexes/${query({ database, table, schema })}`);
 export const modifyDatabaseSchema = (id: number, data: Record<string, unknown>) => apiPost<{ ok: boolean }>(`${base}/assets/${id}/schema/`, data);

@@ -21,6 +21,7 @@ urlpatterns = [
     path("database-management/data/", views.asset_data),
     path("database-management/assets/<int:asset_id>/tree/", views.asset_tree),
     path("database-management/assets/<int:asset_id>/objects/", views.asset_objects),
+    path("database-management/assets/<int:asset_id>/ddl/", views.asset_ddl),
     path("database-management/assets/<int:asset_id>/columns/", views.asset_columns_v2),
     path("database-management/assets/<int:asset_id>/indexes/", views.asset_indexes),
     path("database-management/assets/<int:asset_id>/schema/", views.asset_schema),

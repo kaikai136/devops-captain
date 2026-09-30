@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   executeDatabaseSql, getDatabaseIndexes, getDatabaseTableData, getDatabaseTree,
-  getRedisKeys, getRedisValue, listDatabaseTypes, modifyDatabaseRow, modifyDatabaseSchema, testDatabaseAsset,
+  getDatabaseDdl, getRedisKeys, getRedisValue, listDatabaseObjects, listDatabaseTypes, modifyDatabaseRow, modifyDatabaseSchema, testDatabaseAsset,
 } from '../api/databaseManagement';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -49,6 +49,18 @@ describe('database management API', () => {
     expect(fetch.mock.calls[1][0]).toContain('schema=public');
     expect(fetch.mock.calls[1][0]).toContain('page=2');
     expect(fetch.mock.calls[1][0]).toContain('whereValue=open');
+  });
+
+  it('loads normalized table metadata and a single-table DDL with scoped parameters', async () => {
+    const fetch = mockResponse({ objects: [{ name: 'orders', data_length: null, index_length: 12 }] });
+    await listDatabaseObjects(7, 'sales db', 'public', 'table');
+    await getDatabaseDdl(7, 'sales db', 'orders', 'public');
+    expect(fetch.mock.calls[0][0]).toContain('/assets/7/objects/');
+    expect(fetch.mock.calls[0][0]).toContain('database=sales+db');
+    expect(fetch.mock.calls[0][0]).toContain('type=table');
+    expect(fetch.mock.calls[1][0]).toContain('/assets/7/ddl/');
+    expect(fetch.mock.calls[1][0]).toContain('table=orders');
+    expect(fetch.mock.calls[1][0]).toContain('schema=public');
   });
 
   it('passes the cancel signal to SQL requests and sends row edits separately', async () => {

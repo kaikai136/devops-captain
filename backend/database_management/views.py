@@ -8,7 +8,7 @@ from .models import DatabaseAsset
 from .serializers import DatabaseAssetSerializer
 from .services import connect, databases, tables, columns, table_data, connection_error
 from .advanced import (
-    types_view, sqlite_files, asset_tree, asset_objects, asset_columns_v2,
+    types_view, sqlite_files, asset_tree, asset_objects, asset_ddl, asset_columns_v2,
     asset_indexes, asset_schema,
     asset_data_v2, asset_sql, asset_redis, asset_export, asset_import,
     asset_rows, asset_transaction,

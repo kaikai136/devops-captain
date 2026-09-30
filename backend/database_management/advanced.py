@@ -72,6 +72,17 @@ def asset_objects(request, asset_id):
 
 
 @api_view(["GET"])
+def asset_ddl(request, asset_id):
+    asset, denied = checked(request, asset_id, "view_data")
+    if denied: return denied
+    try:
+        ddl = adapters.table_ddl(asset, request.query_params.get("database", ""),
+                                 request.query_params.get("table", ""), request.query_params.get("schema"))
+        return Response({"ddl": ddl})
+    except Exception as exc: return failed(exc)
+
+
+@api_view(["GET"])
 def asset_columns_v2(request, asset_id):
     asset, denied = checked(request, asset_id, "view_data")
     if denied: return denied
@@ -420,7 +431,7 @@ def asset_export(request, asset_id):
             rows = []
             page = 1
             while True:
-                result = adapters.table_data(asset, database, table, schema, page, 200)
+                result = adapters.table_data(asset, database, table, schema, page, 200, json_safe=False)
                 rows.extend(result["rows"])
                 if result["hasNext"] and len(rows) >= 10000:
                     raise ValueError("单次最多导出 10000 行，请缩小导出范围")

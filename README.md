@@ -103,26 +103,18 @@ django-vue/
 
 批量执行使用现有 SSH/SFTP 传输层，不再要求额外的自动化执行引擎。后端开发仍建议使用 Linux 或 WSL，以保持与部署环境一致。
 
-首次准备依赖：
 
-```powershell
-wsl.exe --cd /mnt/c/Users/kaikai/Desktop/django-vue/backend -e /root/venv-opstool/bin/python -m pip install -r requirements.txt
+安装后端依赖\迁移\启动后端：
+
 ```
-
-执行迁移：
-
-```powershell
-wsl.exe --cd /mnt/c/Users/kaikai/Desktop/django-vue/backend -e env APP_CONFIG_FILE=/mnt/c/Users/kaikai/Desktop/django-vue/config/local.app.conf /root/venv-opstool/bin/python manage.py migrate
-```
-
-启动后端：
-
-```powershell
+cd ~/Desktop/kaikai/devops-captain
 cd backend
-.\start-wsl.ps1
+python -m pip install -r requirements.txt
+export APP_CONFIG_FILE="$(realpath ../config/local.app.conf)"
+python manage.py migrate
+python -m daphne -b 0.0.0.0 -p 8001 ops_tool.asgi:application
 ```
 
-`backend/start-wsl.ps1` 会读取 `config/local.app.conf`，设置 `APP_CONFIG_FILE`，并按 `BACKEND_HOST`、`BACKEND_PORT` 启动 Daphne。
 
 后端默认地址：
 
@@ -150,13 +142,6 @@ npm run dev
 
 ```text
 http://localhost:5173
-```
-
-### 前端生产构建
-
-```powershell
-cd frontend
-npm run build
 ```
 
 ## Docker 部署
@@ -364,134 +349,6 @@ cp -a data data.backup
 
 `data/`、`deploy/config/*.local.conf`、`.env`、`.env.*` 等私有文件默认被 Git 忽略，不要强制提交。
 
-## Kubernetes 部署
-
-
-部署前先编辑 `deploy/k8s/configmap.yaml` 里的 `app.conf`：
-
-- 使用远程 MySQL：保留 `DATABASE_ENGINE=mysql`，修改 `DATABASE_HOST`、`DATABASE_PORT`、`DATABASE_NAME`、`DATABASE_USER`、`DATABASE_PASSWORD`。
-- 使用 SQLite：改为 `DATABASE_ENGINE=sqlite`，并确认 `DJANGO_DB_PATH=/app/data/db.sqlite3`。
-- 通过 NodePort 暴露时，默认 Web 端口是 `30271`，SSH 网关端口是 `30222`；如需调整，同时修改 `deploy/k8s/service.yaml` 和 `SSH_GATEWAY_PUBLIC_PORT`。
-
-应用清单：
-
-```bash
-kubectl apply -k deploy/k8s
-```
-
-访问入口：
-
-```text
-Web: http://节点IP:30271
-SSH: ssh <平台用户>@节点IP -p 30222
-```
-
-`devops-tools-runtime-pvc` 会挂载到容器 `/app`，其中包含 `config/app.conf`、`data/`、`media/` 和 `recordings/`，默认使用 `ReadWriteMany`。如果你的集群存储类不支持 RWX，需要改用支持共享挂载的存储，或根据集群拓扑调整 Pod 调度与 PVC 策略。
-
-
-### 手动远程部署
-
-```bash
-cd /opt
-git clone https://github.com/kaikai136/devops-tools.git devops-tools
-cd /opt/devops-tools
-bash deploy/scripts/compose-up.sh
-curl http://127.0.0.1:8001/api/health/
-```
-
-部署指定标签时：
-
-```bash
-cd /opt/devops-tools
-git fetch --tags --force origin
-git checkout --detach refs/tags/v2.0.0
-bash deploy/scripts/compose-up.sh
-```
-
-### 已有部署升级
-
-升级前保留已有私有配置和持久化数据：
-
-```bash
-cd /opt/devops-tools
-cp data/config/app.conf data/config/app.conf.backup
-cp -a data data.backup
-git pull --ff-only origin main
-bash deploy/scripts/compose-up.sh
-```
-
-如果手工执行 Git 操作时担心运行时配置受影响，请先备份 `data/config/app.conf`。使用 `deploy/scripts/deploy-remote.sh` 时脚本会自动完成该保护流程。
-
-### 部署验证
-
-```bash
-cd /opt/devops-tools
-git describe --tags --always --dirty
-git rev-parse HEAD
-docker compose -f deploy/docker-compose.yml ps
-curl http://127.0.0.1:8001/api/health/
-```
-## 常用运维命令
-
-以下命令对远程 MySQL 和 SQLite 模式都适用，数据库选择由 `data/config/app.conf` 控制。
-
-查看服务状态：
-
-```bash
-docker compose -f deploy/docker-compose.yml ps
-```
-
-查看应用日志：
-
-```bash
-docker compose -f deploy/docker-compose.yml logs -f app
-```
-
-查看 guacd 日志：
-
-```bash
-docker compose -f deploy/docker-compose.yml logs -f guacd
-```
-
-重启服务：
-
-```bash
-docker compose -f deploy/docker-compose.yml restart
-```
-
-重建并滚动启动：
-
-```bash
-bash deploy/scripts/compose-up.sh
-```
-
-执行数据库迁移：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec app python manage.py migrate
-```
-
-按“系统设置 / 日志保留”统一清理过期日志和 RDP 录像：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec app python manage.py cleanup_logs --dry-run
-docker compose -f deploy/docker-compose.yml exec app python manage.py cleanup_logs
-```
-
-旧入口 `cleanup_rdp_recordings` 仍保留用于兼容既有脚本。
-
-进入 Django shell：
-
-```bash
-docker compose -f deploy/docker-compose.yml exec app python manage.py shell
-```
-
-## 默认访问入口
-
-- Web 应用：`http://服务器IP:8001`
-- 管理后台：`http://服务器IP:8001/admin/`
-- 健康检查：`http://服务器IP:8001/api/health/`
-- 终端页面：`http://服务器IP:8001/terminal.html`
 
 ## 注意事项
 

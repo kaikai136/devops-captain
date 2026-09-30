@@ -59,6 +59,17 @@ class DatabaseManagementServiceTests(SimpleTestCase):
         self.assertEqual(result[0]["update_time"], "2026-01-01")
         self.assertIn("update_time", run.call_args.args[1])
 
+    def test_table_list_normalizes_all_metadata_fields_and_mysql_aliases(self):
+        asset = SimpleNamespace(db_type="mysql", database="sample")
+        metadata = [{"name": "orders", "type": "BASE TABLE"}]
+        with patch.object(adapters, "connection"), patch.object(adapters, "run", return_value=(metadata, 1)) as run:
+            result = adapters.object_list(asset, "sample", object_type="table")
+        self.assertEqual(set(result[0]), set(adapters.OBJECT_FIELDS))
+        self.assertIsNone(result[0]["data_length"])
+        sql = run.call_args.args[1].lower()
+        for alias in ("rows_count", "data_length", "index_length", "auto_increment", "charset", "update_time", "create_time", "comment"):
+            self.assertIn(alias, sql)
+
     def test_serializer_never_returns_password(self):
         asset = DatabaseAsset(name="test", db_type="mysql", host="localhost", port=3306,
                               username="user", password_encrypted=encrypt_password("secret"))
@@ -87,6 +98,8 @@ class SQLiteAdapterTests(SimpleTestCase):
         with closing(sqlite3.connect(self.path)) as connection:
             connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)")
             connection.executemany("INSERT INTO sample (name) VALUES (?)", [("alpha",), ("beta",)])
+            connection.execute("CREATE TABLE binary_sample (id INTEGER PRIMARY KEY, payload BLOB)")
+            connection.execute("INSERT INTO binary_sample (payload) VALUES (?)", (b"\xa4\xff",))
             connection.commit()
         self.settings_override = override_settings(DATABASE_ASSET_SQLITE_ROOT=self.root.name)
         self.settings_override.enable()
@@ -105,7 +118,7 @@ class SQLiteAdapterTests(SimpleTestCase):
     def test_tree_columns_filter_sort_and_pagination(self):
         adapters.test(self.asset)
         self.assertEqual(adapters.schema_names(self.asset), ["main"])
-        self.assertEqual(adapters.object_list(self.asset, "main")[0]["name"], "sample")
+        self.assertIn("sample", {item["name"] for item in adapters.object_list(self.asset, "main")})
         columns = adapters.columns(self.asset, "main", "sample")
         self.assertEqual(columns[0]["column_key"], "PRI")
         result = adapters.table_data(self.asset, "main", "sample", page=1, page_size=1,
@@ -114,6 +127,10 @@ class SQLiteAdapterTests(SimpleTestCase):
         self.assertTrue(result["hasNext"])
         filtered = adapters.table_data(self.asset, "main", "sample", where_field="name", where_value="alpha")
         self.assertEqual(filtered["total"], 1)
+
+    def test_table_data_normalizes_binary_values_for_json(self):
+        result = adapters.table_data(self.asset, "main", "binary_sample")
+        self.assertEqual(result["rows"], [{"id": 1, "payload": "0xa4ff"}])
 
     def test_sqlite_cannot_attach_or_export_other_files(self):
         with self.assertRaises(ValueError):
@@ -176,6 +193,15 @@ class SQLiteAdapterTests(SimpleTestCase):
         self.assertIn("CREATE TABLE sample", response.content.decode())
         self.assertIn("INSERT INTO", response.content.decode())
 
+    def test_ddl_endpoint_uses_view_permission_and_returns_sql(self):
+        factory = APIRequestFactory()
+        with patch.object(advanced, "checked", return_value=(self.asset, None)):
+            response = advanced.asset_ddl(factory.get("/ddl/", {
+                "database": "main", "table": "sample",
+            }), 1)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("CREATE TABLE sample", response.data["ddl"])
+
     def test_indexes_and_schema_operations_use_safe_identifiers(self):
         with closing(sqlite3.connect(self.path)) as connection:
             connection.execute("CREATE INDEX sample_name_idx ON sample(name)")
@@ -209,6 +235,8 @@ class DatabasePermissionTests(TestCase):
         path = Path(self.root.name) / "permission.sqlite3"
         with closing(sqlite3.connect(path)) as connection:
             connection.execute("CREATE TABLE sample (id INTEGER PRIMARY KEY, name TEXT)")
+            connection.execute("CREATE TABLE binary_sample (id INTEGER PRIMARY KEY, payload BLOB)")
+            connection.execute("INSERT INTO binary_sample (payload) VALUES (?)", (b"\xa4\xff",))
             connection.commit()
         self.asset = DatabaseAsset.objects.create(name="permission-test", db_type="sqlite",
                                                   host="", port=0, username="", options={"file": path.name})
@@ -239,6 +267,22 @@ class DatabasePermissionTests(TestCase):
         self.assertEqual(self.client.post(import_url, {"format": "csv", "table": "sample", "file": upload}, format="multipart").status_code, 403)
         self.grant("modify_data")
         self.assertEqual(self.client.post(sql_url, {"sql": "INSERT INTO sample (name) VALUES ('allowed')"}, format="json").status_code, 200)
+
+    def test_ddl_requires_view_data_permission(self):
+        ddl_url = f"/api/database-management/assets/{self.asset.id}/ddl/?database=main&table=sample"
+        self.assertEqual(self.client.get(ddl_url).status_code, 403)
+        self.grant("view_data")
+        response = self.client.get(ddl_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("CREATE TABLE sample", response.data["ddl"])
+
+    def test_data_endpoint_serializes_binary_columns(self):
+        data_url = f"/api/database-management/assets/{self.asset.id}/data/?database=main&table=binary_sample"
+        self.assertEqual(self.client.get(data_url).status_code, 403)
+        self.grant("view_data")
+        response = self.client.get(data_url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data["rows"][0]["payload"], "0xa4ff")
 
     def test_schema_mutation_requires_manage_schema(self):
         url = f"/api/database-management/assets/{self.asset.id}/schema/"

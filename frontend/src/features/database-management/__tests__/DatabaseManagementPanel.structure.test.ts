@@ -44,12 +44,30 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain("[{ id: 'list', kind: 'list', label: '列表', sticky: true }]");
     expect(panel).toContain('activeWorkspaceTabId');
     expect(panel).toContain('workspaceSnapshots');
+    expect(panel).toContain('restoreCachedWorkspace');
+    expect(panel).toContain('snapshot?.connected');
+    expect(panel).toContain('tables: [...tables.value]');
+    expect(panel).toContain('rows: [...rows.value]');
     expect(panel).toContain('handleWorkspaceContextAction');
     expect(panel).toContain('openAssetWorkspace(asset)');
     expect(panel).toContain("activeWorkspaceTabId === 'list'");
     expect(panel).toContain('表列表');
     expect(panel.indexOf('<main class="db-main">')).toBeLessThan(panel.indexOf('<DatabaseWorkspaceTabs'));
     expect(panel).toContain('.db-main>.db-workspace-tabs{flex:none');
+  });
+
+  it('keeps each asset connection state independent until explicit disconnect', () => {
+    const panel = readPanel();
+
+    expect(panel).toContain('function isAssetConnected(assetId: number)');
+    expect(panel).toContain('workspaceSnapshots.get(assetId)?.connected === true');
+    expect(panel).toContain('function markAssetDisconnected(assetId: number)');
+    expect(panel).toContain('snapshot.connected = false');
+    expect(panel).toContain('markAssetDisconnected(item.assetId)');
+    expect(panel).toContain("item.assetId && isAssetConnected(item.assetId) ? [{ id: 'disconnect'");
+    expect(panel).toContain('activeWorkspaceTabId.value === workspaceTabId(assetId)');
+    expect(panel).toContain('saveWorkspaceSnapshot();');
+    expect(panel).toContain('isAssetConnected(entry.asset!.id) ?');
   });
 
   it('maps Redis and relational assets to distinct local icon styles', () => {
@@ -81,5 +99,20 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain('.db-workspace{height:100%;min-height:0');
     expect(panel).toContain('.db-shell>.db-workspace{width:100%;height:auto;flex:1 1 auto;align-self:stretch;min-height:0}');
     expect(panel).not.toContain('min-height:600px');
+  });
+
+  it('renders the dense metadata table workflow', () => {
+    const panel = readPanel();
+
+    expect(panel).toContain("tableView = ref<'list' | 'table'>('table')");
+    expect(panel).toContain('已选择 {{ selectedTables.length }} 项，共 {{ tables.length }} 项');
+    expect(panel).toContain('type="selection"');
+    for (const field of ['名称', '注释', '估算行', '数据长度', '索引长度', '自增', '引擎', '编码', '更新时间', '创建时间']) {
+      expect(panel).toContain(`label="${field}"`);
+    }
+    expect(panel).toContain("selectedTables.length !== 1");
+    expect(panel).toContain('getDatabaseDdl');
+    expect(panel).toContain('CREATE TABLE');
+    expect(panel).toContain('formatBytes');
   });
 });
