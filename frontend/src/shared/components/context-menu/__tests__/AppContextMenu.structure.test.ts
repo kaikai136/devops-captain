@@ -37,6 +37,13 @@ describe('shared shadcn-style context menu', () => {
     expect(source('ContextMenuState.vue')).toContain('if (!open) context.onOpenChange(false)');
   });
 
+  it('supports an optional operation heading without changing callers', () => {
+    const sourceText = source('AppContextMenu.vue');
+    expect(sourceText).toContain('heading?: string');
+    expect(sourceText).toContain('v-if="heading" class="shadcn-context-menu-heading"');
+    expect(source('context-menu.css')).toContain('.shadcn-context-menu-heading');
+  });
+
   it('shares the menu with file entries and directory backgrounds', () => {
     const file = readFileSync(new URL('../../../../features/terminal/components/files/SftpPanel.vue', import.meta.url), 'utf8');
     expect(file).toContain(':open="fileContextMenu.visible || directoryContextMenu.visible"');

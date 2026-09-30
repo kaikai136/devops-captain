@@ -67,7 +67,9 @@ def asset_objects(request, asset_id):
     asset, denied = checked(request, asset_id, "view_data")
     if denied: return denied
     try:
-        return Response({"objects": adapters.object_list(asset, request.query_params.get("database", ""), request.query_params.get("schema"), request.query_params.get("type"))})
+        objects = adapters.object_list(asset, request.query_params.get("database", ""), request.query_params.get("schema"), request.query_params.get("type"))
+        capabilities = next((item["capabilities"] for item in adapters.type_metadata() if item["key"] == asset.db_type), [])
+        return Response({"objects": [{**item, "capabilities": capabilities} for item in objects]})
     except Exception as exc: return failed(exc)
 
 
@@ -76,8 +78,9 @@ def asset_ddl(request, asset_id):
     asset, denied = checked(request, asset_id, "view_data")
     if denied: return denied
     try:
-        ddl = adapters.table_ddl(asset, request.query_params.get("database", ""),
-                                 request.query_params.get("table", ""), request.query_params.get("schema"))
+        ddl = adapters.object_ddl(asset, request.query_params.get("database", ""),
+                                  request.query_params.get("table", ""), request.query_params.get("schema"),
+                                  request.query_params.get("objectType", "table"), request.query_params.get("signature"))
         return Response({"ddl": ddl})
     except Exception as exc: return failed(exc)
 

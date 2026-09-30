@@ -28,6 +28,20 @@ IDENTIFIER = re.compile(r"^[\w$][\w$-]*$", re.UNICODE)
 
 
 def type_metadata():
+    relational = ["tree", "data", "sql", "rows", "transaction", "csv", "sql_export",
+                  "tables", "views", "object_ddl", "saved_queries"]
+    capabilities = {
+        "mysql": relational + ["routines", "accounts", "optimize", "truncate", "rename_view"],
+        "mariadb": relational + ["routines", "accounts", "optimize", "truncate", "rename_view"],
+        "postgresql": relational + ["routines", "replace_routine", "rename_routine", "accounts", "optimize", "truncate", "rename_view"],
+        "kingbase": relational + ["routines", "replace_routine", "rename_routine", "accounts", "truncate", "rename_view"],
+        "sqlserver": relational + ["routines", "replace_routine", "accounts", "truncate", "rename_view"],
+        "sqlite": relational,
+        "oracle": relational + ["routines", "replace_routine", "accounts", "truncate"],
+        "dameng": relational + ["routines", "replace_routine", "accounts", "truncate"],
+        "clickhouse": relational + ["accounts", "truncate"],
+        "redis": ["keys", "commands", "json", "csv"],
+    }
     return [{"key": key, "label": label, "defaultPort": port,
              "fields": (["file"] if key == "sqlite" else
                         ["db", "ssl"] if key == "redis" else
@@ -36,8 +50,7 @@ def type_metadata():
                         ["instance"] if key == "sqlserver" else
                         ["schema", "ssl"] if key in {"postgresql", "kingbase"} else
                         ["ssl"] if key in {"mysql", "mariadb"} else []),
-             "capabilities": (["keys", "commands", "json", "csv"] if key == "redis" else
-                              ["tree", "data", "sql", "rows", "transaction", "csv", "sql_export"])}
+             "capabilities": capabilities[key]}
             for key, (label, port, _) in TYPE_INFO.items()]
 
 
@@ -256,12 +269,12 @@ def object_list(asset, database, schema=None, object_type=None):
             sql = "SELECT ROUTINE_NAME AS name, ROUTINE_TYPE AS type FROM information_schema.ROUTINES WHERE ROUTINE_SCHEMA=%s AND ROUTINE_TYPE=%s ORDER BY ROUTINE_NAME"
             params = (database or asset.database, routine_type)
         elif kind in {"postgresql", "kingbase"}:
-            sql = "SELECT routine_name AS name, routine_type AS type FROM information_schema.routines WHERE routine_schema=%s AND routine_type=%s ORDER BY routine_name"
-            params = (schema or "public", routine_type)
+            sql = "SELECT p.proname AS name, CASE WHEN p.prokind='p' THEN 'PROCEDURE' ELSE 'FUNCTION' END AS type, pg_get_function_identity_arguments(p.oid) AS signature FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=%s AND p.prokind=%s ORDER BY p.proname, p.oid"
+            params = (schema or "public", 'p' if object_type == 'procedure' else 'f')
         elif kind == "sqlserver":
             codes = "'P'" if object_type == "procedure" else "'FN','IF','TF'"
-            sql = f"SELECT name, type_desc AS type FROM sys.objects WHERE type IN ({codes}) ORDER BY name"
-            params = ()
+            sql = f"SELECT name, type_desc AS type FROM sys.objects WHERE type IN ({codes}) AND schema_id=SCHEMA_ID(%s) ORDER BY name"
+            params = (schema or 'dbo',)
         else:
             sql = f"SELECT OBJECT_NAME AS name, OBJECT_TYPE AS type FROM ALL_OBJECTS WHERE OWNER={marker(kind)} AND OBJECT_TYPE={marker(kind, 2)} ORDER BY OBJECT_NAME"
             params = (schema or asset.username.upper(), routine_type)
@@ -303,7 +316,7 @@ def object_list(asset, database, schema=None, object_type=None):
     return [_object_metadata(row) for row in rows]
 
 
-OBJECT_FIELDS = ("name", "type", "rows_count", "data_length", "index_length", "auto_increment",
+OBJECT_FIELDS = ("name", "type", "signature", "rows_count", "data_length", "index_length", "auto_increment",
                  "engine", "charset", "update_time", "create_time", "comment")
 
 
@@ -367,6 +380,49 @@ def table_ddl(asset, database, table, schema=None):
             raise ValueError("未找到表定义")
         return str(rows[0]["ddl"])
     raise ValueError(f"{TYPE_INFO.get(kind, (kind,))[0]} 暂不支持读取 DDL")
+
+
+def object_ddl(asset, database, name, schema=None, object_type="table", signature=None):
+    if object_type not in {"table", "view", "function", "procedure"}: raise ValueError("不支持的对象类型")
+    if object_type == "table":
+        return table_ddl(asset, database, name, schema)
+    kind = asset.db_type
+    name = str(name or "").strip()
+    if not IDENTIFIER.fullmatch(name): raise ValueError("对象名称格式不正确")
+    owner = schema or ("dbo" if kind == "sqlserver" else "public" if kind in {"postgresql", "kingbase"} else asset.username.upper())
+    with connection(asset, database if kind not in {"oracle", "dameng", "sqlite"} else None) as conn:
+        if kind in {"mysql", "mariadb"}:
+            command = "SHOW CREATE VIEW" if object_type == "view" else f"SHOW CREATE {object_type.upper()}"
+            rows, _ = run(conn, f"{command} {quote(name, kind)}", db_type=kind)
+            if rows: return str(next((value for key, value in rows[0].items() if "create" in str(key).lower()), next(iter(rows[0].values()), "")))
+        elif kind == "sqlite" and object_type == "view":
+            rows, _ = run(conn, "SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (name,), db_type=kind)
+            if rows and rows[0].get("sql"): return str(rows[0]["sql"])
+        elif kind in {"postgresql", "kingbase"}:
+            if object_type == "view":
+                rows, _ = run(conn, "SELECT view_definition AS ddl FROM information_schema.views WHERE table_schema=%s AND table_name=%s", (owner, name), db_type=kind)
+                if rows and rows[0].get("ddl"): return f'CREATE OR REPLACE VIEW "{owner}"."{name}" AS\n{rows[0]["ddl"]}'
+            else:
+                sql = "SELECT pg_get_functiondef(p.oid) AS ddl FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname=%s AND p.proname=%s AND p.prokind=%s"
+                params = (owner, name, 'f' if object_type == 'function' else 'p')
+                if signature is not None:
+                    sql += " AND pg_get_function_identity_arguments(p.oid)=%s"
+                    params += (signature,)
+                rows, _ = run(conn, sql, params, db_type=kind)
+                if len(rows) > 1: raise ValueError("例程存在重载，请指定签名")
+                if rows and rows[0].get("ddl"): return str(rows[0]["ddl"])
+        elif kind == "sqlserver":
+            rows, _ = run(conn, "SELECT OBJECT_DEFINITION(OBJECT_ID(%s)) AS ddl", (f"{owner}.{name}",), db_type=kind)
+            if rows and rows[0].get("ddl"): return str(rows[0]["ddl"])
+        elif kind == "clickhouse" and object_type == "view":
+            rows, _ = run(conn, "SELECT create_table_query AS ddl FROM system.tables WHERE database={db:String} AND name={name:String}", {"db": database or asset.database or "default", "name": name}, db_type=kind)
+            if rows and rows[0].get("ddl"): return str(rows[0]["ddl"])
+        elif kind in {"oracle", "dameng"}:
+            type_name = "VIEW" if object_type == "view" else object_type.upper()
+            rows, _ = run(conn, f"SELECT DBMS_METADATA.GET_DDL({marker(kind)}, {marker(kind, 2)}, {marker(kind, 3)}) AS ddl FROM DUAL", (type_name, name.upper(), owner.upper()), db_type=kind)
+            rows = metadata_rows(rows)
+            if rows and rows[0].get("ddl"): return str(rows[0]["ddl"])
+    raise ValueError("未找到对象定义或当前数据库不支持读取该定义")
 
 
 def columns(asset, database, table, schema=None):

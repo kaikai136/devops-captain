@@ -17,8 +17,8 @@ from system_management.services import (
     ensure_feature_permissions, inherit_created_action_permissions,
 )
 
-from . import adapters, advanced
-from .models import DatabaseAsset
+from . import accounts, adapters, advanced, object_operations
+from .models import DatabaseAsset, SavedDatabaseQuery
 from .serializers import DatabaseAssetSerializer
 from .services import decrypt_password, encrypt_password, validate_identifier
 
@@ -43,6 +43,101 @@ class DatabaseManagementServiceTests(SimpleTestCase):
             with self.subTest(kind=kind), patch.object(adapters.importlib, "import_module") as importer:
                 adapters.module_for(kind)
                 importer.assert_called_once_with(adapters.TYPE_INFO[kind][2])
+
+    def test_type_capabilities_disable_unsupported_accounts_and_routines(self):
+        metadata = {item["key"]: item["capabilities"] for item in adapters.type_metadata()}
+        self.assertNotIn("accounts", metadata["sqlite"])
+        self.assertNotIn("routines", metadata["sqlite"])
+        self.assertNotIn("routines", metadata["clickhouse"])
+        self.assertIn("accounts", metadata["clickhouse"])
+        self.assertIn("optimize", metadata["postgresql"])
+
+    def test_object_operation_sql_is_dialect_aware_and_rejects_stacked_view_sql(self):
+        mysql = SimpleNamespace(db_type="mysql")
+        postgres = SimpleNamespace(db_type="postgresql")
+        sqlite = SimpleNamespace(db_type="sqlite")
+        self.assertEqual(object_operations.statement(mysql, {
+            "action": "optimize", "objectType": "table", "database": "shop", "name": "orders",
+        }), "OPTIMIZE TABLE `orders`")
+        self.assertEqual(object_operations.statement(postgres, {
+            "action": "rename", "objectType": "view", "schema": "public", "name": "old_view", "newName": "new_view",
+        }), 'ALTER VIEW "public"."old_view" RENAME TO "new_view"')
+        with self.assertRaisesMessage(ValueError, "不支持 TRUNCATE"):
+            object_operations.statement(sqlite, {"action": "truncate", "objectType": "table", "name": "events"})
+        with self.assertRaisesMessage(ValueError, "只能包含一条 SQL"):
+            object_operations.statement(mysql, {
+                "action": "create", "objectType": "view", "name": "unsafe",
+                "definition": "SELECT 1; DROP TABLE users",
+            })
+
+    def test_account_sql_protects_current_user_and_never_embeds_password_in_logs(self):
+        asset = SimpleNamespace(db_type="mysql", username="admin", database="shop")
+        with self.assertRaisesMessage(ValueError, "不能删除当前连接账号"):
+            accounts.account_sql(asset, "delete", "admin")
+        with self.assertRaisesMessage(ValueError, "不能删除数据库内置账号"):
+            accounts.account_sql(SimpleNamespace(db_type="postgresql", username="reader", database="shop"), "delete", "postgres")
+        sql = accounts.account_sql(asset, "create", "reader", password="secret", host="localhost")
+        self.assertIn("IDENTIFIED BY 'secret'", sql)
+
+    def test_object_definitions_cannot_target_another_object_or_stack_routine_sql(self):
+        asset = SimpleNamespace(db_type="postgresql")
+        for definition in ('CREATE TABLE other (id INTEGER)', 'CREATE TABLE wanted (id INTEGER); DROP TABLE other'):
+            with self.subTest(definition=definition), self.assertRaises(ValueError):
+                object_operations.statement(asset, {'action': 'create', 'objectType': 'table', 'name': 'wanted', 'definition': definition})
+        with self.assertRaises(ValueError):
+            object_operations.statement(asset, {'action': 'create', 'objectType': 'function', 'name': 'wanted', 'definition': 'CREATE FUNCTION wanted() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$; DROP TABLE other'})
+
+    def test_clear_operations_reject_non_tables_and_rename_uses_sqlserver_dialect(self):
+        asset = SimpleNamespace(db_type="sqlserver")
+        for action in ('truncate', 'delete_rows', 'optimize'):
+            with self.subTest(action=action), self.assertRaises(ValueError):
+                object_operations.statement(asset, {'action': action, 'objectType': 'view', 'name': 'report'})
+        self.assertEqual(object_operations.statement(asset, {'action': 'rename', 'name': 'old', 'newName': 'new', 'schema': 'dbo'}), "EXEC sp_rename N'[dbo].[old]', N'new'")
+
+    def test_replace_view_rewrites_create_and_unsupported_routine_replace_is_rejected(self):
+        self.assertEqual(object_operations.statement(SimpleNamespace(db_type='postgresql'), {'action': 'replace', 'objectType': 'view', 'name': 'report', 'definition': 'CREATE VIEW report AS SELECT 1'}), 'CREATE OR REPLACE VIEW report AS SELECT 1')
+        with self.assertRaises(ValueError):
+            object_operations.statement(SimpleNamespace(db_type='mysql'), {'action': 'replace', 'objectType': 'function', 'name': 'report', 'definition': 'CREATE FUNCTION report() RETURNS INT RETURN 1'})
+        definition = 'CREATE ALGORITHM=UNDEFINED DEFINER=`admin`@`localhost` SQL SECURITY DEFINER VIEW `report` AS SELECT 1'
+        rewritten = object_operations.statement(SimpleNamespace(db_type='mysql'), {'action': 'replace', 'objectType': 'view', 'name': 'report', 'definition': definition})
+        self.assertTrue(rewritten.startswith('CREATE OR REPLACE ALGORITHM='))
+
+    def test_account_grants_do_not_silently_map_privileges(self):
+        postgres = SimpleNamespace(db_type='postgresql', database='shop', username='admin')
+        sql = accounts.account_sql(postgres, 'grant', 'reader', database='shop', schema='public', grants=['CONNECT', 'USAGE', 'SELECT'])
+        self.assertEqual(len(sql), 3)
+        self.assertIn('ON DATABASE', sql[0])
+        self.assertIn('ON SCHEMA', sql[1])
+        self.assertIn('ON ALL TABLES', sql[2])
+        with self.assertRaises(ValueError): accounts.account_sql(postgres, 'grant', 'reader', grants=['DROP'])
+        with self.assertRaises(ValueError): accounts.literal("password\\fragment")
+
+    def test_account_revoke_and_roles_use_exact_dialect_semantics(self):
+        postgres = SimpleNamespace(db_type='postgresql', database='shop', username='admin')
+        self.assertEqual(accounts.account_sql(postgres, 'revoke', 'reader', schema='public', grants=['USAGE', 'SELECT']), [
+            'REVOKE USAGE ON SCHEMA "public" FROM "reader"',
+            'REVOKE SELECT ON ALL TABLES IN SCHEMA "public" FROM "reader"',
+        ])
+        self.assertEqual(accounts.role_sql(postgres, 'grant_role', 'reader', 'reporting'), 'GRANT "reporting" TO "reader"')
+        sqlserver = SimpleNamespace(db_type='sqlserver', username='admin')
+        self.assertEqual(accounts.role_sql(sqlserver, 'revoke_role', 'reader', 'reporting'), 'ALTER ROLE [reporting] DROP MEMBER [reader]')
+        with self.assertRaises(ValueError): accounts.role_sql(postgres, 'grant_role', 'ADMIN', 'reporting')
+        with self.assertRaises(ValueError): accounts.account_sql(postgres, 'revoke', 'postgres', grants=['SELECT'])
+        clickhouse = SimpleNamespace(db_type='clickhouse', database='shop', username='admin')
+        self.assertEqual(accounts.account_sql(clickhouse, 'grant', 'reader', grants=['ALTER UPDATE']), 'GRANT ALTER UPDATE ON `shop`.* TO `reader`')
+        with self.assertRaises(ValueError): accounts.account_sql(clickhouse, 'grant', 'reader', grants=['UPDATE'])
+
+    def test_routine_rename_requires_safe_identity_signature(self):
+        asset = SimpleNamespace(db_type='postgresql')
+        payload = {'action': 'rename', 'objectType': 'function', 'schema': 'public', 'name': 'report', 'newName': 'report_v2', 'signature': 'integer, text'}
+        self.assertEqual(object_operations.statement(asset, payload), 'ALTER FUNCTION "public"."report"(integer, text) RENAME TO "report_v2"')
+        with self.assertRaises(ValueError): object_operations.statement(asset, {**payload, 'signature': 'integer); DROP TABLE users; --'})
+
+    def test_native_definition_headers_accept_clickhouse_and_sqlserver_targets(self):
+        clickhouse = SimpleNamespace(db_type='clickhouse')
+        self.assertEqual(object_operations.statement(clickhouse, {'action': 'replace', 'objectType': 'view', 'database': 'shop', 'name': 'report', 'definition': 'CREATE VIEW shop.report AS SELECT 1'}), 'CREATE OR REPLACE VIEW shop.report AS SELECT 1')
+        sqlserver = SimpleNamespace(db_type='sqlserver')
+        self.assertEqual(object_operations.statement(sqlserver, {'action': 'create', 'objectType': 'procedure', 'schema': 'dbo', 'name': 'report', 'definition': 'CREATE PROCEDURE dbo.report @count int AS SELECT @count'}), 'CREATE PROCEDURE dbo.report @count int AS SELECT @count')
 
     def test_metadata_aliases_are_case_insensitive(self):
         self.assertEqual(adapters.metadata_rows([{"NAME": "USERS", "TYPE": "TABLE"}]),
@@ -336,6 +431,73 @@ class DatabasePermissionTests(TestCase):
             "assets": [],
         }, format="json")
         self.assertEqual(response.status_code, 400)
+
+    def test_saved_queries_are_unique_private_and_cascade_with_asset(self):
+        self.grant("view_data")
+        self.grant("execute_sql")
+        url = "/api/database-management/queries/"
+        payload = {"assetId": self.asset.id, "database": "main", "schema": "", "name": "Daily", "sql": "SELECT 1"}
+        created = self.client.post(url, payload, format="json")
+        self.assertEqual(created.status_code, 201)
+        self.assertEqual(self.client.post(url, payload, format="json").status_code, 400)
+
+        other = get_user_model().objects.create_user(username="other-query-user", password="test-password")
+        other.user_permissions.add(Permission.objects.get(codename=FEATURE_PERMISSION_CODE_BY_KEY["databaseManagement"]))
+        for action in ("view_data", "execute_sql"):
+            other.user_permissions.add(Permission.objects.get(
+                codename=PAGE_ACTION_PERMISSION_CODE_BY_KEY[("databaseManagement", action)]))
+        other_client = APIClient(); other_client.force_login(other)
+        self.assertEqual(other_client.get(url, {"assetId": self.asset.id}).json(), [])
+        self.assertEqual(other_client.put(f"{url}{created.data['id']}/", {"name": "Stolen"}, format="json").status_code, 404)
+
+        updated = self.client.put(f"{url}{created.data['id']}/", {"name": "Daily 2", "sql": "SELECT 2"}, format="json")
+        self.assertEqual(updated.status_code, 200)
+        self.assertEqual(updated.data["sql"], "SELECT 2")
+        self.asset.delete()
+        self.assertFalse(SavedDatabaseQuery.objects.filter(pk=created.data["id"]).exists())
+
+    def test_account_endpoint_is_permission_guarded_and_never_returns_passwords(self):
+        url = f"/api/database-management/assets/{self.asset.id}/accounts/"
+        self.assertEqual(self.client.get(url).status_code, 403)
+        self.grant("manage_accounts")
+        self.assertEqual(self.client.get(url).status_code, 400)
+
+        self.asset.db_type = "mysql"; self.asset.username = "admin"; self.asset.save(update_fields=["db_type", "username"])
+        with patch.object(accounts.adapters, "connection") as connection, \
+             patch.object(accounts, 'available_roles', return_value=[]), \
+             patch.object(accounts.adapters, "run", return_value=([{"name": "reader", "host": "%", "password": "secret"}], 1)):
+            connection.return_value.__enter__.return_value = SimpleNamespace()
+            response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.data, [{"name": "reader", "host": "%", "roles": [], "permissions": [],
+                                          "current": False, "builtIn": False, "protected": False,
+                                          "capabilities": accounts.account_capabilities('mysql'), 'availableRoles': []}])
+        self.assertNotIn("password", response.data[0])
+
+    def test_query_file_operations_require_import_export_and_export_downloads_sql(self):
+        self.grant('execute_sql')
+        self.grant('view_data')
+        data = {'assetId': self.asset.id, 'name': 'Report', 'database': 'main', 'sql': 'SELECT 1', 'imported': True}
+        self.assertEqual(self.client.post('/api/database-management/queries/', data, format='json').status_code, 403)
+        self.grant('import_export')
+        created = self.client.post('/api/database-management/queries/', data, format='json')
+        self.assertEqual(created.status_code, 201)
+        response = self.client.get(f"/api/database-management/queries/{created.data['id']}/export/")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.content, b'SELECT 1')
+        self.assertIn('attachment', response['Content-Disposition'])
+
+    def test_query_create_requires_name_and_cut_moves_the_owned_record(self):
+        self.grant('execute_sql')
+        self.grant('view_data')
+        url = '/api/database-management/queries/'
+        self.assertEqual(self.client.post(url, {'assetId': self.asset.id}, format='json').status_code, 400)
+        created = self.client.post(url, {'assetId': self.asset.id, 'name': 'Move', 'database': 'old', 'schema': 'first'}, format='json')
+        moved = self.client.put(f"{url}{created.data['id']}/", {'assetId': self.asset.id, 'database': 'new', 'schema': 'second'}, format='json')
+        self.assertEqual(moved.status_code, 200)
+        self.assertEqual(moved.data['id'], created.data['id'])
+        self.assertEqual(self.client.get(url, {'assetId': self.asset.id, 'database': 'old'}).data, [])
+        self.assertEqual(len(self.client.get(url, {'assetId': self.asset.id, 'database': 'new', 'schema': 'second'}).data), 1)
 
 
 class RedisAdapterTests(SimpleTestCase):

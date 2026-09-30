@@ -94,6 +94,7 @@ PAGE_ACTION_PERMISSION_DEFINITIONS = [
     ("databaseManagement", "import_export", "导入导出数据库数据"),
     ("databaseManagement", "redis_command", "执行 Redis 命令"),
     ("databaseManagement", "database_admin", "管理数据库级对象"),
+    ("databaseManagement", "manage_accounts", "管理数据库账号与授权"),
     ("accounts", "create", "新增账号"),
     ("accounts", "edit", "编辑账号"),
     ("accounts", "delete", "删除账号"),

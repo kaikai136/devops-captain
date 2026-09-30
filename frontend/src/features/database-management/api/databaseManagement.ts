@@ -5,7 +5,9 @@ export interface DatabaseAssetPayload { name: string; directoryId?: number | nul
 export interface AssetDirectory { id: number; name: string; parentId: number | null; }
 export interface ConnectionManifest { version: number; directories: string[][]; assets: Array<Record<string, unknown>>; }
 export interface DatabaseType { key: string; label: string; defaultPort: number; fields: string[]; capabilities: string[]; }
-export interface DatabaseTable { name: string; type: string; rows_count: number | null; data_length?: number | null; index_length?: number | null; auto_increment?: number | null; engine?: string | null; charset?: string | null; update_time?: string | null; create_time?: string | null; comment: string; }
+export interface DatabaseTable { name: string; type: string; signature?: string; capabilities?: string[]; rows_count: number | null; data_length?: number | null; index_length?: number | null; auto_increment?: number | null; engine?: string | null; charset?: string | null; update_time?: string | null; create_time?: string | null; comment: string; }
+export interface SavedDatabaseQuery { id: number; assetId: number; database: string; schema: string; name: string; sql: string; pinned: boolean; createdAt: string; updatedAt: string; }
+export interface DatabaseAccount { name: string; host?: string; roles: string[]; permissions: string[]; availableRoles?: { name: string; host: string }[]; current?: boolean; builtIn?: boolean; protected?: boolean; capabilities?: { passwordReset: boolean; delete: boolean; grants: string[]; roles?: boolean }; }
 export interface DatabaseColumn { name: string; type: string; nullable: string; column_key: string; comment: string; default?: unknown; }
 export interface DatabaseIndex { name: string; columns: string[]; unique: boolean; definition?: string; }
 export interface DatabaseDataResult { rows: Record<string, unknown>[]; total: number; page: number; pageSize: number; hasNext: boolean; }
@@ -32,7 +34,15 @@ export const deleteDatabaseAsset = (id: number) => apiDelete<{ deleted: boolean 
 export const testDatabaseAsset = (id: number) => apiPost<{ ok: boolean; message: string }>(`${base}/assets/${id}/test/`, {});
 export const getDatabaseTree = (id: number, database = '') => apiGet<{ databases: string[]; schemas: string[]; kind: string }>(`${base}/assets/${id}/tree/${query({ database })}`);
 export const listDatabaseObjects = (id: number, database: string, schema?: string, type?: string) => apiGet<{ objects: DatabaseTable[] }>(`${base}/assets/${id}/objects/${query({ database, schema, type })}`);
-export const getDatabaseDdl = (id: number, database: string, table: string, schema?: string) => apiGet<{ ddl: string }>(`${base}/assets/${id}/ddl/${query({ database, table, schema })}`);
+export const getDatabaseDdl = (id: number, database: string, table: string, schema?: string, objectType = 'table', signature = '') => apiGet<{ ddl: string }>(`${base}/assets/${id}/ddl/${query({ database, table, schema, objectType, signature })}`);
+export const runDatabaseObjectAction = (id: number, data: Record<string, unknown>) => apiPost<{ ok: boolean }>(`${base}/assets/${id}/objects/action/`, data);
+export const listSavedDatabaseQueries = (assetId: number, database: string) => apiGet<SavedDatabaseQuery[]>(`${base}/queries/${query({ assetId, database })}`);
+export const createSavedDatabaseQuery = (data: Omit<SavedDatabaseQuery, 'id' | 'createdAt' | 'updatedAt'> & { imported?: boolean }) => apiPost<SavedDatabaseQuery>(`${base}/queries/`, data);
+export const updateSavedDatabaseQuery = (id: number, data: Partial<SavedDatabaseQuery>) => apiPut<SavedDatabaseQuery>(`${base}/queries/${id}/`, data);
+export const deleteSavedDatabaseQuery = (id: number) => apiDelete<{ deleted: boolean }>(`${base}/queries/${id}/`);
+export const savedDatabaseQueryExportUrl = (id: number) => `${base}/queries/${id}/export/`;
+export const listDatabaseAccounts = (id: number, database: string, schema?: string) => apiGet<DatabaseAccount[]>(`${base}/assets/${id}/accounts/${query({ database, schema })}`);
+export const manageDatabaseAccount = (id: number, data: Record<string, unknown>, method: 'POST' | 'PUT' | 'DELETE' = 'POST') => method === 'DELETE' ? apiDelete<{ ok: boolean }>(`${base}/assets/${id}/accounts/`, { body: JSON.stringify(data), headers: { 'Content-Type': 'application/json' } }) : method === 'PUT' ? apiPut<{ ok: boolean }>(`${base}/assets/${id}/accounts/`, data) : apiPost<{ ok: boolean }>(`${base}/assets/${id}/accounts/`, data);
 export const getDatabaseColumns = (id: number, database: string, table: string, schema?: string) => apiGet<{ columns: DatabaseColumn[] }>(`${base}/assets/${id}/columns/${query({ database, table, schema })}`);
 export const getDatabaseIndexes = (id: number, database: string, table: string, schema?: string) => apiGet<{ indexes: DatabaseIndex[] }>(`${base}/assets/${id}/indexes/${query({ database, table, schema })}`);
 export const modifyDatabaseSchema = (id: number, data: Record<string, unknown>) => apiPost<{ ok: boolean }>(`${base}/assets/${id}/schema/`, data);

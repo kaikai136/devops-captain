@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { ChevronDown, ChevronRight, Database, DatabaseZap, Download, Folder, FolderPlus, LayoutList, Link2, List as ListIcon, MoreHorizontal, Play, Plus, RefreshCw, Search, Table2, Trash2, Upload } from '@lucide/vue';
+import { ElMessageBox } from 'element-plus';
 import { useAppContext } from '@app/context';
+import AppContextMenu from '@shared/components/context-menu/AppContextMenu.vue';
+import type { ContextMenuEntry } from '@shared/components/context-menu/types';
 import { errorMessage } from '@shared/utils/errors';
 import { compressSqlText, formatSqlText } from '../utils/sqlText';
+import { useDatabaseObjectActions } from '../composables/useDatabaseObjectActions';
+import DatabaseAccountDialog from './DatabaseAccountDialog.vue';
+import DatabaseObjectEditor, { type DatabaseObjectEditorContext } from './DatabaseObjectEditor.vue';
 import DatabaseWorkspaceTabs, { type DatabaseWorkspaceTab } from './DatabaseWorkspaceTabs.vue';
+import { buildDatabaseTreeMenu, type DatabaseObjectCategory, type DatabaseTreeMenuTarget } from './databaseTreeMenu';
 import {
   commitDatabaseRows, createDatabaseAsset, deleteDatabaseAsset, deleteRedisKey, executeDatabaseSql, exportDatabaseUrl, getDatabaseColumns,
   getDatabaseTableData, getDatabaseTree, getRedisKeys, getRedisValue, importDatabaseFile,
@@ -12,11 +19,13 @@ import {
   runRedisCommand, testDatabaseAsset, updateDatabaseAsset, updateRedisKey,
   listAssetDirectories, createAssetDirectory, updateAssetDirectory, deleteAssetDirectory, copyAssetDirectory,
   copyDatabaseAsset, moveDatabaseAsset, connectionManifestUrl, importConnectionManifest, databaseAdmin, databaseExportUrl,
-  type AssetDirectory, type ConnectionManifest, type DatabaseAsset, type DatabaseAssetPayload, type DatabaseColumn, type DatabaseIndex, type DatabaseTable, type DatabaseType,
+  createSavedDatabaseQuery, deleteSavedDatabaseQuery, listSavedDatabaseQueries, runDatabaseObjectAction, updateSavedDatabaseQuery,
+  savedDatabaseQueryExportUrl,
+  type AssetDirectory, type ConnectionManifest, type DatabaseAsset, type DatabaseAssetPayload, type DatabaseColumn, type DatabaseIndex, type DatabaseTable, type DatabaseType, type SavedDatabaseQuery,
 } from '../api/databaseManagement';
 
 type Tab = 'tables' | 'structure' | 'data' | 'sql' | 'transfer';
-const { canUsePageAction, showToast, requestConfirm } = useAppContext();
+const { canUsePageAction, showToast, requestConfirm, currentUser } = useAppContext();
 const can = (action: string) => canUsePageAction('databaseManagement', action);
 const assets = ref<DatabaseAsset[]>([]);
 const directories = ref<AssetDirectory[]>([]);
@@ -92,6 +101,8 @@ type WorkspaceSnapshot = {
   redisTtl: number;
   transaction: boolean;
   stagedChanges: Record<string, unknown>[];
+  queries: SavedDatabaseQuery[];
+  activeQueryId: number | null;
 };
 const workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
 const expandedAssets = ref<number[]>([]);
@@ -150,8 +161,30 @@ const redisCommand = ref('');
 const redisResult = ref('');
 const redisValueDraft = ref('');
 const redisTtl = ref(-1);
-const treeMenu = ref<{ x: number; y: number; kind: 'root' | 'directory' | 'asset' | 'database' | 'schema' | 'category' | 'object' | 'redis'; name: string; assetId?: number; directoryId?: number } | null>(null);
-const menuSubmenu = ref('');
+const treeMenu = ref<DatabaseTreeMenuTarget | null>(null);
+const treeMenuOpen = ref(false);
+const queries = ref<SavedDatabaseQuery[]>([]);
+const activeQueryId = ref<number | null>(null);
+const queryClipboard = ref<SavedDatabaseQuery | null>(null);
+const queryClipboardCut = ref(false);
+const queryInput = ref<HTMLInputElement | null>(null);
+const objectEditorOpen = ref(false);
+const objectEditorContext = ref<DatabaseObjectEditorContext | null>(null);
+const accountDialogOpen = ref(false);
+const pinStorageKey = `database-pinned-objects:${currentUser.value?.username || 'anonymous'}`;
+function readPins(): string[] {
+  try { const value: unknown = JSON.parse(localStorage.getItem(pinStorageKey) || '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }
+  catch { return []; }
+}
+const pinnedObjects = ref<string[]>(readPins());
+function objectPinKey(assetId: number | undefined, database: string, owner: string, category: string, name: string) {
+  return JSON.stringify([assetId, database, owner, category, name]);
+}
+function sortSidebarObjects(items: DatabaseTable[]) {
+  const workspace = sidebarWorkspace.value;
+  return [...items].sort((a, b) => Number(pinnedObjects.value.includes(objectPinKey(sidebarAssetId.value || undefined, workspace?.database || '', workspace?.schema || '', workspace?.category || '', b.name))) - Number(pinnedObjects.value.includes(objectPinKey(sidebarAssetId.value || undefined, workspace?.database || '', workspace?.schema || '', workspace?.category || '', a.name))) || a.name.localeCompare(b.name));
+}
+function sortQueries(items: SavedDatabaseQuery[]) { return [...items].sort((a, b) => Number(b.pinned) - Number(a.pinned) || a.name.localeCompare(b.name)); }
 const importInput = ref<HTMLInputElement | null>(null);
 const editingRow = ref<Record<string, unknown> | null>(null);
 const originalRowKey = ref<Record<string, unknown>>({});
@@ -200,6 +233,7 @@ const sidebarWorkspace = computed(() => {
       counts: objectCounts.value,
       redisDb: redisDb.value,
       redisDbCounts: redisDbCounts.value,
+      queries: queries.value,
     };
   }
   const snapshot = workspaceSnapshots.get(assetId);
@@ -220,6 +254,7 @@ const sidebarWorkspace = computed(() => {
     counts: snapshot.objectCounts,
     redisDb: snapshot.redisDb,
     redisDbCounts: snapshot.redisDbCounts,
+    queries: snapshot.queries,
   } : null;
 });
 // Keep the original catalog contracts discoverable for older structure checks:
@@ -239,11 +274,11 @@ function ensureSidebarAssetSelected() {
 const visibleTables = computed(() => {
   const search = objectSearch.value.trim().toLowerCase();
   return tables.value.filter(item => !search || item.name.toLowerCase().includes(search) || String(item.comment || '').toLowerCase().includes(search))
-    .sort((a, b) => objectSortAsc.value ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name));
+    .sort((a, b) => Number(pinnedObjects.value.includes(objectPinKey(selected.value?.id, activeDatabase.value, schema.value, objectCategory.value, b.name))) - Number(pinnedObjects.value.includes(objectPinKey(selected.value?.id, activeDatabase.value, schema.value, objectCategory.value, a.name))) || (objectSortAsc.value ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name)));
 });
 
 function formatBytes(value: number | null | undefined) {
-  if (value === null || value === undefined || value === '') return '-';
+  if (value === null || value === undefined) return '-';
   const bytes = Number(value);
   if (!Number.isFinite(bytes)) return String(value);
   if (bytes < 1024) return `${bytes}B`;
@@ -309,6 +344,8 @@ function saveWorkspaceSnapshot() {
     redisTtl: redisTtl.value,
     transaction: transaction.value,
     stagedChanges: [...stagedChanges.value],
+    queries: [...queries.value],
+    activeQueryId: activeQueryId.value,
   });
 }
 function restoreCachedWorkspace(asset: DatabaseAsset, snapshot: WorkspaceSnapshot) {
@@ -362,6 +399,8 @@ function restoreCachedWorkspace(asset: DatabaseAsset, snapshot: WorkspaceSnapsho
   redisTtl.value = snapshot.redisTtl;
   transaction.value = snapshot.transaction;
   stagedChanges.value = [...snapshot.stagedChanges];
+  queries.value = [...snapshot.queries];
+  activeQueryId.value = snapshot.activeQueryId;
   loading.value = false;
   sqlRunning.value = false;
 }
@@ -405,26 +444,30 @@ async function activateWorkspaceTab(id: string) {
   if (snapshot?.connected) restoreCachedWorkspace(asset, snapshot);
   else await connectAsset(asset, snapshot);
 }
-async function openAssetWorkspace(asset: DatabaseAsset) {
-  sidebarAssetId.value = asset.id;
-  saveWorkspaceSnapshot();
-  const id = workspaceTabId(asset.id);
-  if (!workspaceTabs.value.some(item => item.id === id)) workspaceTabs.value.push({ id, kind: 'asset', label: asset.name, assetId: asset.id, dbType: asset.dbType });
-  activeWorkspaceTabId.value = id;
-  if (selected.value?.id === asset.id && connected.value) {
-    expandedAssets.value = expandedAssets.value.includes(asset.id) ? expandedAssets.value : [...expandedAssets.value, asset.id];
-    return;
-  }
-  const snapshot = workspaceSnapshots.get(asset.id);
-  if (snapshot?.connected && selected.value?.id !== asset.id && stagedChanges.value.length) {
+async function openAssetWorkspace(asset: DatabaseAsset, afterOpen?: () => Promise<void>) {
+  const switchWorkspace = async (workspaceSaved = false) => {
+    if (!workspaceSaved) saveWorkspaceSnapshot();
+    sidebarAssetId.value = asset.id;
+    const id = workspaceTabId(asset.id);
+    if (!workspaceTabs.value.some(item => item.id === id)) workspaceTabs.value.push({ id, kind: 'asset', label: asset.name, assetId: asset.id, dbType: asset.dbType });
+    activeWorkspaceTabId.value = id;
+    if (selected.value?.id === asset.id && connected.value) {
+      expandedAssets.value = expandedAssets.value.includes(asset.id) ? expandedAssets.value : [...expandedAssets.value, asset.id];
+    } else {
+      const snapshot = workspaceSnapshots.get(asset.id);
+      await restoreOrConnectAsset(asset, snapshot);
+    }
+    if (selected.value?.id === asset.id && connected.value) await afterOpen?.();
+  };
+  if ((selected.value?.id !== asset.id || activeWorkspaceTabId.value !== workspaceTabId(asset.id)) && stagedChanges.value.length) {
+    saveWorkspaceSnapshot();
     requestConfirm('切换连接资产', '当前暂存修改尚未提交，切换后会保留在当前页签中，确定继续吗？', '切换', async () => {
       stagedChanges.value = [];
-      await restoreOrConnectAsset(asset, snapshot);
+      await switchWorkspace(true);
     });
     return;
   }
-  if (snapshot?.connected) restoreCachedWorkspace(asset, snapshot);
-  else await connectAsset(asset, snapshot);
+  await switchWorkspace();
 }
 function markAssetDisconnected(assetId: number) {
   if (selected.value?.id === assetId && activeWorkspaceTabId.value === workspaceTabId(assetId)) saveWorkspaceSnapshot();
@@ -515,13 +558,18 @@ function toggleAsset(asset: DatabaseAsset) {
   }
   void openAssetWorkspace(asset);
 }
+async function openSidebarDatabase(name: string) {
+  const assetId = sidebarAssetId.value;
+  const asset = assets.value.find(item => item.id === assetId);
+  if (!asset) return;
+  await openAssetWorkspace(asset, async () => selectDatabase(name));
+}
 function toggleDatabase(name: string) {
-  if (!ensureSidebarAssetSelected()) return;
   if (expandedDatabase.value === name) {
     expandedDatabase.value = '';
     return;
   }
-  void selectDatabase(name);
+  void openSidebarDatabase(name);
 }
 function toggleSchema(name: string) {
   if (!ensureSidebarAssetSelected()) return;
@@ -665,7 +713,7 @@ function openDatabaseAction(action: typeof databaseAction.value, name = '') {
 }
 function databaseNodeName(item: NonNullable<typeof treeMenu.value>) {
   if (selected.value?.dbType === 'sqlite') return String(selected.value.options.file || '');
-  return item.name;
+  return item.kind === 'database' ? item.name : item.database || activeDatabase.value;
 }
 async function saveDatabaseAction() {
   if (!selected.value) return;
@@ -709,7 +757,7 @@ function resetWorkspace() {
   expandedQuery.value = false;
   connected.value = false; databases.value = []; schemas.value = []; activeDatabase.value = ''; schema.value = '';
   tables.value = []; selectedTables.value = []; objectCategory.value = 'table'; activeTable.value = ''; columns.value = []; indexes.value = []; rows.value = []; total.value = 0;
-  sql.value = ''; sqlRows.value = []; sqlMessage.value = ''; redisKeys.value = []; redisDetail.value = null;
+  sql.value = ''; sqlRows.value = []; sqlMessage.value = ''; queries.value = []; activeQueryId.value = null; redisKeys.value = []; redisDetail.value = null;
   redisValueDraft.value = ''; redisResult.value = ''; redisPattern.value = '*'; tab.value = 'tables';
   redisDb.value = 0; redisDbCounts.value = Array(16).fill(0);
   transaction.value = false; stagedChanges.value = []; selectedFields.value = []; whereField.value = ''; whereValue.value = '';
@@ -756,7 +804,7 @@ async function restoreWorkspaceSnapshot(snapshot?: WorkspaceSnapshot) {
   expandedQuery.value = snapshot.expandedQuery;
   if (snapshot.expandedCategory && snapshot.expandedCategory !== objectCategory.value) {
     objectCategory.value = snapshot.expandedCategory;
-    await loadObjects();
+    await Promise.all([loadObjects(), loadQueries()]);
   }
   if (snapshot.table && tables.value.some(item => item.name === snapshot.table)) await selectTable(snapshot.table);
   tab.value = snapshot.tab;
@@ -788,14 +836,16 @@ async function connectAsset(asset: DatabaseAsset, snapshot?: WorkspaceSnapshot) 
 }
 async function selectDatabase(name: string) {
   if (!selected.value) return;
-  if (activeDatabase.value !== name && stagedChanges.value.length) {
+  if (stagedChanges.value.length) {
     requestConfirm('切换数据库', '当前暂存修改尚未提交，切换后会丢弃，确定继续吗？', '切换', async () => { stagedChanges.value = []; await selectDatabase(name); });
     return;
   }
   const version = ++workspaceVersion;
   resetObjectCounts();
   const assetId = selected.value.id;
-  activeDatabase.value = name; schema.value = ''; activeTable.value = ''; tables.value = []; selectedTables.value = []; rows.value = []; columns.value = []; indexes.value = [];
+  activeDatabase.value = name; schemas.value = []; schema.value = ''; activeTable.value = ''; tables.value = []; selectedTables.value = []; rows.value = []; columns.value = []; indexes.value = []; total.value = 0;
+  queries.value = []; activeQueryId.value = null;
+  tab.value = 'tables'; objectCategory.value = 'table'; tableView.value = 'table'; page.value = 1; selectedFields.value = []; transaction.value = false; stagedChanges.value = [];
   expandedDatabase.value = name;
   expandedSchema.value = '';
   expandedCategory.value = '';
@@ -806,7 +856,7 @@ async function selectDatabase(name: string) {
     schemas.value = result.schemas;
     schema.value = schemas.value.find(item => item === String(selected.value?.options.schema || '')) || schemas.value[0] || '';
     if (!schemas.value.length) void loadObjectCounts();
-    await loadObjects();
+    await Promise.all([loadObjects(), loadQueries()]);
   } catch (error) { showToast('加载数据库失败', errorMessage(error)); }
 }
 async function selectSchema(name: string) {
@@ -817,7 +867,7 @@ async function selectSchema(name: string) {
   resetObjectCounts();
   schema.value = name; expandedSchema.value = name; expandedCategory.value = ''; expandedQuery.value = false;
   void loadObjectCounts();
-  await loadObjects();
+  await Promise.all([loadObjects(), loadQueries()]);
 }
 function resetObjectCounts() {
   objectCountVersion++;
@@ -889,45 +939,141 @@ function selectCategory(category: 'table' | 'view' | 'procedure' | 'function') {
   expandedQuery.value = false;
   objectCategory.value = category; void loadObjects();
 }
-function openTreeMenu(event: MouseEvent, kind: NonNullable<typeof treeMenu.value>['kind'], name: string, assetId?: number, directoryId?: number) {
-  treeMenu.value = { x: Math.max(8, Math.min(event.clientX, window.innerWidth - 225)), y: Math.max(8, Math.min(event.clientY, window.innerHeight - 370)), kind, name, assetId, directoryId };
-  menuSubmenu.value = '';
+const handledTreeEvents = new WeakSet<MouseEvent>();
+function openTreeMenu(_event: MouseEvent, kind: DatabaseTreeMenuTarget['kind'], name: string, assetId?: number, directoryId?: number, category?: DatabaseObjectCategory | 'query', queryId?: number, signature?: string) {
+  if (handledTreeEvents.has(_event)) return;
+  handledTreeEvents.add(_event);
+  const workspace = sidebarWorkspace.value;
+  const contextAssetId = assetId || sidebarAssetId.value || undefined;
+  const contextAsset = assets.value.find(item => item.id === contextAssetId);
+  const contextSnapshot = contextAssetId ? workspaceSnapshots.get(contextAssetId) : undefined;
+  const database = contextAssetId === sidebarAssetId.value ? workspace?.database : contextSnapshot?.database || contextAsset?.databaseName;
+  const owner = contextAssetId === sidebarAssetId.value ? workspace?.schema : contextSnapshot?.schema;
+  treeMenu.value = {
+    kind, name, assetId: contextAssetId, directoryId, category, queryId, signature,
+    database: kind === 'database' ? name : database || '',
+    schema: kind === 'schema' ? name : owner || '',
+  };
+  treeMenuOpen.value = true;
 }
-type MenuAction = { id: string; label: string; children?: MenuAction[] };
-const menuActions = computed<MenuAction[]>(() => {
-  const item = treeMenu.value; if (!item) return [];
-  if (item.kind === 'root' || item.kind === 'directory') return [
-    ...(can('create') ? [{ id: 'new-folder', label: '新建目录' }, { id: 'new-connection', label: '新建连接' }] : []),
-    ...(item.kind === 'directory' && can('edit') ? [{ id: 'rename-folder', label: '重命名' }, { id: 'move-folder', label: '移动目录' }] : []),
-    ...(item.kind === 'directory' && can('create') ? [{ id: 'copy-folder', label: '复制目录' }] : []),
-    ...(can('import_export') ? [{ id: 'import-connections', label: '导入连接' }, { id: 'export-connections', label: '导出连接' }] : []),
-    ...(item.kind === 'directory' && can('delete') ? [{ id: 'delete-folder', label: '删除目录' }] : []),
-    { id: 'refresh', label: '刷新' },
-  ];
-  if (item.kind === 'asset') return [
-    { id: 'open', label: '连接 / 刷新' },
-    ...(can('test_connection') ? [{ id: 'test', label: '测试连接' }] : []),
-    ...(item.assetId && isAssetConnected(item.assetId) ? [{ id: 'disconnect', label: '断开' }] : []),
-    ...(can('edit') ? [{ id: 'edit', label: '编辑' }, { id: 'move-asset', label: '移动' }] : []),
-    ...(can('create') ? [{ id: 'copy-host', label: '复制 Host' }, { id: 'clone', label: '克隆' }] : []),
-    ...(can('import_export') ? [{ id: 'export-connections', label: '导出连接' }] : []),
-    ...(can('delete') ? [{ id: 'delete-asset', label: '删除' }] : []),
-  ];
-  if (item.kind === 'database') return [
-    { id: 'open', label: '打开' }, { id: 'refresh', label: '刷新' },
-    ...(can('database_admin') ? [{ id: 'database-ops', label: '数据库操作', children: [
-      { id: 'database-create', label: '新建数据库' }, { id: 'database-import', label: '导入数据库' },
-      { id: 'database-export', label: '导出数据库' }, { id: 'database-clear', label: '清空数据库' }, { id: 'database-delete', label: '删除数据库' },
-    ] }] : []),
-  ];
-  return [{ id: 'open', label: '打开' }, { id: 'refresh', label: '刷新' }];
+function openTreeMenuFromButton(event: MouseEvent, asset: DatabaseAsset) {
+  openTreeMenu(event, 'asset', asset.name, asset.id, asset.directoryId || undefined);
+  (event.currentTarget as HTMLElement).dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: event.clientX, clientY: event.clientY }));
+}
+const menuActions = computed<ContextMenuEntry[]>(() => {
+  const target = treeMenu.value;
+  if (!target) return [];
+  const asset = assets.value.find(item => item.id === target.assetId) || selected.value;
+  const capabilities = types.value.find(item => item.key === asset?.dbType)?.capabilities || [];
+  return buildDatabaseTreeMenu(target, {
+    connected: Boolean(asset && isAssetConnected(asset.id)), dbType: asset?.dbType || '', capabilities,
+    selectedCount: asset?.id === selected.value?.id && target.database === activeDatabase.value ? selectedTables.value.length : 0,
+    pinned: target.kind === 'query' ? Boolean(queries.value.find(item => item.id === target.queryId)?.pinned) : pinnedObjects.value.includes(objectPinKey(target.assetId, target.database || '', target.schema || '', target.category || '', target.name)), can, run: runMenuAction,
+  });
 });
+async function loadQueries() {
+  if (!selected.value || !connected.value || isRedis.value) { queries.value = []; return; }
+  const assetId = selected.value.id, database = activeDatabase.value, owner = schema.value, version = ++queryLoadVersion;
+  try {
+    const result = await listSavedDatabaseQueries(assetId, database);
+    if (version === queryLoadVersion && selected.value?.id === assetId && activeDatabase.value === database && schema.value === owner) queries.value = sortQueries(result.filter(item => item.schema === owner));
+  }
+  catch (error) { showToast('加载查询失败', errorMessage(error)); }
+}
+let queryLoadVersion = 0;
+function objectContext(mode: 'create' | 'edit' | 'rename', objectType: DatabaseObjectCategory, name = '', definition = '') {
+  if (!selected.value) return;
+  objectEditorContext.value = { assetId: selected.value.id, database: activeDatabase.value, schema: schema.value, dbType: selected.value.dbType, mode, objectType, name, definition, signature: treeMenu.value?.signature };
+  objectEditorOpen.value = true;
+}
+async function openObjectDefinition(mode: 'edit' | 'view' = 'edit') {
+  const target = treeMenu.value ? { ...treeMenu.value } : null;
+  if (!target?.assetId || !target.category || target.category === 'query') return;
+  const asset = assets.value.find(item => item.id === target.assetId);
+  if (!asset) return;
+  try {
+    const result = await getDatabaseDdl(target.assetId, target.database || '', target.name, target.schema || '', target.category, target.signature);
+    if (selected.value?.id !== target.assetId || activeDatabase.value !== target.database || schema.value !== target.schema) return;
+    if (mode === 'view') { sql.value = result.ddl; sqlMessage.value = `${target.category}: ${target.name}`; tab.value = 'sql'; return result.ddl; }
+    objectEditorContext.value = { assetId: target.assetId, database: target.database || '', schema: target.schema || '', dbType: asset.dbType, mode: 'edit', objectType: target.category, name: target.name, definition: result.ddl, signature: target.signature };
+    objectEditorOpen.value = true;
+  } catch (error) { if (selected.value?.id === target.assetId && activeDatabase.value === target.database && schema.value === target.schema) showToast('读取对象定义失败', errorMessage(error)); }
+}
+const { executeObjectAction } = useDatabaseObjectActions({ selected, database: activeDatabase, schema, target: treeMenu, refresh: loadObjects });
+async function createQuery(copy?: SavedDatabaseQuery) {
+  if (!selected.value || !can('execute_sql')) return;
+  const assetId = selected.value.id, database = activeDatabase.value, owner = schema.value, contents = copy?.sql || sql.value;
+  const value = await ElMessageBox.prompt('请输入查询名称', '新建查询', { inputValue: copy ? `${copy.name} 副本` : '新建查询', inputPattern: /\S+/, inputErrorMessage: '查询名称不能为空' }).catch(() => null);
+  if (!value) return;
+  try {
+    const item = await createSavedDatabaseQuery({ assetId, database, schema: owner, name: value.value, sql: contents, pinned: false });
+    if (selected.value?.id === assetId && activeDatabase.value === database && schema.value === owner) { await loadQueries(); openSavedQuery(item); }
+    return item;
+  } catch (error) { showToast('保存查询失败', errorMessage(error)); }
+}
+function openSavedQuery(item: SavedDatabaseQuery) {
+  if (!can('view_data')) return;
+  if (selected.value?.id !== item.assetId || activeWorkspaceTabId.value !== workspaceTabId(item.assetId)) {
+    const asset = assets.value.find(value => value.id === item.assetId);
+    if (asset) void openAssetWorkspace(asset, async () => { if (activeDatabase.value === item.database && schema.value === item.schema) openSavedQuery(item); });
+    return;
+  }
+  activeQueryId.value = item.id; sql.value = item.sql; sqlMessage.value = item.name; tab.value = 'sql';
+}
+async function saveActiveQuery() {
+  const item = queries.value.find(value => value.id === activeQueryId.value);
+  if (!item) { await createQuery(); return; }
+  await updateQueryAction(item, { sql: sql.value }); showToast('查询已保存', item.name);
+}
+async function onQueryImport(event: Event) {
+  const input = event.target as HTMLInputElement, file = input.files?.[0];
+  if (!file || !selected.value || !can('import_export') || !can('execute_sql')) return;
+  try {
+    const item = await createSavedDatabaseQuery({ assetId: selected.value.id, database: activeDatabase.value, schema: schema.value, name: file.name.replace(/\.sql$/i, '') || '导入查询', sql: await file.text(), pinned: false, imported: true });
+    await loadQueries(); openSavedQuery(item);
+  } catch (error) { showToast('导入查询失败', errorMessage(error)); }
+  input.value = '';
+}
+function onObjectRowContext(row: DatabaseTable, _column: unknown, event: MouseEvent) {
+  openTreeMenu(event, 'object', row.name, selected.value?.id, undefined, objectCategory.value, undefined, row.signature);
+  if (treeMenu.value) { treeMenu.value.database = activeDatabase.value; treeMenu.value.schema = schema.value; }
+}
+function onDatabaseShortcut(event: KeyboardEvent) {
+  const target = event.target as HTMLElement | null;
+  if (!target?.closest('.db-shell, [role="menu"]') || target.closest('input, textarea, [contenteditable="true"]') || document.querySelector('.el-overlay-dialog:not([style*="display: none"])')) return;
+  if (!treeMenu.value && selected.value) {
+    const query = queries.value.find(item => item.id === activeQueryId.value);
+    treeMenu.value = query
+      ? { kind: 'query', name: query.name, queryId: query.id, category: 'query', assetId: selected.value.id, database: activeDatabase.value, schema: schema.value }
+      : { kind: activeTable.value ? 'object' : 'category', name: activeTable.value || objectCategory.value, category: objectCategory.value, assetId: selected.value.id, database: activeDatabase.value, schema: schema.value };
+  }
+  const key = event.key.toLowerCase();
+  let action = '';
+  if (event.ctrlKey && event.shiftKey && key === 't') action = 'new-table';
+  else if (event.ctrlKey && event.shiftKey && key === 'q') action = 'new-query';
+  else if (event.ctrlKey && event.shiftKey && key === 's') action = treeMenu.value?.category === 'table' ? 'edit-structure' : 'edit-object-definition';
+  else if (event.key === 'Enter') action = treeMenu.value?.kind === 'query' ? 'open-query' : treeMenu.value?.category === 'table' ? 'open-data' : 'open-object';
+  else if (event.key === 'F2') action = treeMenu.value?.kind === 'query' ? 'rename-query' : 'rename-object';
+  else if (event.key === 'F5') action = treeMenu.value?.category === 'query' ? 'refresh-queries' : 'refresh';
+  else if (event.key === 'Backspace' && treeMenu.value?.kind === 'query') action = 'delete-query';
+  else if (event.key === 'Backspace' && treeMenu.value?.kind === 'object') action = 'drop-object';
+  else if (event.ctrlKey && key === 'c' && treeMenu.value?.kind === 'query') action = 'copy-query';
+  else if (event.ctrlKey && key === 'x' && treeMenu.value?.kind === 'query') action = 'cut-query';
+  else if (event.ctrlKey && key === 'v' && queryClipboard.value) action = 'paste-query';
+  if (!action) return;
+  const findEnabled = (entries: ContextMenuEntry[]): boolean => entries.some(item => item.enabled && (item.id === action || Boolean(item.children && findEnabled(item.children))));
+  if (!findEnabled(menuActions.value)) return;
+  event.preventDefault(); void runMenuAction(action);
+}
+async function updateQueryAction(item: SavedDatabaseQuery, data: Partial<SavedDatabaseQuery>) {
+  try { await updateSavedDatabaseQuery(item.id, data); await loadQueries(); }
+  catch (error) { showToast('更新查询失败', errorMessage(error)); }
+}
 async function runMenuAction(action: string) {
   const item = treeMenu.value;
-  treeMenu.value = null; menuSubmenu.value = '';
+  treeMenuOpen.value = false;
   if (!item) return;
   if (action === 'refresh' && (item.kind === 'root' || item.kind === 'directory')) { await refreshCatalog(); return; }
-  if (action === 'open' || action === 'refresh' || action === 'disconnect') { treeMenu.value = item; await runTreeAction(action); return; }
   const asset = assets.value.find(value => value.id === item.assetId);
   const folder = directories.value.find(value => value.id === item.directoryId);
   if (action === 'new-folder') { openDirectory(item.kind === 'directory' ? item.directoryId! : null); return; }
@@ -944,15 +1090,114 @@ async function runMenuAction(action: string) {
     return;
   }
   if (action === 'edit' && asset) { openEdit(asset); return; }
+  if (action === 'rename-asset' && asset) { openEdit(asset); return; }
+  if (action === 'close' && asset) { closeAssetWorkspaceTabs(asset.id); return; }
+  if (action === 'accounts' && asset) {
+    await openAssetWorkspace(asset, async () => {
+      if (item.database && item.database !== activeDatabase.value) await selectDatabase(item.database);
+      accountDialogOpen.value = true;
+    });
+    return;
+  }
+  if (action === 'new-database-connection') { createMenu.value = true; return; }
   if (action === 'move-asset' && asset) { openMove('asset', asset.id); return; }
   if (action === 'copy-host' && asset) { await copyAsset(asset, true); return; }
   if (action === 'clone' && asset) { await copyAsset(asset, false); return; }
   if (action === 'delete-asset' && asset) { removeAsset(asset); return; }
+  if (action === 'disconnect') { if (asset) markAssetDisconnected(asset.id); return; }
+  if (item.kind === 'asset' && (action === 'open' || action === 'refresh')) { if (asset) await openAssetWorkspace(asset); return; }
+  if (!(await activateMenuTarget(item, action))) return;
+  treeMenu.value = item;
+  if (action === 'open' || action === 'refresh') { await runTreeAction(action); return; }
+  if (action === 'new-table') { objectContext('create', 'table', 'new_table'); return; }
+  if (action === 'new-view') { objectContext('create', 'view', 'new_view'); return; }
+  if (action === 'new-function') { objectContext('create', 'function', 'new_function'); return; }
+  if (action === 'new-procedure') { objectContext('create', 'procedure', 'new_procedure'); return; }
+  if (action === 'new-query') { await createQuery(); return; }
+  if (action === 'open-data' || action === 'edit-structure') { await selectTable(item.name); if (action === 'edit-structure') tab.value = 'structure'; return; }
+  if (action === 'open-object' || action === 'edit-object-definition') { await openObjectDefinition(action === 'open-object' ? 'view' : 'edit'); return; }
+  if (action === 'rename-object') { objectContext('rename', (item.category || 'table') as DatabaseObjectCategory, item.name); return; }
+  if (action === 'copy-ddl') { const ddl = await openObjectDefinition('view'); if (ddl) { await navigator.clipboard.writeText(ddl); showToast('已复制 DDL', item.name); } return; }
+  if (action === 'drop-object') { await executeObjectAction('drop'); return; }
+  if (action === 'delete-rows') { await executeObjectAction('delete_rows'); return; }
+  if (action === 'truncate-table') { await executeObjectAction('truncate'); return; }
+  if (action === 'optimize-table') { await executeObjectAction('optimize'); return; }
+  if (action === 'toggle-pin') { const key = objectPinKey(item.assetId, item.database || '', item.schema || '', item.category || '', item.name); pinnedObjects.value = pinnedObjects.value.includes(key) ? pinnedObjects.value.filter(value => value !== key) : [...pinnedObjects.value, key]; localStorage.setItem(pinStorageKey, JSON.stringify(pinnedObjects.value)); return; }
+  if (action === 'delete-selected' && selected.value) {
+    const assetId = selected.value.id, database = activeDatabase.value, owner = schema.value, targets = selectedTables.value.map(value => value.name);
+    if (!targets.length || !can('manage_schema')) return;
+    requestConfirm('删除所选表', `确定删除 ${targets.length} 张表吗？此操作无法撤销。`, '删除', async () => {
+      try { for (const name of targets) await runDatabaseObjectAction(assetId, { action: 'drop', database, schema: owner, objectType: 'table', name }); }
+      catch (error) { showToast('删除表失败', errorMessage(error)); }
+      finally { if (selected.value?.id === assetId && activeDatabase.value === database && schema.value === owner) { selectedTables.value = []; await loadObjects(); } }
+    });
+    return;
+  }
+  const query = queries.value.find(value => value.id === item.queryId);
+  if (action === 'open-query' && query) { openSavedQuery(query); return; }
+  if (action === 'toggle-query-pin' && query) { await updateQueryAction(query, { pinned: !query.pinned }); return; }
+  if (action === 'rename-query' && query) { const value = await ElMessageBox.prompt('请输入新名称', '重命名查询', { inputValue: query.name }).catch(() => null); if (value) await updateQueryAction(query, { name: value.value }); return; }
+  if ((action === 'copy-query' || action === 'cut-query') && query) { queryClipboard.value = { ...query }; queryClipboardCut.value = action === 'cut-query'; return; }
+  if (action === 'paste-query' && queryClipboard.value && selected.value) {
+    if (queryClipboardCut.value) {
+      try {
+        const moved = await updateSavedDatabaseQuery(queryClipboard.value.id, { assetId: selected.value.id, database: activeDatabase.value, schema: schema.value });
+        workspaceSnapshots.forEach((snapshot, assetId) => {
+          snapshot.queries = snapshot.queries.filter(value => value.id !== moved.id);
+          if (assetId === moved.assetId && snapshot.database === moved.database && snapshot.schema === moved.schema) snapshot.queries = sortQueries([...snapshot.queries, moved]);
+          if (snapshot.activeQueryId === moved.id) snapshot.activeQueryId = null;
+        });
+        queryClipboard.value = null; queryClipboardCut.value = false; await loadQueries();
+      }
+      catch (error) { showToast('移动查询失败', errorMessage(error)); }
+    } else await createQuery(queryClipboard.value);
+    return;
+  }
+  if (action === 'delete-query' && query) { requestConfirm('删除查询', `确定删除“${query.name}”吗？`, '删除', async () => { await deleteSavedDatabaseQuery(query.id); await loadQueries(); }); return; }
+  if (action === 'export-query' && query) { try { await downloadResponse(await fetch(savedDatabaseQueryExportUrl(query.id), { credentials: 'include' }), `${query.name}.sql`); } catch (error) { showToast('导出查询失败', errorMessage(error)); } return; }
+  if (action === 'import-query') { queryInput.value?.click(); return; }
+  if (action === 'refresh-queries') { await loadQueries(); return; }
+  if (action === 'export-csv') { activeTable.value = item.name; await exportFile('csv'); return; }
+  if (action === 'export-sql') { activeTable.value = item.name; await exportFile('sql'); return; }
+  if (action === 'import-table') { activeTable.value = item.name; importInput.value?.click(); return; }
   if (action.startsWith('database-') && selected.value) {
     const targetName = databaseNodeName(item);
     if (action === 'database-export') await exportDatabase(targetName);
     else openDatabaseAction(action.slice('database-'.length) as typeof databaseAction.value, targetName);
   }
+}
+async function activateMenuTarget(item: DatabaseTreeMenuTarget, action: string) {
+  if (!['asset', 'database', 'schema', 'category', 'object', 'query'].includes(item.kind)) return true;
+  const asset = assets.value.find(value => value.id === item.assetId);
+  if (!asset) return false;
+  if (selected.value?.id !== asset.id || activeWorkspaceTabId.value !== workspaceTabId(asset.id) || !connected.value) {
+    await openAssetWorkspace(asset, async () => {
+      treeMenu.value = item;
+      await runMenuAction(action);
+    });
+    return false;
+  }
+  const targetDatabase = item.kind === 'database' ? item.name : item.database || activeDatabase.value;
+  if (!isRedis.value && targetDatabase && targetDatabase !== activeDatabase.value) {
+    if (stagedChanges.value.length) {
+      requestConfirm('切换数据库', '当前暂存修改尚未提交，切换后会丢弃，确定继续吗？', '切换', async () => {
+        stagedChanges.value = [];
+        await selectDatabase(targetDatabase);
+        treeMenu.value = item;
+        await runMenuAction(action);
+      });
+      return false;
+    }
+    await selectDatabase(targetDatabase);
+  }
+  if (!isRedis.value && item.schema !== undefined && item.schema !== schema.value) {
+    if (stagedChanges.value.length) {
+      requestConfirm('切换 Schema', '当前暂存修改尚未提交，确定切换吗？', '切换', async () => { stagedChanges.value = []; await selectSchema(item.schema!); treeMenu.value = item; await runMenuAction(action); });
+      return false;
+    }
+    await selectSchema(item.schema);
+  }
+  return true;
 }
 async function runTreeAction(action: 'open' | 'refresh' | 'disconnect') {
   const item = treeMenu.value;
@@ -966,8 +1211,8 @@ async function runTreeAction(action: 'open' | 'refresh' | 'disconnect') {
   if (!selected.value) return;
   if (item.kind === 'database') { if (isRedis.value) await selectRedisDatabase(Number(item.name)); else await selectDatabase(item.name); return; }
   if (item.kind === 'schema') { await selectSchema(item.name); return; }
-  if (item.kind === 'category') { selectCategory(item.name as 'table' | 'view' | 'procedure' | 'function'); return; }
-  if (item.kind === 'object') { await selectTable(item.name); return; }
+  if (item.kind === 'category') { if (item.category === 'query') await loadQueries(); else { selectCategory((item.category || item.name) as ObjectCategory); if (action === 'refresh') await loadObjects(); } return; }
+  if (item.kind === 'object') { if (action === 'refresh') await loadObjects(); else await selectTable(item.name); return; }
   if (item.kind === 'redis') { if (action === 'refresh') await loadRedis(); else await selectRedisKey(item.name); }
 }
 function openSchema(action: typeof schemaAction.value, item?: { name: string; columns?: string[]; unique?: boolean }) {
@@ -1141,34 +1386,39 @@ function removeAsset(asset: DatabaseAsset) {
 }
 watch(keyword, () => { void loadAssets(); });
 onMounted(() => {
-  window.addEventListener('click', closeTreeMenu);
+  window.addEventListener('keydown', onDatabaseShortcut);
   void refreshCatalog();
   void listDatabaseTypes().then(result => { types.value = result.types; }).catch(error => showToast('加载数据库类型失败', errorMessage(error)));
   void listSQLiteFiles().then(result => { files.value = result.files; }).catch(error => showToast('加载 SQLite 文件失败', errorMessage(error)));
 });
-function closeTreeMenu() { treeMenu.value = null; }
+function closeTreeMenu() { treeMenuOpen.value = false; treeMenu.value = null; }
+function onTreeMenuOpen(open: boolean) {
+  treeMenuOpen.value = open;
+  if (!open) setTimeout(() => { if (!treeMenuOpen.value) treeMenu.value = null; }, 0);
+}
 onUnmounted(() => {
   objectCountVersion++;
   workspaceSnapshots.clear();
-  window.removeEventListener('click', closeTreeMenu);
+  window.removeEventListener('keydown', onDatabaseShortcut);
   connectVersion++; workspaceVersion++; assetListVersion++; sqlRequestVersion++; sqlController?.abort();
 });
 </script>
 
 <template>
   <div class="db-shell">
+  <AppContextMenu :open="treeMenuOpen" :items="menuActions" heading="操作" label="数据库树操作菜单" @update:open="onTreeMenuOpen" @select="item => item.action()">
   <div class="db-workspace">
     <aside class="db-sidebar">
       <header class="db-sidebar-head"><strong>资产列表</strong><div class="db-actions"><el-input v-if="searchExpanded" v-model="keyword" class="db-sidebar-search" placeholder="搜索资产" clearable @clear="searchExpanded = false" /><el-button text circle title="搜索资产" :class="{ active: searchExpanded }" @click="toggleSearch"><Search :size="15" /></el-button><el-button text circle title="刷新资产" @click="refreshCatalog"><RefreshCw :size="15" /></el-button><el-button v-if="can('create')" text circle title="导入连接配置" @click="chooseConnectionImport(activeDirectoryId)"><Download :size="15" /></el-button><el-button v-if="can('create')" text circle title="新建目录" @click="openDirectory(activeDirectoryId)"><FolderPlus :size="15" /></el-button><el-popover v-if="can('create')" v-model:visible="createMenu" placement="bottom-end" trigger="click" :width="190"><template #reference><el-button type="primary" circle title="链接数据库"><Link2 :size="15" /></el-button></template><button v-for="kind in types" :key="kind.key" class="db-type-option" @click="openCreate(kind.key)"><Database :size="15" />{{ kind.label }}</button></el-popover></div></header>
-      <div class="db-asset-scroll" @dragover.prevent @drop="dropItem($event, null)" @contextmenu.prevent="openTreeMenu($event, 'root', '根目录')">
-        <div class="db-catalog-root" @click="activeDirectoryId = null" @contextmenu.stop.prevent="openTreeMenu($event, 'root', '根目录')"><Folder :size="15" /><span>根目录</span></div>
+      <div class="db-asset-scroll" @dragover.prevent @drop="dropItem($event, null)">
+        <div class="db-catalog-root" @click="activeDirectoryId = null" @contextmenu="openTreeMenu($event, 'root', '根目录')"><Folder :size="15" /><span>根目录</span></div>
         <div v-if="!catalogEntries.length" class="db-empty">暂无连接资产</div>
-        <div v-for="entry in catalogEntries" :key="entry.key" class="db-catalog-entry" :style="{ paddingLeft: `${10 + entry.depth * 12}px` }" draggable="true" @dragstart="dragItem($event, entry.directory ? 'directory' : 'asset', entry.directory?.id || entry.asset!.id)" @dragover.prevent @drop.stop="entry.directory && dropItem($event, entry.directory.id)" @contextmenu.stop.prevent="entry.directory ? openTreeMenu($event, 'directory', entry.directory.name, undefined, entry.directory.id) : openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)">
+        <div v-for="entry in catalogEntries" :key="entry.key" class="db-catalog-entry" :style="{ paddingLeft: `${10 + entry.depth * 12}px` }" draggable="true" @dragstart="dragItem($event, entry.directory ? 'directory' : 'asset', entry.directory?.id || entry.asset!.id)" @dragover.prevent @drop.stop="entry.directory && dropItem($event, entry.directory.id)" @contextmenu="entry.directory ? openTreeMenu($event, 'directory', entry.directory.name, undefined, entry.directory.id) : openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)">
           <template v-if="entry.directory"><div class="db-catalog-row"><button class="db-tree-toggle" @click.stop="toggleDirectory(entry.directory.id)"><ChevronDown v-if="expandedDirectories.includes(entry.directory.id)" :size="14" /><ChevronRight v-else :size="14" /></button><Folder class="db-folder-icon" :size="15" /><button class="db-catalog-label" @click="toggleDirectory(entry.directory.id)">{{ entry.directory.name }}</button></div></template>
-            <template v-else><div class="db-catalog-row" :class="{ active: sidebarAssetId === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="isSidebarAssetExpanded(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseZap v-if="isRedisType(entry.asset!.dbType)" class="db-asset-icon redis" :size="15" /><Database v-else class="db-asset-icon" :size="15" /><button class="db-catalog-label" :class="{ active: sidebarAssetId === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span>{{ entry.asset!.name }}</span><small>{{ isAssetConnected(entry.asset!.id) ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)"><MoreHorizontal :size="15" /></button></div>
+            <template v-else><div class="db-catalog-row" :class="{ active: sidebarAssetId === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="isSidebarAssetExpanded(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseZap v-if="isRedisType(entry.asset!.dbType)" class="db-asset-icon redis" :size="15" /><Database v-else class="db-asset-icon" :size="15" /><button class="db-catalog-label" :class="{ active: sidebarAssetId === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span>{{ entry.asset!.name }}</span><small>{{ isAssetConnected(entry.asset!.id) ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenuFromButton($event, entry.asset!)"><MoreHorizontal :size="15" /></button></div>
             <div v-if="isSidebarAssetExpanded(entry.asset!.id) || (expandedAssets.includes(entry.asset!.id) && sidebarAssetId === entry.asset!.id)" class="db-asset-children">
               <template v-if="isRedisType(entry.asset!.dbType)">
-                <div v-for="db in 16" :key="db" class="db-tree-row db-redis-db-row" :class="{ active: sidebarWorkspace?.redisDb === db - 1 }" @contextmenu.stop.prevent="openTreeMenu($event, 'database', String(db - 1))">
+                <div v-for="db in 16" :key="db" class="db-tree-row db-redis-db-row" :class="{ active: sidebarWorkspace?.redisDb === db - 1 }" @contextmenu="openTreeMenu($event, 'database', String(db - 1))">
                   <Database class="db-tree-database-icon" :size="15" />
                   <button class="db-tree-label" @click="selectRedisDatabase(db - 1)"><span>db{{ db - 1 }}</span><small class="db-tree-count">{{ sidebarWorkspace?.redisDbCounts[db - 1] ?? redisDbCounts[db - 1] ?? 0 }}</small></button>
                 </div>
@@ -1176,33 +1426,33 @@ onUnmounted(() => {
               <template v-else>
                 <div class="db-tree-level db-database-level">
                   <div v-for="name in (sidebarWorkspace?.databases || [])" :key="name" class="db-tree-item">
-                    <div class="db-tree-row" :class="{ active: sidebarWorkspace?.database === name }">
+                    <div class="db-tree-row" :class="{ active: sidebarWorkspace?.database === name }" @contextmenu="openTreeMenu($event, 'database', name)">
                       <button class="db-tree-toggle" @click.stop="toggleDatabase(name)"><ChevronDown v-if="sidebarWorkspace?.expandedDatabase === name" :size="13" /><ChevronRight v-else :size="13" /></button>
                       <Database class="db-tree-database-icon" :size="15" />
-                      <button class="db-tree-label" @click="toggleDatabase(name)">{{ name }}</button>
+                      <button class="db-tree-label" @click="openSidebarDatabase(name)">{{ name }}</button>
                     </div>
                     <div v-if="sidebarWorkspace?.expandedDatabase === name" class="db-tree-children">
                       <div v-for="item in (sidebarWorkspace?.schemas?.length ? sidebarWorkspace.schemas : [''])" :key="item || '__default-schema__'" class="db-tree-item">
-                        <div v-if="item" class="db-tree-row" :class="{ active: sidebarWorkspace?.schema === item }">
+                        <div v-if="item" class="db-tree-row" :class="{ active: sidebarWorkspace?.schema === item }" @contextmenu="openTreeMenu($event, 'schema', item)">
                           <button class="db-tree-toggle" @click.stop="toggleSchema(item)"><ChevronDown v-if="sidebarWorkspace?.schema === item" :size="13" /><ChevronRight v-else :size="13" /></button>
                           <Database class="db-tree-schema-icon" :size="14" />
                           <button class="db-tree-label" @click="toggleSchema(item)">{{ item }}</button>
                         </div>
                         <div v-if="sidebarWorkspace?.expandedSchema === item || (!sidebarWorkspace?.schemas?.length && sidebarWorkspace?.expandedDatabase === name)" class="db-tree-children db-object-level" :class="{ 'db-object-level-flat': !item }">
                           <div v-for="category in [{ key: 'table', label: '表' }, { key: 'view', label: '视图' }, { key: 'procedure', label: '存储过程' }, { key: 'function', label: '函数' }]" :key="category.key" class="db-tree-item">
-                            <div class="db-tree-row" :class="{ active: sidebarWorkspace?.category === category.key }">
+                            <div class="db-tree-row" :class="{ active: sidebarWorkspace?.category === category.key }" @contextmenu="openTreeMenu($event, 'category', category.key, undefined, undefined, category.key as DatabaseObjectCategory)">
                               <button class="db-tree-toggle" :aria-label="`${sidebarWorkspace?.category === category.key ? '收起' : '展开'}${category.label}`" :aria-expanded="sidebarWorkspace?.category === category.key" @click.stop="toggleCategory(category.key as 'table' | 'view' | 'procedure' | 'function')"><ChevronDown v-if="sidebarWorkspace?.category === category.key" :size="13" /><ChevronRight v-else :size="13" /></button>
                               <Table2 class="db-tree-object-icon" :size="14" />
                               <button class="db-tree-label" @click="toggleCategory(category.key as ObjectCategory)"><span>{{ category.label }}</span><small class="db-tree-count">{{ (sidebarWorkspace?.counts || objectCounts)[category.key as ObjectCategory] ?? '-' }}</small></button>
                             </div>
                             <div v-if="sidebarWorkspace?.category === category.key" class="db-tree-children db-object-items">
-                              <button v-for="object in (sidebarWorkspace?.tables || [])" :key="object.name" class="db-tree-object-row" :class="{ active: sidebarWorkspace?.table === object.name }" @click="selectTable(object.name)" @contextmenu.prevent="openTreeMenu($event, 'object', object.name)"><Table2 :size="13" /><span>{{ object.name }}</span></button>
+                              <button v-for="object in sortSidebarObjects(sidebarWorkspace?.tables || [])" :key="object.name" class="db-tree-object-row" :class="{ active: sidebarWorkspace?.table === object.name }" @click="selectTable(object.name)" @contextmenu="openTreeMenu($event, 'object', object.name, undefined, undefined, category.key as DatabaseObjectCategory, undefined, object.signature)"><Table2 :size="13" /><span>{{ object.name }}</span></button>
                               <span v-if="!sidebarWorkspace?.tables?.length" class="db-tree-empty">暂无{{ category.label }}</span>
                             </div>
                           </div>
                           <div class="db-tree-item">
-                            <div class="db-tree-row" :class="{ active: sidebarWorkspace?.query && sidebarWorkspace?.tab === 'sql' }"><button class="db-tree-toggle" :aria-label="sidebarWorkspace?.query ? '收起查询' : '展开查询'" :aria-expanded="sidebarWorkspace?.query" @click.stop="toggleQuery"><ChevronDown v-if="sidebarWorkspace?.query" :size="13" /><ChevronRight v-else :size="13" /></button><Search class="db-tree-query-icon" :size="14" /><button class="db-tree-label" @click="toggleQuery"><span>查询</span><small class="db-tree-count">0</small></button></div>
-                            <div v-if="sidebarWorkspace?.query" class="db-tree-children"><button class="db-tree-object-row" :class="{ active: sidebarWorkspace?.tab === 'sql' }" @click="tab = 'sql'"><Search :size="13" /><span>SQL 编辑器</span></button></div>
+                            <div class="db-tree-row" :class="{ active: sidebarWorkspace?.query && sidebarWorkspace?.tab === 'sql' }" @contextmenu="openTreeMenu($event, 'category', 'query', undefined, undefined, 'query')"><button class="db-tree-toggle" :aria-label="sidebarWorkspace?.query ? '收起查询' : '展开查询'" :aria-expanded="sidebarWorkspace?.query" @click.stop="toggleQuery"><ChevronDown v-if="sidebarWorkspace?.query" :size="13" /><ChevronRight v-else :size="13" /></button><Search class="db-tree-query-icon" :size="14" /><button class="db-tree-label" @click="toggleQuery"><span>查询</span><small class="db-tree-count">{{ sidebarWorkspace?.queries?.length || 0 }}</small></button></div>
+                            <div v-if="sidebarWorkspace?.query" class="db-tree-children"><button v-for="query in (sidebarWorkspace?.queries || [])" :key="query.id" class="db-tree-object-row" :class="{ active: activeQueryId === query.id }" @click="openSavedQuery(query)" @contextmenu="openTreeMenu($event, 'query', query.name, undefined, undefined, 'query', query.id)"><Search :size="13" /><span>{{ query.name }}</span></button><button class="db-tree-object-row" :class="{ active: sidebarWorkspace?.tab === 'sql' && !activeQueryId }" @click="activeQueryId = null; tab = 'sql'"><Plus :size="13" /><span>临时查询</span></button></div>
                           </div>
                         </div>
                       </div>
@@ -1216,12 +1466,6 @@ onUnmounted(() => {
         <div v-if="!assets.length && directories.length" class="db-empty">目录中暂无连接资产</div>
       </div>
     </aside>
-    <div v-if="treeMenu" class="db-context-menu hex-menu" :style="{ left: `${treeMenu.x}px`, top: `${treeMenu.y}px` }" @click.stop>
-      <button v-for="action in menuActions" :key="action.id" :class="{ 'has-submenu': action.children }" @mouseenter="menuSubmenu = action.id" @click="action.children ? undefined : runMenuAction(action.id)">{{ action.label }}<ChevronRight v-if="action.children" :size="14" /></button>
-      <div v-if="menuSubmenu" class="db-context-submenu">
-        <template v-for="action in menuActions" :key="action.id"><button v-for="child in action.id === menuSubmenu ? action.children : []" :key="child.id" @click="runMenuAction(child.id)">{{ child.label }}</button></template>
-      </div>
-    </div>
 
     <main class="db-main">
       <DatabaseWorkspaceTabs
@@ -1235,12 +1479,11 @@ onUnmounted(() => {
       <template v-if="activeWorkspaceTabId === 'list'"><div class="db-center-empty"><ListIcon :size="36" /><strong>选择资产打开工作区</strong><span>连接标签会显示在顶部，可随时切换</span></div></template>
       <template v-else-if="!selected || !connected"><div class="db-center-empty"><Database :size="36" /><strong>{{ connecting ? '正在连接数据库' : connectionError || '选择左侧连接资产' }}</strong></div></template>
       <template v-else-if="isRedis">
-        <header class="db-main-head"><div><h2>{{ selected.name }}</h2><p>Redis · 键值数据</p></div><div class="db-actions"><el-button v-if="can('import_export')" @click="importInput?.click()"><Upload :size="15" />导入</el-button><el-dropdown v-if="can('import_export')" @command="exportFile"><el-button><Download :size="15" />导出</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item command="json">JSON</el-dropdown-item><el-dropdown-item command="csv">CSV</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div></header>
         <div class="db-redis-layout"><div class="db-redis-list"><div class="db-inline"><el-input v-model="redisPattern" placeholder="匹配键名" @keyup.enter="loadRedis()" /><el-button title="搜索" @click="loadRedis()"><Search :size="16" /></el-button></div><button v-for="item in redisKeys" :key="item.key" class="db-redis-key" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)"><strong>{{ item.key }}</strong><small>{{ item.type }} · TTL {{ item.ttl }} · {{ item.size }} B</small></button></div>
           <div class="db-redis-detail"><template v-if="redisDetail"><div class="db-redis-title"><div><h3>{{ redisDetail.key }}</h3><p>{{ redisDetail.type }} · TTL {{ redisDetail.ttl }}</p></div><el-button v-if="can('redis_command')" type="danger" text @click="removeRedisKey">删除</el-button></div><el-input v-model="redisValueDraft" type="textarea" :rows="8" :disabled="!can('redis_command')" /><div class="db-redis-edit"><el-input-number v-model="redisTtl" :min="-1" /><el-button v-if="can('redis_command')" @click="saveRedisTtl">更新 TTL</el-button><el-button v-if="can('redis_command')" type="primary" @click="saveRedisValue">保存值</el-button></div></template><div v-else class="db-center-empty">选择键查看数据</div><div v-if="can('redis_command')" class="db-command"><el-input v-model="redisCommand" placeholder="Redis 命令" @keyup.enter="runRedis" /><el-button type="primary" @click="runRedis"><Play :size="15" /></el-button><pre v-if="redisResult">{{ redisResult }}</pre></div></div>
         </div>
       </template>
-      <template v-else><header class="db-main-head"><div><h2>{{ selected.name }}</h2><p>{{ activeDatabase || '选择数据库' }} <span v-if="activeTable">/ {{ activeTable }}</span></p></div><div class="db-actions"><el-button v-if="can('view_data')" title="刷新" @click="activeTable ? loadData() : loadObjects()"><RefreshCw :size="15" /></el-button><el-button v-if="can('import_export')" :disabled="!activeTable" @click="importInput?.click()"><Upload :size="15" />导入</el-button><el-dropdown v-if="can('import_export')" @command="exportFile"><el-button :disabled="!activeTable"><Download :size="15" />导出</el-button><template #dropdown><el-dropdown-menu><el-dropdown-item command="csv">CSV</el-dropdown-item><el-dropdown-item command="sql">SQL</el-dropdown-item></el-dropdown-menu></template></el-dropdown></div></header>
+      <template v-else>
         <nav class="db-tabs"><button v-for="item in [{ key: 'tables', label: '表列表' }, { key: 'structure', label: '表结构' }, { key: 'data', label: '表数据' }, { key: 'sql', label: 'SQL 编辑器' }, { key: 'transfer', label: '导入导出' }]" :key="item.key" :class="{ active: tab === item.key }" @click="tab = item.key as Tab">{{ item.label }}</button></nav>
         <section class="db-content">
           <template v-if="tab === 'tables'">
@@ -1254,8 +1497,8 @@ onUnmounted(() => {
               <div class="db-view-switch"><button title="列表视图" :class="{ active: tableView === 'list' }" @click="tableView = 'list'"><LayoutList :size="16" /></button><button title="表格视图" :class="{ active: tableView === 'table' }" @click="tableView = 'table'"><Table2 :size="16" /></button></div>
               <el-input v-model="objectSearch" clearable placeholder="根据名称/注释筛选"><template #prefix><Search :size="14" /></template></el-input>
             </div>
-            <div v-if="tableView === 'list'" class="db-object-list"><button v-for="item in visibleTables" :key="item.name" class="db-object-item" :class="{ active: activeTable === item.name }" @click="selectTable(item.name)" @contextmenu.prevent="openTreeMenu($event, 'object', item.name)"><Table2 :size="20" /><strong>{{ item.name }}</strong><small>{{ item.type }} · {{ item.rows_count ?? '-' }} 行</small></button><div v-if="!visibleTables.length" class="db-empty">暂无对象</div></div>
-            <el-table v-else :data="visibleTables" height="100%" border stripe size="small" @selection-change="onTableSelectionChange" @row-click="(row: DatabaseTable) => selectTable(row.name)">
+            <div v-if="tableView === 'list'" class="db-object-list"><button v-for="item in visibleTables" :key="item.name" class="db-object-item" :class="{ active: activeTable === item.name }" @click="selectTable(item.name)" @contextmenu="openTreeMenu($event, 'object', item.name, undefined, undefined, objectCategory, undefined, item.signature)"><Table2 :size="20" /><strong>{{ item.name }}</strong><small>{{ item.type }} · {{ item.rows_count ?? '-' }} 行</small></button><div v-if="!visibleTables.length" class="db-empty">暂无对象</div></div>
+            <el-table v-else :data="visibleTables" height="100%" border stripe size="small" @selection-change="onTableSelectionChange" @row-click="(row: DatabaseTable) => selectTable(row.name)" @row-contextmenu="onObjectRowContext">
               <el-table-column type="selection" width="46" />
               <el-table-column prop="name" label="名称" width="220" sortable show-overflow-tooltip />
               <el-table-column prop="comment" label="注释" width="190" show-overflow-tooltip />
@@ -1274,7 +1517,7 @@ onUnmounted(() => {
              <div class="db-data-tools"><el-select v-model="selectedFields" multiple collapse-tags placeholder="字段"><el-option v-for="field in allDataColumns" :key="field" :label="field" :value="field" /></el-select><el-select v-model="whereField" clearable placeholder="筛选字段"><el-option v-for="field in allDataColumns" :key="field" :label="field" :value="field" /></el-select><el-input v-model="whereValue" clearable placeholder="筛选值" @keyup.enter="loadData" /><el-select v-model="sort" clearable placeholder="排序字段"><el-option v-for="field in allDataColumns" :key="field" :label="field" :value="field" /></el-select><el-select v-model="direction"><el-option label="升序" value="asc" /><el-option label="降序" value="desc" /></el-select><el-button @click="loadData">应用</el-button><el-button v-if="can('modify_data')" type="primary" @click="openRow('insert')"><Plus :size="15" />新增行</el-button><el-button v-if="can('modify_data') && !transaction" @click="transaction = true">事务暂存</el-button><el-button v-if="transaction" type="success" :disabled="!stagedChanges.length" @click="commitRows">提交 ({{ stagedChanges.length }})</el-button><el-button v-if="transaction" @click="rollbackRows">回滚</el-button></div>
             <el-table v-loading="loading" :data="rows" border stripe height="100%"><el-table-column v-for="field in tableDataColumns" :key="field" :prop="field" :label="field" min-width="150" show-overflow-tooltip /><el-table-column v-if="can('modify_data')" label="操作" width="130" fixed="right"><template #default="scope"><el-button text size="small" @click="openRow('update', scope.row)">编辑</el-button><el-button text size="small" type="danger" @click="removeRow(scope.row)"><Trash2 :size="14" /></el-button></template></el-table-column></el-table><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, sizes, prev, pager, next" @current-change="loadData" @size-change="loadData" />
           </template></template>
-          <template v-else-if="tab === 'sql'"><div class="db-sql-toolbar"><el-select :model-value="activeDatabase" placeholder="数据库" @change="selectDatabase"><el-option v-for="name in databases" :key="name" :label="name" :value="name" /></el-select><el-select v-if="schemas.length" :model-value="schema" placeholder="Schema" @change="selectSchema"><el-option v-for="name in schemas" :key="name" :label="name" :value="name" /></el-select></div><div class="db-sql-toolbar"><el-button type="primary" :loading="sqlRunning" :disabled="!can('execute_sql')" @click="runSql"><Play :size="15" />执行</el-button><el-button v-if="sqlRunning" @click="stopSql">取消等待</el-button><el-button @click="formatSql">格式化</el-button><el-button @click="compressSql">压缩</el-button><el-button :disabled="sqlRunning || !can('execute_sql')" @click="explainSql">执行计划</el-button><span>{{ sqlMessage }}</span></div><el-input v-model="sql" type="textarea" :rows="10" placeholder="输入 SQL" /><el-table v-if="sqlRows.length" :data="sqlRows" border height="100%"><el-table-column v-for="field in Object.keys(sqlRows[0])" :key="field" :prop="field" :label="field" min-width="150" /></el-table></template>
+          <template v-else-if="tab === 'sql'"><div class="db-sql-toolbar"><el-select :model-value="activeDatabase" placeholder="数据库" @change="selectDatabase"><el-option v-for="name in databases" :key="name" :label="name" :value="name" /></el-select><el-select v-if="schemas.length" :model-value="schema" placeholder="Schema" @change="selectSchema"><el-option v-for="name in schemas" :key="name" :label="name" :value="name" /></el-select></div><div class="db-sql-toolbar"><el-button type="primary" :loading="sqlRunning" :disabled="!can('execute_sql')" @click="runSql"><Play :size="15" />执行</el-button><el-button v-if="sqlRunning" @click="stopSql">取消等待</el-button><el-button @click="saveActiveQuery">{{ activeQueryId ? '保存查询' : '另存查询' }}</el-button><el-button @click="formatSql">格式化</el-button><el-button @click="compressSql">压缩</el-button><el-button :disabled="sqlRunning || !can('execute_sql')" @click="explainSql">执行计划</el-button><span>{{ sqlMessage }}</span></div><el-input v-model="sql" type="textarea" :rows="10" placeholder="输入 SQL" /><el-table v-if="sqlRows.length" :data="sqlRows" border height="100%"><el-table-column v-for="field in Object.keys(sqlRows[0])" :key="field" :prop="field" :label="field" min-width="150" /></el-table></template>
           <template v-else><el-empty v-if="!can('import_export')" description="当前账号没有导入导出权限" /><el-empty v-else-if="!activeTable" description="从左侧选择表" /><div v-else class="db-transfer-panel"><h3>{{ activeTable }}</h3><div class="db-transfer-actions"><el-button type="primary" @click="importInput?.click()"><Upload :size="15" />导入</el-button><el-button @click="exportFile('csv')"><Download :size="15" />CSV</el-button><el-button @click="exportFile('sql')"><Download :size="15" />SQL</el-button></div></div></template>
         </section>
       </template>
@@ -1283,6 +1526,9 @@ onUnmounted(() => {
     <input ref="importInput" class="db-hidden" type="file" accept=".csv,.sql,.json" @change="onImport" />
     <input ref="configInput" class="db-hidden" type="file" accept=".json" @change="onConnectionImport" />
     <input ref="databaseInput" class="db-hidden" type="file" accept=".json" @change="onDatabaseImport" />
+    <input ref="queryInput" class="db-hidden" type="file" accept=".sql,text/plain" @change="onQueryImport" />
+    <DatabaseObjectEditor v-model="objectEditorOpen" :context="objectEditorContext" @saved="loadObjects" />
+    <DatabaseAccountDialog v-if="selected" v-model="accountDialogOpen" :asset-id="selected.id" :database="activeDatabase" :db-type="selected.dbType" :schema="schema" />
     <el-dialog :close-on-click-modal="false" v-model="directoryDialog" :title="editingDirectory ? '重命名目录' : '新建目录'" width="min(420px, 94vw)"><el-input v-model="directoryName" maxlength="160" placeholder="目录名称" @keyup.enter="saveDirectory" /><template #footer><el-button @click="directoryDialog = false">取消</el-button><el-button type="primary" @click="saveDirectory">保存</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="moveDialog" title="移动到目录" width="min(420px, 94vw)"><el-select v-model="moveTarget" placeholder="选择目标目录" style="width:100%"><el-option label="根目录" :value="null" /><el-option v-for="folder in directories" :key="folder.id" :label="folder.name" :value="folder.id" /></el-select><template #footer><el-button @click="moveDialog = false">取消</el-button><el-button type="primary" @click="saveMove">移动</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="databaseDialog" :title="({ create: '新建数据库', delete: '删除数据库', clear: '清空数据库', import: '导入数据库' } as Record<string, string>)[databaseAction]" width="min(440px, 94vw)"><el-input v-model="databaseTarget" :placeholder="selected?.dbType === 'sqlite' ? '受限目录中的 .db 文件名' : selected?.dbType === 'redis' ? 'DB 编号 0-255' : '数据库名称'" /><template #footer><el-button @click="databaseDialog = false">取消</el-button><el-button type="primary" @click="saveDatabaseAction">确认</el-button></template></el-dialog>
@@ -1290,11 +1536,12 @@ onUnmounted(() => {
     <el-dialog v-model="rowDialog" :close-on-click-modal="false" :title="editMode === 'insert' ? '新增数据行' : '编辑数据行'" width="min(520px, 94vw)"><el-form v-if="editingRow" label-position="top"><el-form-item v-for="field in allDataColumns" :key="field" :label="field"><el-input v-model="editingRow[field]" /></el-form-item></el-form><template #footer><el-button @click="rowDialog = false">取消</el-button><el-button type="primary" @click="saveRow">保存</el-button></template></el-dialog>
     <el-dialog v-model="schemaDialog" :close-on-click-modal="false" title="表结构操作" width="min(520px, 94vw)"><el-form label-position="top"><el-form-item v-if="['drop_column', 'drop_index'].includes(schemaAction)" label="名称"><el-input v-model="schemaForm.name" disabled /></el-form-item><template v-if="schemaAction === 'add_column'"><el-form-item label="字段名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段类型"><el-input v-model="schemaForm.columnType" placeholder="例如 VARCHAR(255)" /></el-form-item></template><template v-else-if="schemaAction === 'create_index'"><el-form-item label="索引名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段"><el-select v-model="schemaForm.columns" multiple><el-option v-for="column in columns" :key="column.name" :label="column.name" :value="column.name" /></el-select></el-form-item><el-form-item label="唯一索引"><el-switch v-model="schemaForm.unique" /></el-form-item></template></el-form><template #footer><el-button @click="schemaDialog = false">取消</el-button><el-button type="primary" @click="saveSchema">执行</el-button></template></el-dialog>
   </div>
+  </AppContextMenu>
   </div>
 </template>
 
 <style scoped>
-.db-workspace{height:100%;min-height:0;display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr);border:1px solid var(--border-color,#dce2e9);background:var(--panel-bg,#fff);overflow:hidden}.db-sidebar{min-width:0;border-right:1px solid var(--border-color,#dce2e9);display:flex;flex-direction:column;padding:14px;gap:12px}.db-sidebar-head,.db-main-head,.db-actions,.db-inline,.db-data-tools,.db-sql-toolbar{display:flex;align-items:center;gap:8px}.db-sidebar-head,.db-main-head{justify-content:space-between}.db-sidebar-head strong{font-size:16px}.db-actions .el-button+.el-button{margin-left:0}.db-asset-scroll{min-height:0;overflow:auto;flex:1}.db-asset-line{display:flex;align-items:center;border-radius:5px}.db-asset-line.active,.db-tree-node.active,.db-redis-key.active{background:var(--el-color-primary-light-9,#edf4ff)}.db-asset-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;text-align:left;border:0;background:none;padding:8px;cursor:pointer;color:inherit}.db-asset-main span{min-width:0}.db-asset-main strong,.db-asset-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-asset-main small{color:var(--el-text-color-secondary,#778);font-size:11px}.db-type-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px;border:0;background:none;text-align:left;cursor:pointer;color:inherit}.db-type-option:hover{background:var(--el-fill-color-light,#eee)}.db-tree{padding-left:22px}.db-tree-branch{padding-left:15px;border-left:1px solid var(--border-color,#ddd)}.db-tree-node,.db-tree-category{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 8px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit}.db-tree-category{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-main{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}.db-main-head{flex:none;padding:14px 18px;border-bottom:1px solid var(--border-color,#ddd);min-height:64px}.db-main-head h2{margin:0;font-size:16px}.db-main-head p{margin:3px 0 0;font-size:12px;color:var(--el-text-color-secondary,#778)}.db-tabs{flex:none;display:flex;border-bottom:1px solid var(--border-color,#ddd);overflow:auto}.db-tabs button{border:0;border-bottom:2px solid transparent;background:none;color:inherit;padding:10px 16px;white-space:nowrap;cursor:pointer}.db-tabs button.active{border-bottom-color:var(--el-color-primary,#409eff);color:var(--el-color-primary,#409eff)}.db-content{flex:1;min-height:0;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}.db-content>.el-table{flex:1}.db-data-tools .el-select{width:145px}.db-sql-toolbar{justify-content:flex-start}.db-sql-toolbar span{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-center-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--el-text-color-secondary,#778)}.db-redis-layout{display:grid;grid-template-columns:260px minmax(0,1fr);flex:1;min-height:0}.db-redis-list{border-right:1px solid var(--border-color,#ddd);padding:12px;overflow:auto}.db-redis-key{width:100%;display:block;text-align:left;padding:8px;border:0;background:none;color:inherit;cursor:pointer}.db-redis-key strong,.db-redis-key small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-redis-key small{font-size:11px;color:var(--el-text-color-secondary,#778)}.db-redis-detail{min-width:0;overflow:auto;padding:18px;display:flex;flex-direction:column}.db-redis-detail h3{margin:0}.db-redis-detail pre,.db-command pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--el-fill-color-light,#f3f4f6);padding:10px;border-radius:4px}.db-command{margin-top:auto;padding-top:18px;display:flex;gap:8px;flex-wrap:wrap}.db-command .el-input{flex:1}.db-command pre{width:100%}.db-hidden{display:none}.db-empty{padding:20px;text-align:center;color:var(--el-text-color-secondary,#778)}@media(max-width:720px){.db-workspace{display:flex;flex-direction:column;min-height:0}.db-sidebar{flex:0 0 250px;height:auto;border-right:0;border-bottom:1px solid var(--border-color,#ddd)}.db-main{flex:1;min-height:0}.db-main-head{flex-wrap:wrap}.db-redis-layout{grid-template-columns:38% minmax(0,1fr)}.db-data-tools{flex-wrap:wrap}}
+.db-workspace{height:100%;min-height:0;display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr);border:1px solid var(--border-color,#dce2e9);background:var(--panel-bg,#fff);overflow:hidden}.db-sidebar{min-width:0;border-right:1px solid var(--border-color,#dce2e9);display:flex;flex-direction:column;padding:14px;gap:12px}.db-sidebar-head,.db-inline,.db-data-tools,.db-sql-toolbar{display:flex;align-items:center;gap:8px}.db-sidebar-head strong{font-size:16px}.db-asset-scroll{min-height:0;overflow:auto;flex:1}.db-asset-line{display:flex;align-items:center;border-radius:5px}.db-asset-line.active,.db-tree-node.active,.db-redis-key.active{background:var(--el-color-primary-light-9,#edf4ff)}.db-asset-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;text-align:left;border:0;background:none;padding:8px;cursor:pointer;color:inherit}.db-asset-main span{min-width:0}.db-asset-main strong,.db-asset-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-asset-main small{color:var(--el-text-color-secondary,#778);font-size:11px}.db-type-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px;border:0;background:none;text-align:left;cursor:pointer;color:inherit}.db-type-option:hover{background:var(--el-fill-color-light,#eee)}.db-tree{padding-left:22px}.db-tree-branch{padding-left:15px;border-left:1px solid var(--border-color,#ddd)}.db-tree-node,.db-tree-category{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 8px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit}.db-tree-category{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-main{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}.db-tabs{flex:none;display:flex;border-bottom:1px solid var(--border-color,#ddd);overflow:auto}.db-tabs button{border:0;border-bottom:2px solid transparent;background:none;color:inherit;padding:10px 16px;white-space:nowrap;cursor:pointer}.db-tabs button.active{border-bottom-color:var(--el-color-primary,#409eff);color:var(--el-color-primary,#409eff)}.db-content{flex:1;min-height:0;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}.db-content>.el-table{flex:1}.db-data-tools .el-select{width:145px}.db-sql-toolbar{justify-content:flex-start}.db-sql-toolbar span{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-center-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--el-text-color-secondary,#778)}.db-redis-layout{display:grid;grid-template-columns:260px minmax(0,1fr);flex:1;min-height:0}.db-redis-list{border-right:1px solid var(--border-color,#ddd);padding:12px;overflow:auto}.db-redis-key{width:100%;display:block;text-align:left;padding:8px;border:0;background:none;color:inherit;cursor:pointer}.db-redis-key strong,.db-redis-key small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-redis-key small{font-size:11px;color:var(--el-text-color-secondary,#778)}.db-redis-detail{min-width:0;overflow:auto;padding:18px;display:flex;flex-direction:column}.db-redis-detail h3{margin:0}.db-redis-detail pre,.db-command pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--el-fill-color-light,#f3f4f6);padding:10px;border-radius:4px}.db-command{margin-top:auto;padding-top:18px;display:flex;gap:8px;flex-wrap:wrap}.db-command .el-input{flex:1}.db-command pre{width:100%}.db-hidden{display:none}.db-empty{padding:20px;text-align:center;color:var(--el-text-color-secondary,#778)}@media(max-width:720px){.db-workspace{display:flex;flex-direction:column;min-height:0}.db-sidebar{flex:0 0 250px;height:auto;border-right:0;border-bottom:1px solid var(--border-color,#ddd)}.db-main{flex:1;min-height:0}.db-redis-layout{grid-template-columns:38% minmax(0,1fr)}.db-data-tools{flex-wrap:wrap}}
 .db-data-tools,.db-sql-toolbar,.db-redis-edit,.db-redis-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .db-object-toolbar-dense{min-height:34px;padding:0 2px;gap:6px}.db-object-toolbar-dense .el-button{margin-left:0}.db-object-toolbar-dense .el-input{width:210px}.db-selection-summary{font-size:12px;color:var(--el-text-color-secondary,#778);white-space:nowrap}.db-object-toolbar-spacer{flex:1}.db-content>.el-table{--el-table-header-bg-color:#f5f7fa;--el-table-row-hover-bg-color:#eef5ff;font-size:12px}.db-content>.el-table :deep(.el-table__cell){padding:5px 0}.db-content>.el-table :deep(.cell){white-space:nowrap}
 .db-data-tools .el-input{width:140px}
@@ -1302,9 +1549,9 @@ onUnmounted(() => {
 .db-redis-title h3{overflow-wrap:anywhere}
 .db-redis-edit{margin-top:12px}
 .db-content,.db-main,.db-redis-detail{min-width:0}
-.db-schema-actions{padding:8px 0}.db-index-list{height:45%;min-height:120px;margin-top:8px;display:flex;flex-direction:column;gap:6px}.db-index-list .el-table{min-height:0}.db-context-menu{position:fixed;z-index:3000;display:flex;flex-direction:column;min-width:150px;padding:4px;background:var(--el-bg-color,#fff);border:1px solid var(--el-border-color,#dcdfe6);box-shadow:var(--el-box-shadow-light,0 2px 12px rgba(0,0,0,.1));border-radius:4px}.db-context-menu button{padding:7px 12px;text-align:left;border:0;background:none;color:inherit;cursor:pointer}.db-context-menu button:hover{background:var(--el-fill-color-light,#f5f7fa)}
+.db-schema-actions{padding:8px 0}.db-index-list{height:45%;min-height:120px;margin-top:8px;display:flex;flex-direction:column;gap:6px}.db-index-list .el-table{min-height:0}
 .db-transfer-panel h3{margin:0 0 16px;font-size:16px;overflow-wrap:anywhere}.db-transfer-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.db-transfer-actions .el-button+.el-button{margin-left:0}
-@media(max-width:720px){.db-main-head,.db-content{padding-left:10px;padding-right:10px}.db-redis-edit .el-input-number{width:110px}}
+@media(max-width:720px){.db-content{padding-left:10px;padding-right:10px}.db-redis-edit .el-input-number{width:110px}}
 .db-sidebar{padding:10px 8px;gap:8px;background:var(--el-fill-color-extra-light,#f7f9fb)}
 .db-sidebar-head{padding:2px 5px}.db-sidebar-head strong{font-size:14px}
 .db-asset-scroll{padding:4px 0;min-height:120px}
@@ -1318,10 +1565,6 @@ onUnmounted(() => {
 .db-catalog-label.active{color:var(--el-color-primary,#287f69);font-weight:600}
 .db-tree-toggle{display:grid;place-items:center;width:16px;height:22px;flex:none;border:0;background:none;color:inherit;cursor:pointer}
 .db-tree-node,.db-tree-category{font-size:12px;padding:5px 6px;min-height:27px;text-align:left}
-.hex-menu{min-width:188px;border-radius:6px;background:color-mix(in srgb,var(--el-bg-color,#fff) 78%,transparent);backdrop-filter:blur(24px);box-shadow:0 8px 30px rgba(20,30,35,.18);padding:5px}
-.hex-menu button{display:flex;align-items:center;justify-content:space-between;width:100%;min-height:29px;font-size:12px;border-radius:3px}
-.hex-menu button:hover{background:var(--el-color-primary-light-9,#dcefe9)}
-.db-context-submenu{position:absolute;left:calc(100% - 2px);top:0;min-width:170px;padding:5px;border:1px solid var(--el-border-color,#dcdfe6);border-radius:6px;background:var(--el-bg-color,#fff);box-shadow:0 8px 30px rgba(20,30,35,.18)}
 .db-object-toolbar{display:flex;align-items:center;gap:12px;min-height:36px;flex-wrap:wrap;font-size:12px;color:var(--el-text-color-secondary,#64748b)}
 .db-object-toolbar>.el-input{margin-left:auto;width:180px}.db-sort-button{border:0;background:none;color:var(--el-text-color-primary,#293344);cursor:pointer;font-size:12px}
 .db-view-switch{display:flex;border:1px solid var(--el-border-color,#dcdfe6);border-radius:3px;overflow:hidden}
@@ -1331,7 +1574,7 @@ onUnmounted(() => {
 .db-object-item{display:flex;align-items:center;gap:9px;min-width:0;height:42px;padding:4px 8px;border:1px solid transparent;border-radius:3px;background:none;color:inherit;text-align:left;cursor:pointer}
 .db-object-item:hover,.db-object-item.active{background:var(--el-fill-color-light,#edf2f5);border-color:var(--el-border-color,#dce2e9)}
 .db-object-item>svg{flex:none;color:#427b9f}.db-object-item strong{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:500}.db-object-item small{margin-left:auto;white-space:nowrap;font-size:10px;color:var(--el-text-color-secondary,#64748b)}
-@media(max-width:720px){.db-sidebar{height:250px}.db-object-toolbar>.el-input{width:140px}.db-object-list{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.db-object-item small{display:none}.db-context-submenu{left:auto;right:calc(100% - 2px)}}
+@media(max-width:720px){.db-sidebar{height:250px}.db-object-toolbar>.el-input{width:140px}.db-object-list{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}.db-object-item small{display:none}}
 .db-workspace{grid-template-columns:284px minmax(0,1fr)}
 .db-sidebar{padding:8px 7px;gap:6px;background:var(--el-fill-color-extra-light,#f7f9fb)}
 .db-sidebar-head{min-height:30px;padding:0 3px;gap:5px}

@@ -2,6 +2,9 @@
 from . import views
 from . import catalog
 from . import database_admin
+from . import accounts
+from . import object_operations
+from . import queries
 urlpatterns = [
     path("database-management/directories/", catalog.directories),
     path("database-management/directories/<int:directory_id>/", catalog.directory_detail),
@@ -21,6 +24,7 @@ urlpatterns = [
     path("database-management/data/", views.asset_data),
     path("database-management/assets/<int:asset_id>/tree/", views.asset_tree),
     path("database-management/assets/<int:asset_id>/objects/", views.asset_objects),
+    path("database-management/assets/<int:asset_id>/objects/action/", object_operations.object_action),
     path("database-management/assets/<int:asset_id>/ddl/", views.asset_ddl),
     path("database-management/assets/<int:asset_id>/columns/", views.asset_columns_v2),
     path("database-management/assets/<int:asset_id>/indexes/", views.asset_indexes),
@@ -32,4 +36,8 @@ urlpatterns = [
     path("database-management/assets/<int:asset_id>/import/", views.asset_import),
     path("database-management/assets/<int:asset_id>/rows/", views.asset_rows),
     path("database-management/assets/<int:asset_id>/transaction/", views.asset_transaction),
+    path("database-management/assets/<int:asset_id>/accounts/", accounts.asset_accounts),
+    path("database-management/queries/", queries.saved_queries),
+    path("database-management/queries/<int:query_id>/", queries.saved_query_detail),
+    path("database-management/queries/<int:query_id>/export/", queries.export_saved_query),
 ]

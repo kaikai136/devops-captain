@@ -9,6 +9,7 @@ withDefaults(defineProps<{
   open: boolean;
   items: ContextMenuEntry[];
   label?: string;
+  heading?: string;
   disabled?: boolean;
 }>(), { label: '\u64cd\u4f5c\u83dc\u5355', disabled: false });
 const emit = defineEmits<{
@@ -33,6 +34,8 @@ const emit = defineEmits<{
         @contextmenu.prevent.stop
         @close-auto-focus.prevent
       >
+        <div v-if="heading" class="shadcn-context-menu-heading">{{ heading }}</div>
+        <div v-if="heading" class="shadcn-context-menu-separator" role="separator" />
         <ContextMenuItems :items="items" @select="emit('select', $event)" />
       </ContextMenuContent>
     </ContextMenuPortal>

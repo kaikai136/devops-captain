@@ -83,6 +83,13 @@
   background: #e4e4e7;
 }
 
+.shadcn-context-menu-heading {
+  padding: 5px 8px 3px;
+  color: #71717a;
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .shadcn-context-menu-swatch {
   display: inline-flex;
   flex-shrink: 0;

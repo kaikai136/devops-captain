@@ -64,7 +64,7 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain('function markAssetDisconnected(assetId: number)');
     expect(panel).toContain('snapshot.connected = false');
     expect(panel).toContain('markAssetDisconnected(item.assetId)');
-    expect(panel).toContain("item.assetId && isAssetConnected(item.assetId) ? [{ id: 'disconnect'");
+    expect(panel).toContain('connected: Boolean(asset && isAssetConnected(asset.id))');
     expect(panel).toContain('activeWorkspaceTabId.value === workspaceTabId(assetId)');
     expect(panel).toContain('saveWorkspaceSnapshot();');
     expect(panel).toContain('isAssetConnected(entry.asset!.id) ?');
@@ -90,7 +90,18 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain('listDatabaseObjects(assetId, database, owner || undefined, category)');
     expect(panel).toContain("objectCounts[category.key as ObjectCategory] ?? '-'");
     expect(panel).toContain('objectCountVersion++');
-    expect(panel).toContain('class="db-tree-count">0</small>');
+    expect(panel).toContain('class="db-tree-count">{{ sidebarWorkspace?.queries?.length || 0 }}</small>');
+  });
+
+  it('opens a sidebar database in its asset workspace and resets to the table list', () => {
+    const panel = readPanel();
+
+    expect(panel).toContain('async function openSidebarDatabase(name: string)');
+    expect(panel).toContain('await openAssetWorkspace(asset, async () => selectDatabase(name))');
+    expect(panel).toContain('@click="openSidebarDatabase(name)"');
+    expect(panel).toContain("tab.value = 'tables'; objectCategory.value = 'table'; tableView.value = 'table'; page.value = 1; selectedFields.value = []; transaction.value = false; stagedChanges.value = [];");
+    expect(panel).toContain("activeDatabase.value = name; schemas.value = []; schema.value = ''; activeTable.value = ''; tables.value = []; selectedTables.value = []; rows.value = []; columns.value = []; indexes.value = []; total.value = 0;");
+    expect(panel).toContain('await afterOpen?.()');
   });
 
   it('keeps the workspace fitted to the available content height', () => {
