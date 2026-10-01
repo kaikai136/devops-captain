@@ -5,7 +5,18 @@ from . import database_admin
 from . import accounts
 from . import object_operations
 from . import queries
+from . import transfers
 urlpatterns = [
+    path("database-management/transfers/", transfers.task_collection),
+    path("database-management/transfers/uploads/", transfers.upload_init),
+    path("database-management/transfers/<uuid:task_id>/chunks/<int:index>/", transfers.upload_chunk),
+    path("database-management/transfers/<uuid:task_id>/complete/", transfers.upload_complete),
+    path("database-management/transfers/<uuid:task_id>/confirm/", transfers.task_confirm),
+    path("database-management/transfers/<uuid:task_id>/download/", transfers.task_download),
+    path("database-management/transfers/<uuid:task_id>/cancel/", transfers.task_cancel),
+    path("database-management/transfers/<uuid:task_id>/retry/", transfers.task_retry),
+    path("database-management/transfers/<uuid:task_id>/", transfers.task_detail),
+    path("database-management/transfers/<uuid:task_id>/delete/", transfers.task_delete),
     path("database-management/directories/", catalog.directories),
     path("database-management/directories/<int:directory_id>/", catalog.directory_detail),
     path("database-management/directories/<int:directory_id>/copy/", catalog.directory_copy),

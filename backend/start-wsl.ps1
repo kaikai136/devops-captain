@@ -55,4 +55,4 @@ $envScript = $envExports -join '; '
 Write-Host "Using local config: $LocalConfig"
 Write-Host "Starting backend on ${backendHost}:${backendPort}"
 
-wsl.exe -e bash -lc "export PATH=~/venv-opstool/bin:`$PATH; $envScript; cd '$wslBackendDir' && exec ~/venv-opstool/bin/python -m daphne -b '$backendHost' -p '$backendPort' ops_tool.asgi:application"
+wsl.exe -e bash -lc "export PATH=~/venv-opstool/bin:`$PATH; $envScript; cd '$wslBackendDir' && ~/venv-opstool/bin/python manage.py run_database_transfer_worker --poll-interval 1 >/tmp/database-transfer-worker.log 2>&1 & exec ~/venv-opstool/bin/python -m daphne -b '$backendHost' -p '$backendPort' ops_tool.asgi:application"

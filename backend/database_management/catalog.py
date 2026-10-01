@@ -178,6 +178,41 @@ def exported_asset(asset, path):
             "databaseName": asset.database, "remark": asset.remark, "options": asset.options}
 
 
+def import_manifest_payload(owner, manifest, directory_id=None, conflict_policy="rename"):
+    if not isinstance(manifest, dict) or manifest.get("version") != 1:
+        raise ValueError("连接配置格式或版本不正确")
+    folders, assets = manifest.get("directories"), manifest.get("assets")
+    if not isinstance(folders, list) or not isinstance(assets, list):
+        raise ValueError("连接配置项目格式不正确")
+    target = directory_for(directory_id)
+    mapping = {(): target}
+    paths = {tuple(path) for path in folders if isinstance(path, list)}
+    for item in assets:
+        if not isinstance(item, dict) or not isinstance(item.get("directory"), list): raise ValueError("连接配置目录格式不正确")
+        path = tuple(item["directory"]); paths.update(path[:index] for index in range(1, len(path) + 1))
+    with transaction.atomic():
+        for path in sorted(paths, key=lambda value: (len(value), value)):
+            if not path or len(path) > 20 or any(not isinstance(part, str) for part in path): raise ValueError("连接配置目录层级或名称不正确")
+            parent = mapping[path[:-1]]
+            existing = AssetDirectory.objects.filter(parent=parent, name=path[-1]).first()
+            if existing and conflict_policy == "skip": mapping[path] = existing; continue
+            name = copy_name(path[-1], parent, AssetDirectory) if existing else path[-1]
+            mapping[path] = AssetDirectory.objects.create(name=name, parent=parent)
+        imported = 0
+        for item in assets:
+            folder = mapping[tuple(item["directory"])]
+            payload = {key: value for key, value in item.items() if key in {"name", "dbType", "host", "port", "username", "databaseName", "remark", "options"}}
+            existing = DatabaseAsset.objects.filter(directory=folder, name=payload.get("name", "")).first()
+            if existing and conflict_policy == "skip": continue
+            if existing and conflict_policy == "overwrite": existing.delete()
+            if existing and conflict_policy == "rename": payload["name"] = copy_name(payload.get("name"), folder, DatabaseAsset)
+            payload["directoryId"] = folder.id if folder else None
+            serializer = DatabaseAssetSerializer(data=payload)
+            if not serializer.is_valid(): raise ValueError(str(serializer.errors))
+            serializer.save(created_by=owner); imported += 1
+    return {"imported": imported}
+
+
 @api_view(["GET", "POST"])
 def connection_manifest(request):
     denied = permitted(request, "import_export")

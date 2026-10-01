@@ -151,9 +151,9 @@ class ConfigFileTests(SimpleTestCase):
 
         self.assertEqual(path, Path("/repo/backend/db.sqlite3"))
 
-    def test_runtime_uses_local_cache_db_sessions_and_inmemory_channels(self):
+    def test_runtime_uses_local_cache_db_sessions_and_redis_channels(self):
         from ops_tool import settings
 
         self.assertEqual(settings.CACHES["default"]["BACKEND"], "django.core.cache.backends.locmem.LocMemCache")
         self.assertEqual(settings.SESSION_ENGINE, "django.contrib.sessions.backends.db")
-        self.assertEqual(settings.CHANNEL_LAYERS["default"]["BACKEND"], "channels.layers.InMemoryChannelLayer")
+        self.assertEqual(settings.CHANNEL_LAYERS["default"]["BACKEND"], "channels_redis.core.RedisChannelLayer")

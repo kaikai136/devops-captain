@@ -11,6 +11,7 @@ export interface DatabaseAccount { name: string; host?: string; roles: string[];
 export interface DatabaseColumn { name: string; type: string; nullable: string; column_key: string; comment: string; default?: unknown; }
 export interface DatabaseIndex { name: string; columns: string[]; unique: boolean; definition?: string; }
 export interface DatabaseDataResult { rows: Record<string, unknown>[]; total: number; page: number; pageSize: number; hasNext: boolean; }
+export interface DatabaseTransferTask { id: string; assetId: number | null; assetName: string; direction: 'import' | 'export'; scope: string; format: string; database: string; schema: string; objectName: string; status: string; stage: string; progress: number; processedRows: number; processedBytes: number; totalRows: number | null; totalBytes: number | null; preview: Record<string, unknown>; sourceName: string; error: string; conflictPolicy: string; cancelRequested: boolean; createdAt: string; startedAt: string | null; finishedAt: string | null; expiresAt: string; canDownload: boolean; chunkBytes?: number; }
 
 const base = '/api/database-management';
 function query(params: Record<string, unknown>) { const search = new URLSearchParams(); Object.entries(params).forEach(([key, value]) => { if (value !== undefined && value !== null && value !== '') search.set(key, String(value)); }); const text = search.toString(); return text ? `?${text}` : ''; }
@@ -57,3 +58,19 @@ export const modifyDatabaseRow = (id: number, data: Record<string, unknown>) => 
 export const commitDatabaseRows = (id: number, data: Record<string, unknown>) => apiPost<{ affected: number }>(`${base}/assets/${id}/transaction/`, { action: 'commit', ...data });
 export const importDatabaseFile = (id: number, body: FormData) => apiPostForm<{ imported: number }>(`${base}/assets/${id}/import/`, body);
 export const exportDatabaseUrl = (id: number, params: Record<string, unknown>) => `${base}/assets/${id}/export/${query(params)}`;
+const transfers = `${base}/transfers/`;
+export const listDatabaseTransferTasks = () => apiGet<DatabaseTransferTask[]>(transfers);
+export const createDatabaseTransfer = (data: Record<string, unknown>) => apiPost<DatabaseTransferTask>(transfers, data);
+export const beginDatabaseTransferUpload = (data: Record<string, unknown>) => apiPost<DatabaseTransferTask>(`${transfers}uploads/`, data);
+export const uploadDatabaseTransferChunk = (id: string, index: number, chunk: Blob) => apiRequestTransfer<void>(`${transfers}${id}/chunks/${index}/`, 'PUT', chunk);
+export const completeDatabaseTransferUpload = (id: string, chunks: number, sha256: string) => apiPost<DatabaseTransferTask>(`${transfers}${id}/complete/`, { chunks, sha256 });
+export const confirmDatabaseTransfer = (id: string, conflictPolicy: string, confirmed: boolean) => apiPost<DatabaseTransferTask>(`${transfers}${id}/confirm/`, { conflictPolicy, confirmed });
+export const cancelDatabaseTransfer = (id: string) => apiPost<DatabaseTransferTask>(`${transfers}${id}/cancel/`, {});
+export const retryDatabaseTransfer = (id: string, confirmed: boolean) => apiPost<DatabaseTransferTask>(`${transfers}${id}/retry/`, { confirmed });
+export const deleteDatabaseTransfer = (id: string) => apiDelete<{ deleted: boolean }>(`${transfers}${id}/delete/`);
+export const databaseTransferDownloadUrl = (id: string) => `${transfers}${id}/download/`;
+export async function apiRequestTransfer<T>(url: string, method: string, body: BodyInit): Promise<T> {
+  const response = await fetch(url, { method, body, credentials: 'include' });
+  if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.error || data.detail || '上传分片失败'); }
+  return (response.status === 204 ? undefined : response.json()) as Promise<T>;
+}

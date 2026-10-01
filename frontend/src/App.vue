@@ -21,6 +21,7 @@ const AccountManager = defineAsyncComponent(() => import('./components/tools/Acc
 const AuthenticatorPanel = defineAsyncComponent(() => import('./components/tools/AuthenticatorPanel.vue'));
 const BulkExecutionPanel = defineAsyncComponent(() => import('./features/bulk-execution/components/BulkExecutionPanel.vue'));
 const DatabaseManagementPanel = defineAsyncComponent(() => import('./features/database-management/components/DatabaseManagementPanel.vue'));
+const DatabaseTransferCenter = defineAsyncComponent(() => import('./features/database-management/components/DatabaseTransferCenter.vue'));
 const ApplicationMarketPanel = defineAsyncComponent(() => import('./features/application-market/components/ApplicationMarketPanel.vue'));
 const DashboardPage = defineAsyncComponent(() => import('./components/tools/DashboardPage.vue'));
 const DeviceManager = defineAsyncComponent(() => import('./features/company/components/DeviceManager.vue'));
@@ -48,6 +49,7 @@ const selectedHostExportColumnList = computed(() => [...selectedHostExportColumn
 const allHostExportColumnsSelected = computed(() => selectedHostExportColumns.value.size === hostExportColumnOptions.length);
 const dashboardPageRef = ref<DashboardPageExpose | null>(null);
 const isDashboardRefreshing = ref(false);
+const databaseTransferCenterOpen = ref(false);
 
 const {
   activeTool,
@@ -472,9 +474,16 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
               <ProfileCenter v-else-if="activeTool === 'profile'" />
               <SystemSettingsPanel v-else-if="activeTool === 'systemSettings'" />
             </div>
+            <!--
+            <el-button v-if="canUsePageAction('databaseManagement', 'import_export')" class="workspace-icon-button" circle title="导入导出任务" aria-label="导入导出任务" @click="databaseTransferCenterOpen = true">
+              -->
           </Transition>
+          <el-button v-if="canUsePageAction('databaseManagement', 'import_export')" class="workspace-icon-button" circle title="导入导出任务" aria-label="导入导出任务" @click="databaseTransferCenterOpen = true">
+            <AppIcon name="databaseBackup" :size="18" />
+          </el-button>
         </template>
       </section>
+      <DatabaseTransferCenter v-if="isAuthenticated && canUsePageAction('databaseManagement', 'import_export')" v-model:open="databaseTransferCenterOpen" />
       <footer v-if="layoutFooter.enabled" class="workspace-footer" :style="footerStyle">
         <span>{{ footerText }}</span>
         <a

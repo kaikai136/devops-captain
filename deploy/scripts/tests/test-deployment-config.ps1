@@ -105,7 +105,7 @@ $settingsText = Get-Content -Raw -Encoding UTF8 $settings
 foreach ($required in @('load_config_file', 'APP_CONFIG_FILE', 'APP_CONFIG', 'config_value', 'config_bool', 'config_int', 'config_path', 'database_config', 'django.db.backends.mysql', 'pymysql.install_as_MySQLdb')) {
     if ($settingsText -notmatch [regex]::Escape($required)) { throw "Django settings are missing config-file loading: $required" }
 }
-foreach ($required in @('django.core.cache.backends.locmem.LocMemCache', 'django.contrib.sessions.backends.db', 'channels.layers.InMemoryChannelLayer')) {
+foreach ($required in @('django.core.cache.backends.locmem.LocMemCache', 'django.contrib.sessions.backends.db', 'channels_redis.core.RedisChannelLayer')) {
     if ($settingsText -notmatch [regex]::Escape($required)) { throw "Django settings are missing local runtime config: $required" }
 }
 $removedKeys = @('ENABLED', 'HOST', 'PORT', 'PASSWORD', 'DB', 'KEY_PREFIX', 'URL') | ForEach-Object { "RE" + "DIS_$_" }

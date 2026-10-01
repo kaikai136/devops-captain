@@ -1,4 +1,11 @@
 services:
+  redis:
+    image: redis:7-alpine
+    container_name: devops-tools-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
   migrate:
     image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools:v2.1.2-local-cache-cwdhook
     container_name: devops-tools-migrate
@@ -28,10 +35,13 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+      redis:
+        condition: service_started
 
     environment:
       RUN_MIGRATE: "0"
       RUN_COLLECTSTATIC: "0"
+      CHANNEL_REDIS_URL: "redis://redis:6379/3"
 
       DJANGO_CSRF_TRUSTED_ORIGINS: "http://172.16.0.99:8088"
 
@@ -53,3 +63,23 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+
+  transfer-worker:
+    image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools:v2.1.2-local-cache-cwdhook
+    container_name: devops-tools-transfer-worker
+    restart: unless-stopped
+    init: true
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    environment:
+      RUN_MIGRATE: "0"
+      CHANNEL_REDIS_URL: "redis://redis:6379/3"
+    command: python manage.py run_database_transfer_worker --poll-interval 1
+    volumes:
+      - ./data:/app
+
+volumes:
+  redis-data:

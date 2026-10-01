@@ -690,19 +690,13 @@ async function downloadResponse(response: Response, filename: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 async function exportConnections(directoryId: number | null, assetId?: number) {
-  try { await downloadResponse(await fetch(connectionManifestUrl(directoryId, assetId), { credentials: 'include' }), 'database-connections.json'); }
-  catch (error) { showToast('导出连接失败', errorMessage(error)); }
+  window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: 'connections', format: 'json', directoryId, assetId, fileName: 'database-connections.json' } }));
 }
 function chooseConnectionImport(directoryId: number | null) { importDirectoryId.value = directoryId; configInput.value?.click(); }
 async function onConnectionImport(event: Event) {
   const input = event.target as HTMLInputElement;
   const file = input.files?.[0]; if (!file) return;
-  try {
-    if (file.size > 5_000_000) throw new Error('连接配置文件不能超过 5 MB');
-    const manifest = JSON.parse(await file.text()) as ConnectionManifest;
-    await importConnectionManifest(manifest, importDirectoryId.value);
-    await refreshCatalog(); showToast('连接已导入', '请编辑连接补充密码');
-  } catch (error) { showToast('导入连接失败', errorMessage(error)); }
+  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { scope: 'connections', format: 'json', directoryId: importDirectoryId.value } } }));
   input.value = '';
 }
 function openDatabaseAction(action: typeof databaseAction.value, name = '') {
@@ -734,18 +728,14 @@ async function saveDatabaseAction() {
 async function onDatabaseImport(event: Event) {
   const input = event.target as HTMLInputElement, file = input.files?.[0];
   if (!file || !selected.value) return;
-  try {
-    if (file.size > 5_000_000) throw new Error('数据包不能超过 5 MB');
-    const snapshot = JSON.parse(await file.text());
-    await databaseAdmin(selected.value.id, 'import', databaseTarget.value.trim(), snapshot);
-    databaseDialog.value = false; await loadObjects(); showToast('数据库导入完成', file.name);
-  } catch (error) { showToast('数据库导入失败', errorMessage(error)); }
+  const format = file.name.toLowerCase().endsWith('.zip') ? 'zip' : 'snapshot';
+  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { scope: 'database', format, assetId: selected.value.id, database: databaseTarget.value.trim(), schema: schema.value } } }));
+  databaseDialog.value = false;
   input.value = '';
 }
 async function exportDatabase(name: string) {
   if (!selected.value) return;
-  try { await downloadResponse(await fetch(databaseExportUrl(selected.value.id, name), { credentials: 'include' }), 'database-export.json'); }
-  catch (error) { showToast('数据库导出失败', errorMessage(error)); }
+  window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: isRedis.value ? 'redis' : 'database', format: isRedis.value ? 'json' : 'zip', assetId: selected.value.id, database: name, schema: schema.value, fileName: `${name || selected.value.name}.${isRedis.value ? 'json' : 'zip'}` } }));
 }
 function resetWorkspace() {
   workspaceVersion++;
@@ -1028,10 +1018,7 @@ async function saveActiveQuery() {
 async function onQueryImport(event: Event) {
   const input = event.target as HTMLInputElement, file = input.files?.[0];
   if (!file || !selected.value || !can('import_export') || !can('execute_sql')) return;
-  try {
-    const item = await createSavedDatabaseQuery({ assetId: selected.value.id, database: activeDatabase.value, schema: schema.value, name: file.name.replace(/\.sql$/i, '') || '导入查询', sql: await file.text(), pinned: false, imported: true });
-    await loadQueries(); openSavedQuery(item);
-  } catch (error) { showToast('导入查询失败', errorMessage(error)); }
+  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { scope: 'queries', format: 'sql', assetId: selected.value.id, database: activeDatabase.value, schema: schema.value } } }));
   input.value = '';
 }
 function onObjectRowContext(row: DatabaseTable, _column: unknown, event: MouseEvent) {
@@ -1154,7 +1141,7 @@ async function runMenuAction(action: string) {
     return;
   }
   if (action === 'delete-query' && query) { requestConfirm('删除查询', `确定删除“${query.name}”吗？`, '删除', async () => { await deleteSavedDatabaseQuery(query.id); await loadQueries(); }); return; }
-  if (action === 'export-query' && query) { try { await downloadResponse(await fetch(savedDatabaseQueryExportUrl(query.id), { credentials: 'include' }), `${query.name}.sql`); } catch (error) { showToast('导出查询失败', errorMessage(error)); } return; }
+  if (action === 'export-query' && query) { window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: 'queries', format: 'sql', assetId: query.assetId, database: query.database, schema: query.schema, queryId: query.id, objectName: query.name, fileName: `${query.name}.sql` } })); return; }
   if (action === 'import-query') { queryInput.value?.click(); return; }
   if (action === 'refresh-queries') { await loadQueries(); return; }
   if (action === 'export-csv') { activeTable.value = item.name; await exportFile('csv'); return; }
@@ -1358,20 +1345,12 @@ async function onImport(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
   if (!file || !selected.value) return;
   const format = file.name.split('.').pop()?.toLowerCase() || 'csv';
-  const body = new FormData(); body.set('file', file); body.set('format', format); body.set('database', activeDatabase.value); body.set('schema', schema.value); body.set('table', activeTable.value);
-  try { const result = await importDatabaseFile(selected.value.id, body); showToast('导入完成', `已处理 ${result.imported} 条`); if (isRedis.value) await loadRedis(); else await loadData(); }
-  catch (error) { showToast('导入失败', errorMessage(error)); }
+  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { scope: isRedis.value ? 'redis' : 'table', format, assetId: selected.value.id, database: activeDatabase.value, schema: schema.value, objectName: activeTable.value } } }));
   (event.target as HTMLInputElement).value = '';
 }
 async function exportFile(format: string) {
   if (!selected.value) return;
-  try {
-    const response = await fetch(exportDatabaseUrl(selected.value.id, { format, database: activeDatabase.value, schema: schema.value, table: activeTable.value }), { credentials: 'include' });
-    if (!response.ok) { const payload = await response.json(); throw new Error(payload.error || payload.detail || '导出失败'); }
-    const url = URL.createObjectURL(await response.blob());
-    const link = document.createElement('a'); link.href = url; link.download = `${selected.value.name}.${format}`; link.click();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
-  } catch (error) { showToast('导出失败', errorMessage(error)); }
+  window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: isRedis.value ? 'redis' : 'table', format: isRedis.value && format === 'sql' ? 'json' : format, assetId: selected.value.id, database: activeDatabase.value, schema: schema.value, table: activeTable.value, objectName: activeTable.value, fileName: `${activeTable.value || selected.value.name}.${isRedis.value && format === 'sql' ? 'json' : format}` } }));
 }
 function removeAsset(asset: DatabaseAsset) {
   requestConfirm('删除连接资产', `确定删除“${asset.name}”吗？`, '删除', async () => {
