@@ -54,6 +54,7 @@ function commonDisabled(context: DatabaseMenuContext) {
 export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: DatabaseMenuContext): ContextMenuEntry[] {
   const manageSchema = context.can('manage_schema');
   const importExport = context.can('import_export');
+  const dumpSupported = ['mysql', 'mariadb'].includes(context.dbType);
   const supports = (capability: string) => context.capabilities.includes(capability);
   if (context.dbType === 'redis' && target.kind === 'database') return [item(context, 'open', '打开', 'eye'), item(context, 'refresh', '刷新', 'refresh', { shortcut: 'F5' })];
   if (target.kind === 'root' || target.kind === 'directory') return [
@@ -80,8 +81,8 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
     item(context, 'delete-asset', '删除', 'trash', { enabled: context.can('delete'), danger: true }),
     item(context, 'accounts', '账号管理', 'userCog', { enabled: context.can('manage_accounts') && supports('accounts'), separatorBefore: true }),
     item(context, 'database-create', '新建数据库', 'database', { enabled: context.can('database_admin') }),
-    item(context, 'database-import', '导入数据库', 'upload', { enabled: importExport }),
-    item(context, 'database-export', '导出数据库', 'download', { enabled: importExport }),
+    item(context, 'database-import', '导入数据库', 'upload', { enabled: importExport && dumpSupported }),
+    item(context, 'database-export', '导出数据库', 'download', { enabled: importExport && dumpSupported }),
     item(context, 'more', '更多', 'menu', { children: [
       item(context, 'test', '测试连接', 'circleCheck', { enabled: context.can('test_connection') }),
       item(context, 'move-asset', '移动', 'moveRight', { enabled: context.can('edit') }),
@@ -96,8 +97,8 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
     item(context, 'refresh', '刷新', 'refresh', { shortcut: 'F5' }),
     ...commonDisabled(context).slice(1),
     item(context, 'delete-selected', '删除', 'trash', { enabled: manageSchema && context.selectedCount > 0, danger: true }),
-    item(context, 'database-export', '导出', 'download', { enabled: importExport }),
-    item(context, 'database-import', '导入', 'upload', { enabled: importExport }),
+    item(context, 'database-export', '导出', 'download', { enabled: importExport && dumpSupported }),
+    item(context, 'database-import', '导入', 'upload', { enabled: importExport && dumpSupported }),
   ];
   if (target.kind === 'category' && target.category === 'table') return buildDatabaseTreeMenu({ ...target, kind: 'database' }, context);
   if (target.kind === 'object' && target.category === 'table') return [
@@ -117,12 +118,8 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
       item(context, 'delete-rows', '清空数据', 'trash', { enabled: manageSchema, danger: true }),
       item(context, 'truncate-table', '快速清空数据', 'zap', { enabled: manageSchema && supports('truncate'), danger: true }),
     ] }),
-    item(context, 'export-table', '导出', 'download', { enabled: importExport, children: [
-      item(context, 'export-csv', '导出 CSV', 'download', { enabled: importExport }),
-      item(context, 'export-sql', '表结构及数据 SQL', 'fileCode', { enabled: importExport }),
-      item(context, 'copy-ddl', '表结构 SQL', 'clipboard', { enabled: importExport }),
-    ] }),
-    item(context, 'import-table', '导入', 'upload', { enabled: importExport }),
+    item(context, 'export-sql', '导出 SQL', 'fileCode', { enabled: importExport && dumpSupported }),
+    item(context, 'import-table', '导入 SQL', 'upload', { enabled: importExport && dumpSupported }),
   ];
   if (target.category === 'view') return [
     item(context, 'open-object', '打开视图', 'eye', { enabled: target.kind === 'object', shortcut: 'Enter' }),

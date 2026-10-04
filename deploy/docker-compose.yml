@@ -24,6 +24,7 @@ services:
 
     volumes:
       - ./data:/app
+      - ./config/redis.conf:/app/config/redis.conf:ro
 
 
   app:
@@ -41,8 +42,6 @@ services:
     environment:
       RUN_MIGRATE: "0"
       RUN_COLLECTSTATIC: "0"
-      CHANNEL_REDIS_URL: "redis://redis:6379/3"
-
       DJANGO_CSRF_TRUSTED_ORIGINS: "http://172.16.0.99:8088"
 
       SSH_GATEWAY_PUBLIC_HOST: "172.16.0.99"
@@ -54,6 +53,7 @@ services:
 
     volumes:
       - ./data:/app
+      - ./config/redis.conf:/app/config/redis.conf:ro
 
     healthcheck:
       test:
@@ -76,10 +76,10 @@ services:
         condition: service_started
     environment:
       RUN_MIGRATE: "0"
-      CHANNEL_REDIS_URL: "redis://redis:6379/3"
     command: python manage.py run_database_transfer_worker --poll-interval 1
     volumes:
       - ./data:/app
+      - ./config/redis.conf:/app/config/redis.conf:ro
 
 volumes:
   redis-data:

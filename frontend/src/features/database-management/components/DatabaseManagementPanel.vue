@@ -43,6 +43,12 @@ const tableView = ref<'list' | 'table'>('table');
 const objectSearch = ref('');
 const objectSortAsc = ref(true);
 const selectedTables = ref<DatabaseTable[]>([]);
+const dumpSupported = computed(() => ['mysql', 'mariadb'].includes(selected.value?.dbType || ''));
+const dumpDialog = ref(false);
+const dumpContent = ref('structure_data');
+const dumpRange = ref('database');
+const dumpTarget = ref<{ assetId: number; database: string; schema: string; table: string; selected: string[] } | null>(null);
+const importTarget = ref<{ assetId: number; database: string; schema: string; objectName: string; scope: string; redis: boolean } | null>(null);
 const databaseDialog = ref(false);
 const databaseAction = ref<'create' | 'delete' | 'clear' | 'import'>('create');
 const databaseTarget = ref('');
@@ -714,7 +720,7 @@ async function saveDatabaseAction() {
   const assetId = selected.value.id, action = databaseAction.value, name = databaseTarget.value.trim();
   const execute = async () => {
     try {
-      if (action === 'import') { databaseInput.value?.click(); return; }
+      if (action === 'import') { chooseDumpImport('database', name); return; }
       await databaseAdmin(assetId, action, name);
       databaseDialog.value = false;
       if (action === 'delete' || action === 'clear') { resetWorkspace(); selected.value = null; }
@@ -727,15 +733,33 @@ async function saveDatabaseAction() {
 }
 async function onDatabaseImport(event: Event) {
   const input = event.target as HTMLInputElement, file = input.files?.[0];
-  if (!file || !selected.value) return;
-  const format = file.name.toLowerCase().endsWith('.zip') ? 'zip' : 'snapshot';
-  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { scope: 'database', format, assetId: selected.value.id, database: databaseTarget.value.trim(), schema: schema.value } } }));
+  const target = importTarget.value;
+  if (!file || !target) return;
+  const format = target.redis ? 'snapshot' : 'sql';
+  if (!target.redis && !file.name.toLowerCase().endsWith('.sql')) { showToast('导入失败', '请选择 MySQL/MariaDB SQL 转储文件'); input.value = ''; return; }
+  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { ...target, format } } }));
   databaseDialog.value = false;
   input.value = '';
 }
 async function exportDatabase(name: string) {
   if (!selected.value) return;
-  window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: isRedis.value ? 'redis' : 'database', format: isRedis.value ? 'json' : 'zip', assetId: selected.value.id, database: name, schema: schema.value, fileName: `${name || selected.value.name}.${isRedis.value ? 'json' : 'zip'}` } }));
+  if (!isRedis.value) { openDumpExport(name); return; }
+  window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: 'redis', format: 'json', assetId: selected.value.id, database: name, schema: schema.value, fileName: `${name || selected.value.name}.json` } }));
+}
+function openDumpExport(database = activeDatabase.value, table = '') {
+  if (!selected.value || !dumpSupported.value) { showToast('暂不支持', 'SQL 转储目前仅支持 MySQL/MariaDB'); return; }
+  dumpTarget.value = { assetId: selected.value.id, database, schema: schema.value, table: table || activeTable.value, selected: database === activeDatabase.value ? selectedTables.value.map(item => item.name) : [] };
+  dumpRange.value = table ? 'table' : 'database';
+  dumpContent.value = 'structure_data';
+  dumpDialog.value = true;
+}
+function submitDumpExport() {
+  const target = dumpTarget.value;
+  if (!target) return;
+  const names = dumpRange.value === 'table' ? [target.table] : dumpRange.value === 'selected' ? target.selected : [];
+  if (dumpRange.value !== 'database' && (!names.length || !names[0])) return;
+  window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: dumpRange.value === 'table' ? 'table' : 'database', format: 'sql', assetId: target.assetId, database: target.database, schema: target.schema, tables: names, objectName: dumpRange.value === 'table' ? target.table : '', content: dumpContent.value, fileName: `${dumpRange.value === 'table' ? target.table : target.database}.sql` } }));
+  dumpDialog.value = false;
 }
 function resetWorkspace() {
   workspaceVersion++;
@@ -1144,9 +1168,8 @@ async function runMenuAction(action: string) {
   if (action === 'export-query' && query) { window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: 'queries', format: 'sql', assetId: query.assetId, database: query.database, schema: query.schema, queryId: query.id, objectName: query.name, fileName: `${query.name}.sql` } })); return; }
   if (action === 'import-query') { queryInput.value?.click(); return; }
   if (action === 'refresh-queries') { await loadQueries(); return; }
-  if (action === 'export-csv') { activeTable.value = item.name; await exportFile('csv'); return; }
   if (action === 'export-sql') { activeTable.value = item.name; await exportFile('sql'); return; }
-  if (action === 'import-table') { activeTable.value = item.name; importInput.value?.click(); return; }
+  if (action === 'import-table') { chooseDumpImport('table', activeDatabase.value, item.name); return; }
   if (action.startsWith('database-') && selected.value) {
     const targetName = databaseNodeName(item);
     if (action === 'database-export') await exportDatabase(targetName);
@@ -1341,15 +1364,24 @@ async function runRedis() {
   try { const result = await runRedisCommand(selected.value.id, redisCommand.value.trim().split(/\s+/), redisDb.value); redisResult.value = JSON.stringify(result.result, null, 2); await loadRedis(); }
   catch (error) { showToast('命令失败', errorMessage(error)); }
 }
+function chooseDumpImport(scope = 'table', database = activeDatabase.value, objectName = activeTable.value) {
+  if (!selected.value) return;
+  if (!isRedis.value && !dumpSupported.value) { showToast('暂不支持', 'SQL 转储目前仅支持 MySQL/MariaDB'); return; }
+  importTarget.value = { assetId: selected.value.id, database, schema: schema.value, objectName, scope: isRedis.value && scope === 'table' ? 'redis' : scope, redis: isRedis.value };
+  if (scope === 'database') databaseInput.value?.click(); else importInput.value?.click();
+}
 async function onImport(event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0];
-  if (!file || !selected.value) return;
+  const target = importTarget.value;
+  if (!file || !target) return;
   const format = file.name.split('.').pop()?.toLowerCase() || 'csv';
-  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { scope: isRedis.value ? 'redis' : 'table', format, assetId: selected.value.id, database: activeDatabase.value, schema: schema.value, objectName: activeTable.value } } }));
+  if (!target.redis && format !== 'sql') { showToast('导入失败', '请选择 MySQL/MariaDB SQL 转储文件'); (event.target as HTMLInputElement).value = ''; return; }
+  window.dispatchEvent(new CustomEvent('database-transfer:upload', { detail: { file, target: { ...target, format } } }));
   (event.target as HTMLInputElement).value = '';
 }
 async function exportFile(format: string) {
   if (!selected.value) return;
+  if (!isRedis.value) { openDumpExport(activeDatabase.value, activeTable.value); return; }
   window.dispatchEvent(new CustomEvent('database-transfer:export', { detail: { direction: 'export', scope: isRedis.value ? 'redis' : 'table', format: isRedis.value && format === 'sql' ? 'json' : format, assetId: selected.value.id, database: activeDatabase.value, schema: schema.value, table: activeTable.value, objectName: activeTable.value, fileName: `${activeTable.value || selected.value.name}.${isRedis.value && format === 'sql' ? 'json' : format}` } }));
 }
 function removeAsset(asset: DatabaseAsset) {
@@ -1364,7 +1396,15 @@ function removeAsset(asset: DatabaseAsset) {
   });
 }
 watch(keyword, () => { void loadAssets(); });
+function onTransferComplete(event: Event) {
+  const task = (event as CustomEvent<{ direction: string; assetId: number; database: string }>).detail;
+  if (task?.direction === 'import' && task.assetId === selected.value?.id && task.database === activeDatabase.value) {
+    void loadObjects();
+    if (activeTable.value) void loadData();
+  }
+}
 onMounted(() => {
+  window.addEventListener('database-transfer:completed', onTransferComplete);
   window.addEventListener('keydown', onDatabaseShortcut);
   void refreshCatalog();
   void listDatabaseTypes().then(result => { types.value = result.types; }).catch(error => showToast('加载数据库类型失败', errorMessage(error)));
@@ -1376,6 +1416,7 @@ function onTreeMenuOpen(open: boolean) {
   if (!open) setTimeout(() => { if (!treeMenuOpen.value) treeMenu.value = null; }, 0);
 }
 onUnmounted(() => {
+  window.removeEventListener('database-transfer:completed', onTransferComplete);
   objectCountVersion++;
   workspaceSnapshots.clear();
   window.removeEventListener('keydown', onDatabaseShortcut);
@@ -1497,16 +1538,24 @@ onUnmounted(() => {
             <el-table v-loading="loading" :data="rows" border stripe height="100%"><el-table-column v-for="field in tableDataColumns" :key="field" :prop="field" :label="field" min-width="150" show-overflow-tooltip /><el-table-column v-if="can('modify_data')" label="操作" width="130" fixed="right"><template #default="scope"><el-button text size="small" @click="openRow('update', scope.row)">编辑</el-button><el-button text size="small" type="danger" @click="removeRow(scope.row)"><Trash2 :size="14" /></el-button></template></el-table-column></el-table><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, sizes, prev, pager, next" @current-change="loadData" @size-change="loadData" />
           </template></template>
           <template v-else-if="tab === 'sql'"><div class="db-sql-toolbar"><el-select :model-value="activeDatabase" placeholder="数据库" @change="selectDatabase"><el-option v-for="name in databases" :key="name" :label="name" :value="name" /></el-select><el-select v-if="schemas.length" :model-value="schema" placeholder="Schema" @change="selectSchema"><el-option v-for="name in schemas" :key="name" :label="name" :value="name" /></el-select></div><div class="db-sql-toolbar"><el-button type="primary" :loading="sqlRunning" :disabled="!can('execute_sql')" @click="runSql"><Play :size="15" />执行</el-button><el-button v-if="sqlRunning" @click="stopSql">取消等待</el-button><el-button @click="saveActiveQuery">{{ activeQueryId ? '保存查询' : '另存查询' }}</el-button><el-button @click="formatSql">格式化</el-button><el-button @click="compressSql">压缩</el-button><el-button :disabled="sqlRunning || !can('execute_sql')" @click="explainSql">执行计划</el-button><span>{{ sqlMessage }}</span></div><el-input v-model="sql" type="textarea" :rows="10" placeholder="输入 SQL" /><el-table v-if="sqlRows.length" :data="sqlRows" border height="100%"><el-table-column v-for="field in Object.keys(sqlRows[0])" :key="field" :prop="field" :label="field" min-width="150" /></el-table></template>
-          <template v-else><el-empty v-if="!can('import_export')" description="当前账号没有导入导出权限" /><el-empty v-else-if="!activeTable" description="从左侧选择表" /><div v-else class="db-transfer-panel"><h3>{{ activeTable }}</h3><div class="db-transfer-actions"><el-button type="primary" @click="importInput?.click()"><Upload :size="15" />导入</el-button><el-button @click="exportFile('csv')"><Download :size="15" />CSV</el-button><el-button @click="exportFile('sql')"><Download :size="15" />SQL</el-button></div></div></template>
+          <template v-else><el-empty v-if="!can('import_export')" description="当前账号没有导入导出权限" /><el-empty v-else-if="!dumpSupported" description="SQL 转储目前仅支持 MySQL/MariaDB" /><div v-else class="db-transfer-panel"><h3>{{ activeDatabase }}</h3><div class="db-transfer-actions"><el-button type="primary" @click="openDatabaseAction('import', activeDatabase)"><Upload :size="15" />导入 SQL</el-button><el-button @click="openDumpExport()"><Download :size="15" />导出 SQL</el-button><el-button v-if="activeTable" @click="chooseDumpImport()"><Upload :size="15" />导入当前表</el-button></div></div></template>
         </section>
       </template>
     </main>
 
-    <input ref="importInput" class="db-hidden" type="file" accept=".csv,.sql,.json" @change="onImport" />
+    <input ref="importInput" class="db-hidden" type="file" :accept="isRedis ? '.csv,.json' : '.sql'" @change="onImport" />
     <input ref="configInput" class="db-hidden" type="file" accept=".json" @change="onConnectionImport" />
-    <input ref="databaseInput" class="db-hidden" type="file" accept=".json" @change="onDatabaseImport" />
+    <input ref="databaseInput" class="db-hidden" type="file" :accept="isRedis ? '.json' : '.sql'" @change="onDatabaseImport" />
     <input ref="queryInput" class="db-hidden" type="file" accept=".sql,text/plain" @change="onQueryImport" />
     <DatabaseObjectEditor v-model="objectEditorOpen" :context="objectEditorContext" @saved="loadObjects" />
+    <el-dialog v-model="dumpDialog" title="导出 SQL" width="min(480px, 94vw)" :close-on-click-modal="false">
+      <el-form label-position="top">
+        <el-form-item label="数据库"><el-input :model-value="dumpTarget?.database" disabled /></el-form-item>
+        <el-form-item label="范围"><el-select v-model="dumpRange" style="width:100%"><el-option label="当前表" value="table" :disabled="!dumpTarget?.table" /><el-option :label="`勾选表 (${dumpTarget?.selected.length || 0})`" value="selected" :disabled="!dumpTarget?.selected.length" /><el-option label="数据库全部表" value="database" /></el-select></el-form-item>
+        <el-form-item label="内容"><el-select v-model="dumpContent" style="width:100%"><el-option label="结构和数据" value="structure_data" /><el-option label="仅结构" value="structure" /><el-option label="仅数据" value="data" /></el-select></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="dumpDialog = false">取消</el-button><el-button type="primary" @click="submitDumpExport">提交导出</el-button></template>
+    </el-dialog>
     <DatabaseAccountDialog v-if="selected" v-model="accountDialogOpen" :asset-id="selected.id" :database="activeDatabase" :db-type="selected.dbType" :schema="schema" />
     <el-dialog :close-on-click-modal="false" v-model="directoryDialog" :title="editingDirectory ? '重命名目录' : '新建目录'" width="min(420px, 94vw)"><el-input v-model="directoryName" maxlength="160" placeholder="目录名称" @keyup.enter="saveDirectory" /><template #footer><el-button @click="directoryDialog = false">取消</el-button><el-button type="primary" @click="saveDirectory">保存</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="moveDialog" title="移动到目录" width="min(420px, 94vw)"><el-select v-model="moveTarget" placeholder="选择目标目录" style="width:100%"><el-option label="根目录" :value="null" /><el-option v-for="folder in directories" :key="folder.id" :label="folder.name" :value="folder.id" /></el-select><template #footer><el-button @click="moveDialog = false">取消</el-button><el-button type="primary" @click="saveMove">移动</el-button></template></el-dialog>

@@ -95,6 +95,14 @@ django-vue/
 常用本地启动项：
 
 ```conf
+APP_CONFIG_FILE=config/local.app.conf
+REDIS_CONFIG_FILE=config/redis.app.conf
+BACKEND_HOST=0.0.0.0
+BACKEND_PORT=8001
+FRONTEND_HOST=0.0.0.0
+FRONTEND_PORT=5115
+VITE_API_TARGET=http://127.0.0.1:8001
+VITE_WS_TARGET=ws://127.0.0.1:8001
 ```
 
 本地配置只放安全默认值。生产和 Docker Compose 部署不要改这个文件，部署环境继续使用 `data/config/app.conf`。
@@ -104,15 +112,32 @@ django-vue/
 批量执行使用现有 SSH/SFTP 传输层，不再要求额外的自动化执行引擎。后端开发仍建议使用 Linux 或 WSL，以保持与部署环境一致。
 
 
-安装后端依赖\迁移\启动后端：
+导入导出任务依赖 Redis，连接地址单独配置在 `config/redis.app.conf`。本地默认地址为 `redis://127.0.0.1:6379/3`；启动前请确保 Redis 已在该地址运行，或将配置文件中的 `REDIS_URL` 改为外部 Redis 地址。应用和任务 Worker 必须使用同一个 Redis 配置。
 
-```
+安装后端依赖并执行数据库迁移：
+
+```bash
 cd ~/Desktop/kaikai/devops-captain
 cd backend
 python -m pip install -r requirements.txt
 export APP_CONFIG_FILE="$(realpath ../config/local.app.conf)"
 python manage.py migrate
+```
+
+启动后端 API/WebSocket 服务：
+
+```bash
+cd ~/Desktop/kaikai/devops-captain/backend
+export APP_CONFIG_FILE="$(realpath ../config/local.app.conf)"
 python -m daphne -b 0.0.0.0 -p 8001 ops_tool.asgi:application
+```
+
+数据库导入导出由独立 Worker 异步处理。另开一个终端并使用相同配置启动：
+
+```bash
+cd ~/Desktop/kaikai/devops-captain/backend
+export APP_CONFIG_FILE="$(realpath ../config/local.app.conf)"
+python manage.py run_database_transfer_worker --poll-interval 1
 ```
 
 
@@ -127,6 +152,14 @@ http://127.0.0.1:8001
 ```bash
 curl http://127.0.0.1:8001/api/health/
 ```
+
+健康检查正常时返回 `{"status":"ok"}`。若只启动 Daphne 而未启动 Worker，普通 API 可用，但导入导出任务会停留在队列中等待处理。
+
+MySQL/MariaDB 表及整库导入导出统一使用 UTF-8 `.sql` 转储。导出可选择当前表、勾选表或数据库全部表，以及结构和数据、仅结构或仅数据；关系库 CSV、ZIP 和 JSON 快照入口已移除，其他关系库暂不支持此转储功能。Redis、查询 SQL 文件和连接配置功能保持不变。
+
+导入文件通过分片上传后由 Worker 预检，在顶部消息按钮中查看逐表冲突、预计行数和兼容性警告，再选择追加（默认）、覆盖或跳过并确认执行。文件只允许受支持的表结构、常量 INSERT 和安全会话设置，不执行任意 SQL；文件中的 DROP 不会直接执行。覆盖结构会删除重建表，MySQL DDL 无法保证回滚；重试会保留已完成表检查点，仍需确认。
+
+行数、表数、上传和结果大小的 `DATABASE_TRANSFER_MAX_*` 配置默认 `0`（无固定业务上限），仍受磁盘空间、超时和内存保护约束。`DATABASE_TRANSFER_MAX_SQL_STATEMENT_BYTES` 默认 64 MiB，仅限制单条 SQL；超大 INSERT 应拆分，不限制文件总大小。历史未过期结果仍可下载，旧格式未结束任务需重新提交。
 
 ### 前端手动启动
 

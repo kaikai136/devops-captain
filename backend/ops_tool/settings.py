@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from urllib.parse import quote
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -89,6 +90,45 @@ def config_path(name: str, default: Path, *, config: dict[str, str] | None = Non
         return path
     config_root = Path(APP_CONFIG_FILE).resolve().parent.parent
     return config_root / path
+
+
+def redis_config_path() -> Path:
+    configured_path = os.environ.get("REDIS_CONFIG_FILE", "").strip()
+    if not configured_path:
+        configured_path = APP_CONFIG.get("REDIS_CONFIG_FILE", "").strip()
+    if configured_path:
+        path = Path(configured_path)
+        if path.is_absolute():
+            return path
+        return Path(APP_CONFIG_FILE).resolve().parent.parent / path
+
+    return Path(APP_CONFIG_FILE).resolve().parent / "redis.conf"
+
+
+def redis_channel_url() -> str:
+    environment_url = os.environ.get("CHANNEL_REDIS_URL", "").strip()
+    if environment_url:
+        return environment_url
+
+    redis_config = load_config_file(redis_config_path())
+    configured_url = redis_config.get("REDIS_URL", redis_config.get("CHANNEL_REDIS_URL", "")).strip()
+    if configured_url:
+        return configured_url
+
+    # Keep CHANNEL_REDIS_URL in app.conf working for older deployments.
+    legacy_url = APP_CONFIG.get("CHANNEL_REDIS_URL", "").strip()
+    if legacy_url:
+        return legacy_url
+
+    host = redis_config.get("REDIS_HOST", "127.0.0.1").strip() or "127.0.0.1"
+    port = redis_config.get("REDIS_PORT", "6379").strip() or "6379"
+    database = redis_config.get("REDIS_DB", "3").strip() or "3"
+    password = redis_config.get("REDIS_PASSWORD", "")
+    scheme = redis_config.get("REDIS_SCHEME", "redis").strip() or "redis"
+    auth = f":{quote(password, safe='')}@" if password else ""
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    return f"{scheme}://{auth}{host}:{port}/{database}"
 
 
 def django_secret_key() -> str:
@@ -258,7 +298,7 @@ SESSION_ENGINE = "django.contrib.sessions.backends.db"
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
-        "CONFIG": {"hosts": [config_value("CHANNEL_REDIS_URL", "redis://127.0.0.1:6379/3")]},
+        "CONFIG": {"hosts": [redis_channel_url()]},
     }
 }
 DATABASE_TRANSFER_DIR = config_path("DATABASE_TRANSFER_DIR", BASE_DIR / "database-transfer")
@@ -271,3 +311,4 @@ DATABASE_TRANSFER_MAX_ROWS = config_int("DATABASE_TRANSFER_MAX_ROWS", 0)
 DATABASE_TRANSFER_MAX_TABLES = config_int("DATABASE_TRANSFER_MAX_TABLES", 0)
 DATABASE_TRANSFER_MAX_UPLOAD_BYTES = config_int("DATABASE_TRANSFER_MAX_UPLOAD_BYTES", 0)
 DATABASE_TRANSFER_MAX_RESULT_BYTES = config_int("DATABASE_TRANSFER_MAX_RESULT_BYTES", 0)
+DATABASE_TRANSFER_MAX_SQL_STATEMENT_BYTES = config_int("DATABASE_TRANSFER_MAX_SQL_STATEMENT_BYTES", 64 * 1024 * 1024)

@@ -252,41 +252,17 @@ class SQLiteAdapterTests(SimpleTestCase):
         self.assertEqual(result["total"], 2)
         self.assertEqual(result["rows"][0]["name"], "changed")
 
-    def test_csv_export_spans_pages_and_import_preserves_schema(self):
-        with closing(sqlite3.connect(self.path)) as connection:
-            connection.executemany("INSERT INTO sample (name) VALUES (?)",
-                                   [(f"item-{index}",) for index in range(600)])
-            connection.commit()
+    def test_sqlite_dump_entries_are_disabled(self):
         factory = APIRequestFactory()
         with patch.object(advanced, "checked", return_value=(self.asset, None)), \
-             patch.object(advanced, "record_operation_log"), \
-             patch.object(advanced, "require_feature_permission", return_value=None):
-            response = advanced.asset_export(factory.get("/export/", {
-                "format": "csv", "database": "main", "table": "sample",
-            }), 1)
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(len(response.content.decode("utf-8-sig").splitlines()), 603)
+             patch("database_management.transfers.configure_asset", return_value=self.asset):
+            for fmt in ("csv", "sql", "zip"):
+                response = advanced.asset_export(factory.get("/export/", {
+                    "format": fmt, "database": "main", "table": "sample",
+                }), 1)
+                self.assertEqual(response.status_code, 400)
+                self.assertIn("MySQL/MariaDB", response.data["error"])
 
-            upload = SimpleUploadedFile("rows.csv", b"id,name\n700,imported\n", content_type="text/csv")
-            response = advanced.asset_import(factory.post("/import/", {
-                "format": "csv", "database": "main", "schema": "main",
-                "table": "sample", "file": upload,
-            }, format="multipart"), 1)
-            self.assertEqual(response.status_code, 200)
-            self.assertEqual(response.data["imported"], 1)
-        result = adapters.table_data(self.asset, "main", "sample", where_field="id", where_value=700)
-        self.assertEqual(result["rows"][0]["name"], "imported")
-
-    def test_sql_export_includes_table_definition(self):
-        factory = APIRequestFactory()
-        with patch.object(advanced, "checked", return_value=(self.asset, None)), \
-             patch.object(advanced, "record_operation_log"):
-            response = advanced.asset_export(factory.get("/export/", {
-                "format": "sql", "database": "main", "table": "sample",
-            }), 1)
-        self.assertEqual(response.status_code, 200)
-        self.assertIn("CREATE TABLE sample", response.content.decode())
-        self.assertIn("INSERT INTO", response.content.decode())
 
     def test_ddl_endpoint_uses_view_permission_and_returns_sql(self):
         factory = APIRequestFactory()

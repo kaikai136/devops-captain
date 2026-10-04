@@ -6,7 +6,6 @@ import shutil
 import tempfile
 import time
 import uuid
-import zipfile
 from datetime import timedelta
 from pathlib import Path
 
@@ -50,7 +49,7 @@ def serialize(task):
         "status": task.status, "stage": task.stage, "progress": task.progress,
         "processedRows": task.processed_rows, "processedBytes": task.processed_bytes,
         "totalRows": task.total_rows, "totalBytes": task.total_bytes,
-        "preview": task.preview, "sourceName": task.source_name, "error": task.error,
+        "preview": task.preview, "checkpoints": task.checkpoints, "sourceName": task.source_name, "error": task.error,
         "conflictPolicy": task.conflict_policy, "cancelRequested": task.cancel_requested,
         "createdAt": task.created_at, "startedAt": task.started_at, "finishedAt": task.finished_at,
         "expiresAt": task.expires_at, "canDownload": task.status == "succeeded" and bool(task.output_path),
@@ -68,6 +67,7 @@ def emit(task):
 
 
 def update(task, **values):
+    if "stage" in values: values["stage"] = values["stage"][:64]
     for key, value in values.items():
         setattr(task, key, value)
     task.save(update_fields=[*values.keys(), "updated_at"])
@@ -99,12 +99,35 @@ def effective_permission(scope, direction, fmt):
 
 
 def require_task_permissions(user, task):
-    for permission in effective_permission(task.scope, task.direction, task.format):
+    required = effective_permission(task.scope, task.direction, task.format)
+    if task.scope in {"table", "database"}:
+        if task.direction == "export":
+            required.append("view_data")
+            if task.parameters.get("content", "structure_data") != "data":
+                required.append("manage_schema")
+        else:
+            required.append("modify_data")
+            if any(item.get("hasStructure") for item in task.preview.get("objects", [])):
+                required.append("manage_schema")
+    for permission in required:
         if permission == "create":
             continue
         if not has_feature_permission(user, "databaseManagement", permission):
             return False
     return True
+
+
+def validate_dump_target(asset, scope, fmt):
+    scope = str(scope or "").strip().lower()
+    fmt = str(fmt or "").strip().lower().lstrip(".")
+    if scope in {"table", "database"}:
+        db_type = str(getattr(asset, "db_type", "") or "").strip().lower()
+        if not asset or db_type not in {"mysql", "mariadb"}:
+            from .mysql_dump import DumpError
+            raise DumpError("表转储目前仅支持 MySQL/MariaDB")
+        if fmt != "sql":
+            from .mysql_dump import DumpError
+            raise DumpError("旧 CSV/ZIP/JSON 表转储已移除，请重新提交 SQL 任务")
 
 
 def configure_asset(request, data):
@@ -122,25 +145,75 @@ def task_collection(request):
     if request.method == "GET":
         items = DatabaseTransferTask.objects.filter(owner=request.user).select_related("asset")[:200]
         return Response([serialize(item) for item in items])
-    data = request.data
+    return export_response(request.user, request.data)
+
+
+def export_response(user, data):
     try:
-        direction, scope, fmt = str(data.get("direction", "")), str(data.get("scope", "")), str(data.get("format", ""))
+        direction = str(data.get("direction", "") or "").strip().lower()
+        scope = str(data.get("scope", "") or "").strip().lower()
+        fmt = str(data.get("format", "") or "").strip().lower().lstrip(".")
         if direction != "export" or scope not in {"table", "database", "redis", "connections", "queries"}:
             raise ValueError("导出任务类型无效")
-        asset = configure_asset(request, data)
+        asset = configure_asset(None, data)
+        validate_dump_target(asset, scope, fmt)
         if scope in {"table", "database", "redis", "queries"} and asset is None: raise ValueError("此导出任务需要数据库资产")
-        if not has_feature_permission(request.user, "databaseManagement", "import_export"): raise ValueError("没有导入导出权限")
-        if scope == "redis" and asset.db_type != "redis": raise ValueError("Redis 导出任务需要 Redis 资产")
-        if scope != "redis" and asset.db_type == "redis": raise ValueError("Redis 资产请使用 Redis 导出范围")
-        allowed_formats = {"json", "csv"} if scope == "redis" else {"sql"} if scope == "queries" else {"json"} if scope == "connections" else {"csv", "sql"} if scope == "table" else {"zip"}
+        if not has_feature_permission(user, "databaseManagement", "import_export"): raise ValueError("没有导入导出权限")
+        db_type = str(getattr(asset, "db_type", "") or "").strip().lower()
+        if scope == "redis" and db_type != "redis": raise ValueError("Redis 导出任务需要 Redis 资产")
+        if scope != "redis" and asset and db_type == "redis": raise ValueError("Redis 资产请使用 Redis 导出范围")
+        allowed_formats = {"json", "csv"} if scope == "redis" else {"sql"} if scope == "queries" else {"json"} if scope == "connections" else {"sql"}
         if fmt not in allowed_formats: raise ValueError("导出格式不支持")
-        task = create_task(owner=request.user, asset=asset, direction=direction, scope=scope, format=fmt,
-                           database=str(data.get("database") or asset.database), schema=str(data.get("schema") or ""),
-                           object_name=str(data.get("objectName") or ""), parameters={"table": str(data.get("table") or ""), "queryId": data.get("queryId"), "directoryId": data.get("directoryId"), "assetId": data.get("assetId")},
+        names = data.get("tables", [])
+        if not isinstance(names, list) or any(not isinstance(name, str) for name in names) or len(names) != len(set(names)):
+            raise ValueError("导出表范围无效")
+        if scope == "table" and not names:
+            names = [str(data.get("objectName") or data.get("table") or "")]
+        if scope == "table" and len(names) != 1: raise ValueError("单表导出只能选择一张表")
+        content = data.get("content", "structure_data")
+        if content not in {"structure_data", "structure", "data"}: raise ValueError("导出内容无效")
+        from .mysql_dump import quote
+        for name in names: quote(name)
+        if scope in {"table", "database"} and not has_feature_permission(user, "databaseManagement", "view_data"):
+            raise PermissionError("没有数据读取权限")
+        if scope in {"table", "database"} and content != "data" and not has_feature_permission(user, "databaseManagement", "manage_schema"):
+            raise PermissionError("没有结构读取权限")
+        task = create_task(owner=user, asset=asset, direction=direction, scope=scope, format=fmt,
+                           database=str(data.get("database") or (asset.database if asset else "")), schema=str(data.get("schema") or ""),
+                           object_name=str(data.get("objectName") or ""), parameters={"tables": names, "content": content, "table": str(data.get("table") or ""), "queryId": data.get("queryId"), "directoryId": data.get("directoryId"), "assetId": data.get("assetId")},
                            source_name=str(data.get("fileName") or (f"{data.get('objectName') or data.get('table') or 'database-export'}.{fmt}")),
                            status="queued", stage="queued")
         return Response(serialize(task), status=202)
     except Exception as exc:
+        return bad_request(str(exc))
+
+
+def uploaded_dump_response(owner, asset, data, upload):
+    task = None
+    try:
+        for permission in ("import_export", "execute_sql", "modify_data"):
+            if not has_feature_permission(owner, "databaseManagement", permission):
+                return Response({"error": "当前账号缺少导入所需权限"}, status=403)
+        if not upload: raise ValueError("请选择 SQL 文件")
+        validate_dump_target(asset, "table", data.get("format", "sql"))
+        task = create_task(owner=owner, asset=asset, direction="import", scope="table", format="sql",
+                           database=str(data.get("database") or asset.database), object_name=str(data.get("table") or ""),
+                           source_name=Path(upload.name).name[:255], status="uploading", stage="uploading")
+        if not require_task_permissions(owner, task): raise PermissionError("当前账号缺少导入所需权限")
+        path = task_path(task.pk, ".upload")
+        update(task, input_path=str(path))
+        size = 0
+        from .mysql_dump import resource_guard
+        with path.open("wb") as output:
+            for chunk in upload.chunks():
+                size += len(chunk)
+                if settings.DATABASE_TRANSFER_MAX_UPLOAD_BYTES and size > settings.DATABASE_TRANSFER_MAX_UPLOAD_BYTES:
+                    raise ValueError("文件超过配置上限")
+                resource_guard(task); output.write(chunk)
+        update(task, status="inspecting", stage="inspection_queued", total_bytes=size, processed_bytes=size)
+        return Response(serialize(task), status=202)
+    except Exception as exc:
+        if task: update(task, status="failed", stage="upload_failed", error="SQL 上传失败", finished_at=timezone.now())
         return bad_request(str(exc))
 
 
@@ -153,6 +226,7 @@ def upload_init(request):
         scope, fmt = str(data.get("scope", "")), str(data.get("format", ""))
         if scope not in {"table", "database", "redis", "connections", "queries"}: raise ValueError("导入任务类型无效")
         asset = configure_asset(request, data)
+        validate_dump_target(asset, scope, fmt)
         if scope in {"table", "database", "redis"} and asset is None: raise ValueError("导入任务需要数据库资产")
         if scope == "redis" and asset.db_type != "redis": raise ValueError("Redis 导入任务需要 Redis 资产")
         if scope in {"table", "database"} and asset.db_type == "redis": raise ValueError("Redis 资产请使用 Redis 导入范围")
@@ -160,6 +234,10 @@ def upload_init(request):
         for permission in effective_permission(scope, "import", fmt):
             if permission != "create" and not has_feature_permission(request.user, "databaseManagement", permission):
                 raise ValueError("当前账号缺少此导入操作所需权限")
+        if scope in {"table", "database"}:
+            for permission in ("modify_data",):
+                if not has_feature_permission(request.user, "databaseManagement", permission):
+                    return Response({"error": "当前账号缺少导入所需权限"}, status=403)
         original = Path(str(data.get("fileName", "import.data"))).name[:255]
         chunk_count = data.get("chunks")
         total_bytes = data.get("totalBytes")
@@ -167,6 +245,8 @@ def upload_init(request):
             raise ValueError("分片数量无效")
         if not isinstance(total_bytes, int) or total_bytes < 0:
             raise ValueError("文件大小无效")
+        if chunk_count != max(1, (total_bytes + settings.DATABASE_TRANSFER_CHUNK_BYTES - 1) // settings.DATABASE_TRANSFER_CHUNK_BYTES):
+            raise ValueError("分片数量与声明的文件大小不一致")
         if settings.DATABASE_TRANSFER_MAX_UPLOAD_BYTES and total_bytes > settings.DATABASE_TRANSFER_MAX_UPLOAD_BYTES:
             raise ValueError("上传文件超过系统配置上限")
         task = create_task(owner=request.user, asset=asset, direction="import", scope=scope, format=fmt,
@@ -201,10 +281,12 @@ def upload_chunk(request, task_id, index):
 
 def merge_chunks(task, count, expected_hash=""):
     expected_count = task.parameters.get("chunkCount")
-    if count != expected_count or not isinstance(count, int) or count < 1 or count > 1000000: raise ValueError("分片数量与初始化声明不一致")
+    if count != expected_count or not isinstance(count, int) or count < 1: raise ValueError("分片数量与初始化声明不一致")
     final = Path(task.input_path)
     digest = hashlib.sha256()
     total = 0
+    for index in range(count):
+        if not task_path(task.pk, f".chunk.{index}").is_file(): raise ValueError(f"缺少第 {index + 1} 个分片")
     with final.open("wb") as output:
         for index in range(count):
             part = task_path(task.pk, f".chunk.{index}")
@@ -213,8 +295,9 @@ def merge_chunks(task, count, expected_hash=""):
                 while True:
                     chunk = source.read(1024 * 1024)
                     if not chunk: break
+                    if shutil.disk_usage(final.parent).free < settings.DATABASE_TRANSFER_MIN_FREE_BYTES:
+                        raise ValueError("服务器临时磁盘空间不足")
                     output.write(chunk); digest.update(chunk); total += len(chunk)
-            part.unlink()
     expected_bytes = task.parameters.get("totalBytes")
     if expected_bytes is not None and total != expected_bytes:
         final.unlink(missing_ok=True)
@@ -226,6 +309,7 @@ def merge_chunks(task, count, expected_hash=""):
     if limit and total > limit: final.unlink(missing_ok=True); raise ValueError("上传文件超过系统配置上限")
     if shutil.disk_usage(final.parent).free < settings.DATABASE_TRANSFER_MIN_FREE_BYTES:
         final.unlink(missing_ok=True); raise ValueError("服务器临时磁盘空间不足")
+    for index in range(count): task_path(task.pk, f".chunk.{index}").unlink(missing_ok=True)
     return total, digest.hexdigest()
 
 
@@ -233,6 +317,10 @@ def inspect_input(task):
     path = Path(task.input_path)
     suffix = Path(task.source_name).suffix.lower()
     preview = {"fileBytes": path.stat().st_size, "format": task.format, "sourceName": task.source_name, "warnings": []}
+    if task.scope in {"table", "database"}:
+        validate_dump_target(task.asset, task.scope, task.format)
+        from .mysql_dump import inspect_dump
+        return inspect_dump(task, lambda: progress(task, stage="validating_sql"))
     if task.format == "snapshot" or suffix == ".json":
         with path.open("r", encoding="utf-8-sig") as stream:
             payload = json.load(stream)
@@ -251,15 +339,6 @@ def inspect_input(task):
     elif task.format == "sql":
         preview["requiresExplicitConfirmation"] = True
         preview["fileBytes"] = path.stat().st_size
-    elif task.format == "zip":
-        import zipfile
-        with zipfile.ZipFile(path) as archive:
-            for item in archive.infolist():
-                member = Path(item.filename)
-                if member.is_absolute() or ".." in member.parts: raise ValueError("ZIP 文件包含非法路径")
-            manifest = json.loads(archive.read("manifest.json"))
-        preview.update({"tables": len(manifest.get("tables", [])), "databaseType": manifest.get("dbType"), "version": manifest.get("version")})
-        if task.asset and manifest.get("dbType") != task.asset.db_type: raise ValueError("数据包数据库类型与目标资产不一致")
     else:
         raise ValueError("暂不支持此导入格式")
     return preview
@@ -275,6 +354,9 @@ def upload_complete(request, task_id):
     try:
         size, digest = merge_chunks(task, request.data.get("chunks"), request.data.get("sha256", ""))
         update(task, status="inspecting", stage="validating", total_bytes=size, processed_bytes=size)
+        if task.scope in {"table", "database"}:
+            update(task, parameters={**task.parameters, "sha256": digest}, stage="inspection_queued")
+            return Response(serialize(task), status=202)
         preview = inspect_input(task)
         preview["sha256"] = digest
         update(task, status="awaiting_confirmation", stage="awaiting_confirmation", preview=preview)
@@ -292,6 +374,11 @@ def task_confirm(request, task_id):
     if task.status != "awaiting_confirmation": return bad_request("任务未等待确认")
     policy = str(request.data.get("conflictPolicy", "append"))
     if policy not in {"append", "overwrite", "skip", "rename"}: return bad_request("冲突处理策略无效")
+    if task.scope in {"table", "database"} and policy == "rename": return bad_request("表导入不支持重命名策略")
+    if task.scope in {"table", "database"} and policy == "append" and any(item.get("appendCompatible") is False for item in task.preview.get("objects", [])):
+        return bad_request("字段与目标结构不兼容，不能追加")
+    if task.preview.get("requiresExplicitConfirmation") and request.data.get("confirmed") is not True:
+        return bad_request("SQL 导入需要明确确认")
     if task.scope in {"database", "table", "redis"} and policy in {"overwrite", "skip"} and request.data.get("confirmed") is not True:
         return bad_request("覆盖或跳过操作需要明确确认")
     update(task, conflict_policy=policy, status="queued", stage="queued", error="")
@@ -309,7 +396,8 @@ def task_cancel(request, task_id):
     task, error = fetch_task(request, task_id)
     if error: return error
     if task.status not in ACTIVE: return bad_request("任务已结束")
-    if task.status in {"queued", "uploading", "awaiting_confirmation"}:
+    if not require_task_permissions(request.user, task): return bad_request("任务所需权限已被撤销")
+    if task.status in {"queued", "uploading", "awaiting_confirmation"} or (task.status == "inspecting" and task.stage == "inspection_queued"):
         update(task, status="cancelled", stage="cancelled", finished_at=timezone.now(), cancel_requested=True)
     else:
         update(task, status="cancel_requested", cancel_requested=True)
@@ -321,15 +409,19 @@ def task_retry(request, task_id):
     source, error = fetch_task(request, task_id)
     if error: return error
     if source.status not in {"failed", "cancelled"}: return bad_request("仅失败或已取消任务可以重试")
-    if source.format == "sql" and request.data.get("confirmed") is not True: return bad_request("SQL 重试需再次确认可能重复执行")
+    try: validate_dump_target(source.asset, source.scope, source.format)
+    except ValueError as exc: return bad_request(str(exc))
+    if source.direction == "import" and source.format == "sql" and request.data.get("confirmed") is not True: return bad_request("SQL 重试需再次确认可能重复执行")
     if not require_task_permissions(request.user, source): return bad_request("当前账号已不具备任务所需权限")
     source_input = Path(source.input_path) if source.input_path and Path(source.input_path).is_file() else None
     task = create_task(owner=request.user, asset=source.asset, direction=source.direction, scope=source.scope,
                        format=source.format, database=source.database, schema=source.schema,
                        object_name=source.object_name, parameters=source.parameters, conflict_policy=source.conflict_policy,
-                       status="queued", stage="queued", retry_of=source,
+                       status="inspecting" if source.direction == "import" and not source.preview else "queued",
+                       stage="inspection_queued" if source.direction == "import" and not source.preview else "queued", retry_of=source,
                        input_path="",
-                       source_name=source.source_name)
+                       source_name=source.source_name, checkpoints=source.checkpoints,
+                       preview=source.preview, processed_rows=source.processed_rows if source.direction == "import" else 0)
     if source.direction == "import":
         if source_input is None:
             task.delete()
@@ -344,6 +436,7 @@ def task_retry(request, task_id):
 def task_download(request, task_id):
     task, error = fetch_task(request, task_id)
     if error: return error
+    if not require_task_permissions(request.user, task): return bad_request("任务所需权限已被撤销")
     if task.status != "succeeded" or not task.output_path or not Path(task.output_path).is_file(): return bad_request("导出文件尚未就绪")
     response = FileResponse(open(task.output_path, "rb"), as_attachment=True, filename=task.source_name or f"database-export-{task.pk}.{task.format}")
     return response
@@ -377,74 +470,6 @@ def progress(task, *, stage=None, rows=None, byte_count=None, total=None):
     update(task, **values)
 
 
-def export_table(task, output):
-    asset = task.asset
-    database, table, schema = task.database, task.parameters.get("table") or task.object_name, task.schema or None
-    if not table: raise ValueError("导出任务缺少表名")
-    columns = adapters.columns(asset, database, table, schema)
-    if task.format == "csv":
-        writer = csv.DictWriter(output, fieldnames=[item["name"] for item in columns], extrasaction="ignore")
-        writer.writeheader()
-    elif task.format == "sql":
-        writer = None
-        output.write(f"-- Export {table}\n")
-    else: raise ValueError("表导出仅支持 CSV 或 SQL")
-    page, rows_done = 1, 0
-    while True:
-        progress(task, stage="exporting_rows", rows=rows_done)
-        result = adapters.table_data(asset, database, table, schema, page=page, page_size=499, json_safe=False)
-        for row in result["rows"]:
-            if writer:
-                writer.writerow({key: "" if value is None else value for key, value in row.items()})
-            else:
-                names = ", ".join(adapters.quote(key, asset.db_type) for key in row)
-                values = ", ".join(__import__("database_management.advanced", fromlist=["sql_literal"]).sql_literal(value) for value in row.values())
-                output.write(f"INSERT INTO {adapters.quote(table, asset.db_type)} ({names}) VALUES ({values});\n")
-            rows_done += 1
-        task.processed_rows = rows_done; task.progress = min(99, int(rows_done * 100 / result["total"])) if result["total"] else 99
-        task.save(update_fields=["processed_rows", "progress", "updated_at"]); emit(task)
-        if not result["hasNext"]: break
-        page += 1
-    task.total_rows = rows_done
-
-
-def iter_table_rows(task, table):
-    page = 1
-    while True:
-        result = adapters.table_data(task.asset, task.database, table, task.schema or None, page=page, page_size=499, json_safe=False)
-        yield from result["rows"]
-        if not result["hasNext"]: break
-        page += 1
-
-
-def export_database_zip(task, output_path):
-    tables = adapters.object_list(task.asset, task.database, task.schema or None, object_type="table")
-    max_tables = settings.DATABASE_TRANSFER_MAX_TABLES
-    if max_tables and len(tables) > max_tables: raise ValueError("数据库表数量超过系统配置上限")
-    manifest = {"version": 2, "dbType": task.asset.db_type, "database": task.database, "schema": task.schema, "tables": []}
-    rows_done = 0
-    with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
-        for index, item in enumerate(tables):
-            progress(task, stage=f"exporting_table:{item['name']}", rows=rows_done)
-            table = item["name"]
-            columns = adapters.columns(task.asset, task.database, table, task.schema or None)
-            ddl = adapters.table_ddl(task.asset, task.database, table, task.schema or None)
-            entry = {"name": table, "data": f"tables/{index}.csv", "ddl": f"ddl/{index}.sql", "columns": [column["name"] for column in columns]}
-            manifest["tables"].append(entry)
-            archive.writestr(entry["ddl"], ddl.rstrip(";") + ";\n")
-            with archive.open(entry["data"], "w", force_zip64=True) as raw:
-                import io
-                stream = io.TextIOWrapper(raw, encoding="utf-8", newline="", write_through=True)
-                writer = csv.DictWriter(stream, fieldnames=entry["columns"], extrasaction="ignore")
-                writer.writeheader()
-                for row in iter_table_rows(task, table):
-                    writer.writerow({key: "" if value is None else value for key, value in row.items()})
-                    rows_done += 1
-                    if rows_done % settings.DATABASE_TRANSFER_BATCH_ROWS == 0:
-                        progress(task, stage=f"exporting_table:{table}", rows=rows_done)
-                stream.flush()
-        archive.writestr("manifest.json", json.dumps(manifest, ensure_ascii=False, indent=2))
-    task.processed_rows = rows_done; task.total_rows = rows_done
 
 
 def connection_manifest_payload(task):
@@ -472,116 +497,6 @@ def export_small(task, output_path):
     else: raise ValueError("导出范围不支持")
 
 
-def execute_sql_file(task):
-    from .advanced import sql_action, validate_sql_for_asset
-    asset = task.asset
-    statement, quote, line_comment, block_comment = [], None, False, False
-
-    def execute(statement_text, conn):
-        sql = statement_text.strip()
-        if not sql:
-            return
-        action = sql_action(sql)
-        validate_sql_for_asset(asset, sql)
-        if action != "read" and not has_feature_permission(task.owner, "databaseManagement", action):
-            raise PermissionError("当前账号没有执行此 SQL 的权限")
-        adapters.run(conn, sql, db_type=asset.db_type)
-        task.processed_rows += 1
-        if task.processed_rows % 10 == 0:
-            progress(task, stage="executing_sql", rows=task.processed_rows)
-
-    with Path(task.input_path).open("r", encoding="utf-8-sig") as source, adapters.connection(asset, task.database) as conn:
-        while True:
-            chunk = source.read(64 * 1024)
-            if not chunk: break
-            index = 0
-            while index < len(chunk):
-                char = chunk[index]
-                if line_comment:
-                    if char in "\r\n": line_comment = False
-                    index += 1
-                    continue
-                if block_comment:
-                    if char == "*" and index + 1 < len(chunk) and chunk[index + 1] == "/":
-                        block_comment = False; index += 2; continue
-                    index += 1
-                    continue
-                if quote:
-                    statement.append(char)
-                    if char == "\\" and index + 1 < len(chunk):
-                        statement.append(chunk[index + 1]); index += 2; continue
-                    if char == quote:
-                        if index + 1 < len(chunk) and chunk[index + 1] == quote:
-                            statement.append(chunk[index + 1]); index += 2; continue
-                        quote = None
-                    index += 1; continue
-                if char in ("'", '"', "`"):
-                    quote = char; statement.append(char); index += 1; continue
-                if char == "#":
-                    line_comment = True; index += 1; continue
-                if char == "-" and index + 1 < len(chunk) and chunk[index + 1] == "-":
-                    line_comment = True
-                    index += 2; continue
-                if char == "/" and index + 1 < len(chunk) and chunk[index + 1] == "*":
-                    block_comment = True; index += 2; continue
-                if char == ";":
-                    execute("".join(statement), conn)
-                    statement.clear(); index += 1; continue
-                statement.append(char)
-                index += 1
-        execute("".join(statement), conn)
-        if hasattr(conn, "commit"): conn.commit()
-
-
-def import_table_csv(task, source, table, columns=None):
-    asset = task.asset
-    reader = csv.DictReader(source)
-    fields = reader.fieldnames or []
-    if not fields or len(fields) != len(set(fields)): raise ValueError("CSV 表头为空或字段重复")
-    target = adapters.quote(table, asset.db_type)
-    if task.schema: target = adapters.quote(task.schema, asset.db_type) + "." + target
-    quoted = ", ".join(adapters.quote(field, asset.db_type) for field in fields)
-    markers = ", ".join(adapters.marker(asset.db_type, index + 1) for index in range(len(fields)))
-    sql = f"INSERT INTO {target} ({quoted}) VALUES ({markers})"
-    batch = []
-    with adapters.connection(asset, task.database) as conn:
-        try:
-            if task.conflict_policy == "overwrite": adapters.run(conn, f"DELETE FROM {target}", db_type=asset.db_type)
-            for row in reader:
-                batch.append([row.get(field, "") for field in fields])
-                if len(batch) >= settings.DATABASE_TRANSFER_BATCH_ROWS:
-                    cursor = conn.cursor(); cursor.executemany(sql, batch); cursor.close()
-                    task.processed_rows += len(batch); batch.clear(); progress(task, stage=f"importing_table:{table}", rows=task.processed_rows)
-            if batch:
-                cursor = conn.cursor(); cursor.executemany(sql, batch); cursor.close()
-                task.processed_rows += len(batch)
-            if hasattr(conn, "commit"): conn.commit()
-        except Exception:
-            if hasattr(conn, "rollback"): conn.rollback()
-            raise
-
-
-def import_zip(task):
-    import zipfile
-    with zipfile.ZipFile(task.input_path) as archive:
-        manifest = json.loads(archive.read("manifest.json"))
-        if manifest.get("version") != 2 or manifest.get("dbType") != task.asset.db_type: raise ValueError("ZIP 数据包版本或数据库类型不匹配")
-        names = set(archive.namelist())
-        existing = {entry["name"] for entry in adapters.object_list(task.asset, task.database, task.schema or None, object_type="table")}
-        seen = set()
-        for item in manifest.get("tables", []):
-            table_name = str(item.get("name", ""))
-            if not table_name or table_name in seen: raise ValueError("ZIP 清单包含重复或空表名")
-            seen.add(table_name)
-            data_name = item.get("data", "")
-            if data_name not in names or not data_name.startswith("tables/"): raise ValueError("ZIP 清单包含无效数据路径")
-            if table_name not in existing:
-                raise ValueError(f"目标缺少表 {table_name}，请先创建表后再导入")
-            if task.conflict_policy == "skip": continue
-            with archive.open(data_name) as raw:
-                import io
-                stream = io.TextIOWrapper(raw, encoding="utf-8", newline="")
-                import_table_csv(task, stream, table_name)
 
 
 def import_legacy_snapshot(task):
@@ -603,23 +518,14 @@ def import_legacy_snapshot(task):
                 task.processed_rows += 1
                 if task.processed_rows % 100 == 0: progress(task, stage="importing_keys", rows=task.processed_rows)
         return
-    existing = {entry["name"] for entry in adapters.object_list(task.asset, task.database, task.schema or None, object_type="table")}
-    for table in payload.get("tables", []):
-        if table["name"] not in existing: raise ValueError(f"目标缺少表 {table['name']}")
-        if task.conflict_policy == "skip": continue
-        if task.conflict_policy == "overwrite":
-            target = adapters.quote(table["name"], task.asset.db_type)
-            with adapters.connection(task.asset, task.database) as conn: adapters.run(conn, f"DELETE FROM {target}", db_type=task.asset.db_type)
-        for row in table.get("rows", []):
-            fields = list(row); target = adapters.quote(table["name"], task.asset.db_type)
-            sql = f"INSERT INTO {target} ({', '.join(adapters.quote(key, task.asset.db_type) for key in fields)}) VALUES ({', '.join(adapters.marker(task.asset.db_type, i + 1) for i in range(len(fields)))})"
-            with adapters.connection(task.asset, task.database) as conn: adapters.run(conn, sql, list(row.values()), db_type=task.asset.db_type); conn.commit()
-            task.processed_rows += 1
-            if task.processed_rows % settings.DATABASE_TRANSFER_BATCH_ROWS == 0: progress(task, stage=f"importing_table:{table['name']}", rows=task.processed_rows)
 
 
 def import_task(task):
     fmt = task.format
+    if task.scope in {"table", "database"}:
+        validate_dump_target(task.asset, task.scope, fmt)
+        from .mysql_dump import import_dump
+        return import_dump(task, progress)
     if task.scope == "queries":
         sql = Path(task.input_path).read_text(encoding="utf-8-sig")
         name = Path(task.source_name).stem[:160] or "导入查询"
@@ -635,33 +541,40 @@ def import_task(task):
     if task.scope == "connections":
         from .catalog import import_manifest_payload
         with Path(task.input_path).open("r", encoding="utf-8-sig") as source: return import_manifest_payload(task.owner, json.load(source), task.parameters.get("directoryId"), task.conflict_policy)
-    if fmt == "sql": return execute_sql_file(task)
-    if fmt == "zip": return import_zip(task)
     if fmt == "snapshot" or Path(task.source_name).suffix.lower() == ".json": return import_legacy_snapshot(task)
-    if fmt == "csv":
-        with Path(task.input_path).open("r", encoding="utf-8-sig", newline="") as source:
-            return import_table_csv(task, source, task.object_name)
     raise ValueError("导入范围不支持")
 
 
 def run_task(task):
+    validate_dump_target(task.asset, task.scope, task.format)
+    if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
+    if task.stage == "inspection_running":
+        preview = inspect_input(task)
+        progress(task, stage="inspection_running")
+        preview["sha256"] = task.parameters.get("sha256", "")
+        update(task, status="awaiting_confirmation", stage="awaiting_confirmation", preview=preview)
+        return
     if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
     task.refresh_from_db()
     if task.cancel_requested: raise InterruptedError("用户取消任务")
     if task.direction == "import":
+        if task.scope in {"table", "database"} and not task.preview.get("requiresExplicitConfirmation"):
+            raise PermissionError("SQL 转储必须先预检并确认")
         import_task(task)
         update(task, status="succeeded", stage="complete", progress=100, finished_at=timezone.now())
+        audit_task(task)
         return
     output_path = task_path(task.pk, f".result.{task.format}")
-    task.output_path = str(output_path)
-    if task.scope == "database" and task.format == "zip":
-        export_database_zip(task, output_path)
+    update(task, output_path=str(output_path))
+    if task.scope in {"table", "database"}:
+        from .mysql_dump import export_dump
+        with output_path.open("w", encoding="utf-8", newline="") as output:
+            export_dump(task, output, progress)
     elif task.scope in {"connections", "queries"}:
         export_small(task, output_path)
     else:
         with output_path.open("w", encoding="utf-8-sig", newline="") as output:
-            if task.scope == "table": export_table(task, output)
-            elif task.scope == "redis":
+            if task.scope == "redis":
                 from .advanced import redis_export_value
                 asset = task.asset
                 with adapters.connection(asset, database=task.database) as client:
@@ -685,19 +598,28 @@ def run_task(task):
         raise ValueError("服务器临时磁盘空间不足")
     update(task, status="succeeded", stage="complete", progress=100, output_path=str(output_path),
            total_bytes=output_size, finished_at=timezone.now(), source_name=task.source_name or output_path.name)
+    audit_task(task)
+
+
+def audit_task(task):
     from django.test.client import RequestFactory
-    record_operation_log(RequestFactory().get("/"), "应用管理", "数据库传输任务", str(task.pk), f"方向={task.direction}; 范围={task.scope}; 格式={task.format}; 行数={task.processed_rows}", user=task.owner)
+    record_operation_log(RequestFactory().get("/"), "应用管理", "数据库传输任务", str(task.pk), f"方向={task.direction}; 范围={task.scope}; 格式={task.format}; 状态={task.status}; 行数={task.processed_rows}", user=task.owner)
 
 
 def claim_one():
+    legacy = DatabaseTransferTask.objects.filter(scope__in={"table", "database"}, status__in=ACTIVE).exclude(format="sql").exclude(status__in={"running", "cancel_requested"})
+    for task in legacy:
+        update(task, status="failed", stage="unsupported_format", error="旧 CSV/ZIP/JSON 表转储已移除，请重新提交 SQL 任务", finished_at=timezone.now())
     cutoff = timezone.now() - timedelta(seconds=settings.DATABASE_TRANSFER_TASK_TIMEOUT_SECONDS)
     stale = DatabaseTransferTask.objects.filter(status="running", started_at__lt=cutoff)
     for task in stale:
         update(task, status="failed", stage="timeout", error="任务超过执行超时时间", finished_at=timezone.now())
     with transaction.atomic():
-        task = DatabaseTransferTask.objects.filter(status="queued").order_by("created_at").first()
+        from django.db.models import Q
+        task = DatabaseTransferTask.objects.filter(Q(status="queued") | Q(status="inspecting", stage="inspection_queued")).order_by("created_at").first()
         if not task: return None
-        changed = DatabaseTransferTask.objects.filter(pk=task.pk, status="queued").update(status="running", stage="starting", started_at=timezone.now())
+        inspection = task.status == "inspecting"
+        changed = DatabaseTransferTask.objects.filter(pk=task.pk, status=task.status, stage=task.stage).update(status="running", stage="inspection_running" if inspection else "starting", started_at=timezone.now())
         if not changed: return None
         task.refresh_from_db(); emit(task)
         return task
@@ -708,8 +630,13 @@ def execute_claimed(task):
         run_task(task)
     except InterruptedError as exc:
         update(task, status="cancelled", stage="cancelled", error=str(exc), finished_at=timezone.now())
+        audit_task(task)
     except Exception as exc:
-        update(task, status="failed", stage="failed", error=str(exc)[:2000], finished_at=timezone.now())
+        # Driver messages may contain SQL values; only expose known safe application errors.
+        from .mysql_dump import DumpError
+        summary = str(exc) if isinstance(exc, (DumpError, PermissionError)) else "数据库传输失败，请检查目标兼容性、键冲突、权限及连接状态"
+        update(task, status="failed", stage="failed", error=summary[:2000], finished_at=timezone.now())
+        audit_task(task)
 
 
 def cleanup_expired():

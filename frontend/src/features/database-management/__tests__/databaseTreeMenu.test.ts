@@ -56,12 +56,18 @@ describe('HexHub database tree menus', () => {
     expect(byId(items, 'delete-selected').enabled).toBe(true);
   });
 
-  it('builds destructive and export submenus for an actual table', () => {
+  it('builds destructive actions and SQL-only transfers for an actual table', () => {
     const items = menu({ kind: 'object', name: 'orders', category: 'table' });
     expect(byId(items, 'open-data').shortcut).toBe('Enter');
     expect(byId(items, 'rename-object').shortcut).toBe('F2');
     expect(byId(items, 'delete-object-menu').children?.map(item => item.id)).toEqual(['drop-object', 'delete-rows', 'truncate-table']);
-    expect(byId(items, 'export-table').children?.map(item => item.id)).toEqual(['export-csv', 'export-sql', 'copy-ddl']);
+    expect(byId(items, 'export-sql').enabled).toBe(true);
+    expect(items.some(item => item.id === 'export-csv')).toBe(false);
+    for (const dbType of ['sqlite', 'postgresql', 'clickhouse']) {
+      const unsupported = menu({ kind: 'object', name: 'orders', category: 'table' }, { dbType });
+      expect(byId(unsupported, 'export-sql').enabled).toBe(false);
+      expect(byId(unsupported, 'import-table').enabled).toBe(false);
+    }
   });
 
   it('enables actual view actions while disabling virtual folders', () => {

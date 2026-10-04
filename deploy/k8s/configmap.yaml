@@ -17,6 +17,7 @@ data:
     DJANGO_CORS_ALLOWED_ORIGINS=
     DJANGO_MEDIA_ROOT=/app/media
     DJANGO_SERVE_MEDIA_FILES=1
+    REDIS_CONFIG_FILE=/app/config/redis.conf
 
     DATABASE_ENGINE=sqlite
 
@@ -50,3 +51,6 @@ data:
     BULK_EXECUTION_TIMEOUT_SECONDS=300
     BULK_EXECUTION_RUN_ASYNC=1
     DATA_UPLOAD_MAX_NUMBER_FILES=1000
+  redis.conf: |
+    # Default in-cluster Redis. Replace this ConfigMap value for an external Redis.
+    REDIS_URL=redis://redis:6379/3

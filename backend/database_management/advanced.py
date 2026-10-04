@@ -415,6 +415,10 @@ def sql_literal(value):
 def asset_export(request, asset_id):
     asset, denied = checked(request, asset_id, "import_export")
     if denied: return denied
+    if asset.db_type != "redis":
+        from .transfers import export_response
+        payload = {**request.query_params.dict(), "assetId": asset_id, "scope": "table", "direction": "export", "format": request.query_params.get("format", "sql"), "objectName": request.query_params.get("table", "")}
+        return export_response(request.user, payload)
     fmt = request.query_params.get("format", "csv")
     try:
         if asset.db_type == "redis":
@@ -426,21 +430,6 @@ def asset_export(request, asset_id):
                         raise ValueError("Redis 单次最多导出 500 个键，请先缩小键空间")
                     kind = client.type(key)
                     rows.append({"key": key, "type": kind, "ttl": client.ttl(key), "value": redis_export_value(client, key, kind)})
-        else:
-            if fmt not in {"csv", "sql"}: return bad_request("关系库仅支持 CSV/SQL")
-            table = request.query_params.get("table", "")
-            database = request.query_params.get("database", "")
-            schema = request.query_params.get("schema")
-            rows = []
-            page = 1
-            while True:
-                result = adapters.table_data(asset, database, table, schema, page, 200, json_safe=False)
-                rows.extend(result["rows"])
-                if result["hasNext"] and len(rows) >= 10000:
-                    raise ValueError("单次最多导出 10000 行，请缩小导出范围")
-                if not result["hasNext"]:
-                    break
-                page += 1
         if fmt == "json": text = json.dumps(rows, ensure_ascii=False, default=str)
         elif fmt == "csv":
             fields = list(rows[0]) if rows else (["key", "type", "ttl", "value"] if asset.db_type == "redis" else
@@ -450,50 +439,6 @@ def asset_export(request, asset_id):
             for row in rows:
                 writer.writerow({**row, "value": json.dumps(row["value"], ensure_ascii=False, default=str)} if asset.db_type == "redis" and row["type"] != "string" else row)
             text = "\ufeff" + stream.getvalue()
-        else:
-            table_name = adapters.quote(table, asset.db_type)
-            if request.query_params.get("schema"):
-                table_name = adapters.quote(request.query_params["schema"], asset.db_type) + "." + table_name
-            statements = []
-            if asset.db_type == "sqlite":
-                with adapters.connection(asset) as conn:
-                    definition, _ = adapters.run(conn, "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,), db_type="sqlite")
-                if definition and definition[0]["sql"]:
-                    statements.append(definition[0]["sql"] + ";")
-            elif asset.db_type in {"mysql", "mariadb"}:
-                with adapters.connection(asset, database) as conn:
-                    definition, _ = adapters.run(conn, f"SHOW CREATE TABLE {table_name}", db_type=asset.db_type)
-                if definition:
-                    statements.append(str(list(definition[0].values())[-1]).rstrip(";") + ";")
-            elif asset.db_type == "clickhouse":
-                with adapters.connection(asset, database) as conn:
-                    definition, _ = adapters.run(conn, "SELECT create_table_query FROM system.tables WHERE database={db:String} AND name={table:String}",
-                                                  {"db": database or asset.database or "default", "table": table}, db_type="clickhouse")
-                if definition and definition[0]["create_table_query"]:
-                    statements.append(definition[0]["create_table_query"].rstrip(";") + ";")
-            elif asset.db_type not in {"mysql", "mariadb"}:
-                definitions = adapters.columns(asset, database, table, request.query_params.get("schema"))
-                if definitions:
-                    field_definitions = []
-                    primary_keys = []
-                    for column in definitions:
-                        field = f"{adapters.quote(column['name'], asset.db_type)} {column['type'] or 'TEXT'}"
-                        if str(column.get("nullable", "")).upper() in {"NO", "N", "FALSE"}:
-                            field += " NOT NULL"
-                        default = column.get("default")
-                        if default is not None:
-                            field += f" DEFAULT {default}"
-                        field_definitions.append(field)
-                        if column.get("column_key") == "PRI":
-                            primary_keys.append(adapters.quote(column["name"], asset.db_type))
-                    if primary_keys:
-                        field_definitions.append("PRIMARY KEY (" + ", ".join(primary_keys) + ")")
-                    statements.append(f"CREATE TABLE {table_name} (" + ", ".join(field_definitions) + ");")
-            for row in rows:
-                column_names = ", ".join(adapters.quote(key, asset.db_type) for key in row)
-                values = ", ".join(sql_literal(value) for value in row.values())
-                statements.append(f"INSERT INTO {table_name} ({column_names}) VALUES ({values});")
-            text = "\n".join(statements)
         record_operation_log(request, "应用管理", "导出数据", asset.name, f"格式={fmt}; 行数={len(rows)}")
         return download(text, f"database-export.{fmt}", "application/json" if fmt == "json" else "text/plain; charset=utf-8")
     except Exception as exc: return failed(exc)
@@ -503,6 +448,9 @@ def asset_export(request, asset_id):
 def asset_import(request, asset_id):
     asset, denied = checked(request, asset_id, "import_export")
     if denied: return denied
+    if asset.db_type != "redis":
+        from .transfers import uploaded_dump_response
+        return uploaded_dump_response(request.user, asset, request.data, request.FILES.get("file"))
     upload = request.FILES.get("file")
     if not upload or upload.size > 10 * 1024 * 1024: return bad_request("请选择不超过 10MB 的文件")
     fmt = request.data.get("format", "csv")
@@ -538,52 +486,6 @@ def asset_import(request, asset_id):
                     else:
                         raise ValueError("Redis 数据类型或结构无效")
                     if int(row.get("ttl") or -1) > 0: client.expire(key, int(row["ttl"]))
-        elif fmt == "csv":
-            denied = require_feature_permission(request, "databaseManagement", "modify_data")
-            if denied: return denied
-            reader = csv.DictReader(io.StringIO(content)); rows = list(reader)
-            if not rows or len(rows) > 10000: raise ValueError("CSV 必须包含 1 至 10000 行")
-            table = adapters.quote(request.data.get("table"), asset.db_type)
-            if request.data.get("schema"):
-                table = adapters.quote(request.data["schema"], asset.db_type) + "." + table
-            fields = reader.fieldnames or []
-            if not fields or len(fields) != len(set(fields)):
-                raise ValueError("CSV 表头不能为空或重复")
-            columns = ", ".join(adapters.quote(field, asset.db_type) for field in fields)
-            marks = ", ".join(adapters.marker(asset.db_type, index + 1) for index in range(len(fields)))
-            sql = f"INSERT INTO {table} ({columns}) VALUES ({marks})"
-            with adapters.connection(asset, request.data.get("database")) as conn:
-                if asset.db_type == "clickhouse":
-                    conn.insert(request.data.get("table"), [[row[field] for field in fields] for row in rows],
-                                column_names=fields, database=request.data.get("database") or asset.database or "default")
-                else:
-                    cursor = conn.cursor()
-                    try:
-                        cursor.executemany(sql, [[row[field] for field in fields] for row in rows]); conn.commit()
-                    except Exception:
-                        conn.rollback(); raise
-                    finally: cursor.close()
-        elif fmt == "sql":
-            denied = require_feature_permission(request, "databaseManagement", "execute_sql")
-            if denied: return denied
-            statements = [item.strip() for item in sqlparse.split(content) if item.strip()]
-            if not statements or len(statements) > 100: raise ValueError("SQL 文件最多包含 100 条语句")
-            for statement in statements:
-                action = sql_action(statement)
-                validate_sql_for_asset(asset, statement)
-                if action != "read":
-                    denied = require_feature_permission(request, "databaseManagement", action)
-                    if denied: return denied
-            with adapters.connection(asset, request.data.get("database")) as conn:
-                try:
-                    for statement in statements:
-                        adapters.run(conn, statement, db_type=asset.db_type)
-                    if hasattr(conn, "commit"): conn.commit()
-                except Exception:
-                    if hasattr(conn, "rollback"): conn.rollback()
-                    raise
-            rows = statements
-        else: return bad_request("不支持的导入格式")
         record_operation_log(request, "应用管理", "导入数据", asset.name, f"格式={fmt}; 条数={len(rows)}")
         return Response({"imported": len(rows)})
     except Exception as exc: return failed(exc)

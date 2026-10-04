@@ -390,6 +390,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
           >
             <AppIcon :name="isWorkspaceDark ? 'sun' : 'moon'" :size="18" />
           </el-button>
+          <DatabaseTransferCenter v-if="isAuthenticated && canUsePageAction('databaseManagement', 'import_export')" v-model:open="databaseTransferCenterOpen" />
           <el-button
             v-if="activeTool === 'dashboard'"
             class="workspace-icon-button workspace-dashboard-refresh"
@@ -474,16 +475,9 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
               <ProfileCenter v-else-if="activeTool === 'profile'" />
               <SystemSettingsPanel v-else-if="activeTool === 'systemSettings'" />
             </div>
-            <!--
-            <el-button v-if="canUsePageAction('databaseManagement', 'import_export')" class="workspace-icon-button" circle title="导入导出任务" aria-label="导入导出任务" @click="databaseTransferCenterOpen = true">
-              -->
           </Transition>
-          <el-button v-if="canUsePageAction('databaseManagement', 'import_export')" class="workspace-icon-button" circle title="导入导出任务" aria-label="导入导出任务" @click="databaseTransferCenterOpen = true">
-            <AppIcon name="databaseBackup" :size="18" />
-          </el-button>
         </template>
       </section>
-      <DatabaseTransferCenter v-if="isAuthenticated && canUsePageAction('databaseManagement', 'import_export')" v-model:open="databaseTransferCenterOpen" />
       <footer v-if="layoutFooter.enabled" class="workspace-footer" :style="footerStyle">
         <span>{{ footerText }}</span>
         <a

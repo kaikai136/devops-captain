@@ -101,23 +101,8 @@ def snapshot(asset, name):
                 keys.append({"key": key, "type": kind, "ttl": client.ttl(key),
                              "value": redis_export_value(client, key, kind)})
         return {"version": 1, "dbType": "redis", "database": str(selected), "keys": keys}
-    tables = adapters.object_list(asset, name, object_type="table")
-    if len(tables) > MAX_TABLES: raise ValueError("数据库表超过导出上限")
-    result = []
-    row_count = 0
-    for item in tables:
-        table = item["name"]
-        data = []
-        page = 1
-        while True:
-            chunk = adapters.table_data(asset, name, table, page=page, page_size=200)
-            data.extend(chunk["rows"])
-            row_count += len(chunk["rows"])
-            if row_count > MAX_ROWS: raise ValueError("数据库行数超过导出上限")
-            if not chunk["hasNext"]: break
-            page += 1
-        result.append({"name": table, "columns": adapters.columns(asset, name, table), "rows": data})
-    return {"version": 1, "dbType": asset.db_type, "database": name, "tables": result}
+    raise ValueError("关系库快照已移除，请提交 SQL 转储任务")
+
 
 
 def import_snapshot(asset, name, payload):
@@ -125,29 +110,8 @@ def import_snapshot(asset, name, payload):
         raise ValueError("数据包版本或数据库类型不匹配")
     if asset.db_type == "redis":
         raise ValueError("Redis 整库导入请使用现有 JSON 键值导入功能")
-    tables = payload.get("tables")
-    if not isinstance(tables, list) or len(tables) > MAX_TABLES:
-        raise ValueError("数据包表列表无效")
-    available = {item["name"] for item in adapters.object_list(asset, name, object_type="table")}
-    total = 0
-    with adapters.connection(asset, name) as conn:
-        try:
-            for item in tables:
-                if not isinstance(item, dict) or item.get("name") not in available or not isinstance(item.get("rows"), list):
-                    raise ValueError("目标数据库缺少数据包中的表")
-                table = adapters.quote(item["name"], asset.db_type)
-                for row in item["rows"]:
-                    if not isinstance(row, dict) or not row: raise ValueError("数据包包含无效数据行")
-                    columns = ", ".join(adapters.quote(key, asset.db_type) for key in row)
-                    markers = ", ".join(adapters.marker(asset.db_type, index + 1) for index in range(len(row)))
-                    adapters.run(conn, f"INSERT INTO {table} ({columns}) VALUES ({markers})", list(row.values()), db_type=asset.db_type)
-                    total += 1
-                    if total > MAX_ROWS: raise ValueError("导入行数超过上限")
-            if hasattr(conn, "commit"): conn.commit()
-        except Exception:
-            if hasattr(conn, "rollback"): conn.rollback()
-            raise
-    return {"imported": total}
+    raise ValueError("关系库快照已移除，请通过分片上传任务导入 SQL")
+
 
 
 def clear_database(asset, name):
@@ -185,6 +149,9 @@ def database_operation(request, asset_id):
         elif action == "delete": result = delete_database(asset, name)
         elif action == "clear": result = clear_database(asset, name)
         elif action == "export":
+            if asset.db_type != "redis":
+                from .transfers import export_response
+                return export_response(request.user, {"assetId": asset_id, "database": name, "scope": "database", "direction": "export", "format": "sql"})
             result = snapshot(asset, name)
             data = json.dumps(result, ensure_ascii=False, default=str).encode("utf-8")
             if len(data) > MAX_BYTES: raise ValueError("数据库数据包超过 5 MB")
@@ -193,6 +160,7 @@ def database_operation(request, asset_id):
             record_operation_log(request, "应用管理", "导出数据库数据", asset.name, f"类型={asset.db_type}; 数据库={name}")
             return response
         elif action == "import":
+            if asset.db_type != "redis": return bad_request("旧快照导入已移除，请通过分片上传任务接口导入 SQL")
             content = request.data.get("snapshot")
             if len(json.dumps(content, default=str).encode("utf-8")) > MAX_BYTES:
                 raise ValueError("数据库数据包超过 5 MB")

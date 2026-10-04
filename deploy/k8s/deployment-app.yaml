@@ -66,8 +66,6 @@ spec:
               value: "0"
             - name: RUN_COLLECTSTATIC
               value: "0"
-            - name: CHANNEL_REDIS_URL
-              value: "redis://redis:6379/3"
           ports:
             - name: http
               containerPort: 8001
@@ -78,6 +76,10 @@ spec:
             - name: app-config
               mountPath: /app/config/app.conf
               subPath: app.conf
+              readOnly: true
+            - name: redis-config
+              mountPath: /app/config/redis.conf
+              subPath: redis.conf
               readOnly: true
           resources:
             requests:
@@ -112,15 +114,16 @@ spec:
           image: harbor.xunsiya.com:7891/devops/devops-tools:latest
           imagePullPolicy: IfNotPresent
           command: ["python", "manage.py", "run_database_transfer_worker", "--poll-interval", "1"]
-          env:
-            - name: CHANNEL_REDIS_URL
-              value: "redis://redis:6379/3"
           volumeMounts:
             - name: runtime
               mountPath: /app
             - name: app-config
               mountPath: /app/config/app.conf
               subPath: app.conf
+              readOnly: true
+            - name: redis-config
+              mountPath: /app/config/redis.conf
+              subPath: redis.conf
               readOnly: true
 
       volumes:
@@ -138,3 +141,9 @@ spec:
             items:
               - key: app.conf
                 path: app.conf
+        - name: redis-config
+          configMap:
+            name: devops-tools-config
+            items:
+              - key: redis.conf
+                path: redis.conf
