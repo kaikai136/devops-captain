@@ -62,8 +62,15 @@ class ManagedHost(models.Model):
 
 
 class HostCredential(models.Model):
+    TYPE_HOST = "host"
+    TYPE_APPLICATION = "application"
+    TYPE_CHOICES = [
+        (TYPE_HOST, "主机密钥"),
+        (TYPE_APPLICATION, "应用密钥"),
+    ]
     name = models.CharField(max_length=120)
-    username = models.CharField(max_length=120)
+    credential_type = models.CharField(max_length=20, choices=TYPE_CHOICES, default=TYPE_HOST)
+    username = models.CharField(max_length=120, blank=True)
     password = models.CharField(max_length=256, blank=True)
     port = models.PositiveIntegerField(default=22)
     private_key_name = models.CharField(max_length=180, blank=True)

@@ -39,6 +39,17 @@
   align-items: center;
 }
 
+.account-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.account-title strong {
+  min-width: 0;
+}
+
 .account-toolbar {
   justify-content: space-between;
   gap: 16px;

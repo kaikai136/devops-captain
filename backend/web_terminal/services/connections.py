@@ -413,7 +413,7 @@ def should_poll_host_credentials(host: ManagedHost) -> bool:
 
 def host_credential_login_candidates(seen: set[tuple[str, str, str]]) -> list[SshLoginCandidate]:
     candidates: list[SshLoginCandidate] = []
-    for credential in HostCredential.objects.order_by("id"):
+    for credential in HostCredential.objects.filter(credential_type=HostCredential.TYPE_HOST).order_by("id"):
         username = str(credential.username or "").strip()
         if not username:
             continue

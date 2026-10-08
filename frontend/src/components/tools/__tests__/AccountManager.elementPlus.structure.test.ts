@@ -19,6 +19,10 @@ describe('AccountManager Element Plus migration', () => {
     expect(template).toContain('<el-form-item');
     expect(template).toContain('<el-button');
     expect(template).toContain('<el-input');
+    expect(template).toContain('账号类型');
+    expect(template).toContain('主机密钥');
+    expect(template).toContain('应用密钥');
+    expect(template).toContain('row.credentialType');
     expect(template).toContain('<el-upload');
     expect(template).toContain('class="account-table-wrap app-data-table-wrap"');
     expect(template).toContain('class="account-table app-data-table"');

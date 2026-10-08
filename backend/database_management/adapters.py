@@ -8,6 +8,12 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from django.conf import settings
+from redis.exceptions import (
+    AuthenticationError as RedisAuthenticationError,
+    ConnectionError as RedisConnectionError,
+    NoPermissionError as RedisNoPermissionError,
+    TimeoutError as RedisTimeoutError,
+)
 
 from .services import decrypt_password
 
@@ -85,7 +91,20 @@ def marker(db_type, index=1):
 def connection_error(exc):
     if isinstance(exc, ValueError):
         return str(exc)
-    return "数据库操作失败，请检查连接配置、对象名称及账号权限"
+    if isinstance(exc, RedisAuthenticationError):
+        return "Redis 认证失败，请检查用户名和密码；仅使用密码认证时请留空用户名，ACL 认证时请填写已启用的用户名"
+    if isinstance(exc, RedisNoPermissionError):
+        return "Redis 账号没有执行当前命令或访问当前键的权限，请检查 ACL 授权"
+    if isinstance(exc, RedisTimeoutError):
+        return "Redis 连接或操作超时，请检查网络及服务状态"
+    if isinstance(exc, RedisConnectionError):
+        return "无法连接 Redis，请检查地址、端口、网络及 TLS 配置"
+    # Keep the generic context while exposing the driver's sanitized reason so
+    # operators can distinguish authentication, network, and missing-driver errors.
+    detail = " ".join(str(exc).split())[:240]
+    if not detail:
+        return "数据库操作失败，请检查连接配置、对象名称及账号权限"
+    return f"数据库操作失败：{detail}"
 
 
 def module_for(db_type):

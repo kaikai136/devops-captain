@@ -74,6 +74,7 @@ export interface ManagedHost {
 export interface HostCredential {
   id: number;
   name: string;
+  credentialType: 'host' | 'application' | string;
   username: string;
   password: string;
   port: number;

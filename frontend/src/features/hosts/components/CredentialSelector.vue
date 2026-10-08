@@ -17,11 +17,12 @@ const selectedCredential = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 });
+const hostCredentials = computed(() => props.credentials.filter((credential) => credential.credentialType !== 'application'));
 </script>
 
 <template>
   <el-select v-model="selectedCredential" :teleported="false" @change="emit('change', selectedCredential)">
     <el-option :value="null" label="手动输入" />
-    <el-option v-for="credential in props.credentials" :key="credential.id" :value="credential.id" :label="`${credential.name}（${credential.username}）`" />
+    <el-option v-for="credential in hostCredentials" :key="credential.id" :value="credential.id" :label="`${credential.name}（${credential.username}）`" />
   </el-select>
 </template>

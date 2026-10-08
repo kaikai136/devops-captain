@@ -1,7 +1,7 @@
 import { apiDelete, apiGet, apiPost, apiPostForm, apiPut } from '../../../api';
 
 export interface DatabaseAsset { id: number; name: string; directoryId: number | null; dbType: string; host: string; port: number; username: string; databaseName: string; remark: string; options: Record<string, unknown>; }
-export interface DatabaseAssetPayload { name: string; directoryId?: number | null; dbType: string; host: string; port: number; username: string; password?: string; databaseName: string; remark: string; options: Record<string, unknown>; }
+export interface DatabaseAssetPayload { name: string; directoryId?: number | null; dbType: string; host: string; port: number; username: string; password?: string; databaseName: string; remark: string; options: Record<string, unknown>; applicationCredentialId?: number | null; }
 export interface AssetDirectory { id: number; name: string; parentId: number | null; }
 export interface ConnectionManifest { version: number; directories: string[][]; assets: Array<Record<string, unknown>>; }
 export interface DatabaseType { key: string; label: string; defaultPort: number; fields: string[]; capabilities: string[]; }

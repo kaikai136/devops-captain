@@ -104,6 +104,17 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain('await afterOpen?.()');
   });
 
+  it('offers application credentials only on new connection forms and copies username/password', () => {
+    const panel = readPanel();
+
+    expect(panel).toContain("hostCredentials.value.filter(item => item.credentialType === 'application')");
+    expect(panel).toContain('v-if="!editing" label="应用密钥"');
+    expect(panel).toContain('@change="applyApplicationCredential"');
+    expect(panel).toContain('form.value.username = credential.username');
+    expect(panel).toContain('form.value.password = credential.password');
+    expect(panel).toContain('delete payload.applicationCredentialId');
+  });
+
   it('keeps the workspace fitted to the available content height', () => {
     const panel = readPanel();
 

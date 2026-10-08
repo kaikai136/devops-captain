@@ -29,6 +29,11 @@ class DatabaseManagementServiceTests(SimpleTestCase):
         self.assertNotEqual(encrypted, "p@ss word")
         self.assertEqual(decrypt_password(encrypted), "p@ss word")
 
+    def test_connection_error_keeps_safe_driver_reason(self):
+        message = adapters.connection_error(ConnectionError("Error 111 connecting to 172.16.0.99:6379"))
+        self.assertIn("数据库操作失败", message)
+        self.assertIn("172.16.0.99:6379", message)
+
     def test_identifier_validation_rejects_sql_fragments(self):
         self.assertEqual(validate_identifier("orders_2026"), "orders_2026")
         with self.assertRaises(ValueError):
@@ -477,6 +482,21 @@ class DatabasePermissionTests(TestCase):
 
 
 class RedisAdapterTests(SimpleTestCase):
+    def test_connection_errors_identify_redis_failure_without_exposing_driver_details(self):
+        from redis.exceptions import AuthenticationError, ConnectionError, NoPermissionError, TimeoutError
+
+        for error_type, expected in (
+            (AuthenticationError, "Redis 认证失败"),
+            (NoPermissionError, "ACL 授权"),
+            (TimeoutError, "超时"),
+            (ConnectionError, "无法连接 Redis"),
+        ):
+            with self.subTest(error_type=error_type):
+                message = adapters.connection_error(error_type("private-driver-detail"))
+                self.assertIn(expected, message)
+                self.assertNotIn("private-driver-detail", message)
+        self.assertIn("留空用户名", adapters.connection_error(AuthenticationError("invalid credentials")))
+
     def test_redis_key_list_returns_sixteen_database_counts(self):
         asset = SimpleNamespace(db_type="redis", options={"db": 0})
         client = SimpleNamespace(scan_iter=lambda **_kwargs: iter(()),

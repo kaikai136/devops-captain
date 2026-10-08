@@ -7,6 +7,7 @@ from web_terminal.services import TerminalConnectionError
 
 from .models import HostCredential, HostGroup, ManagedHost
 from .probe import verify_host
+from .serializers import HostCredentialSerializer
 
 
 class HostInitialMigrationTests(SimpleTestCase):
@@ -16,6 +17,50 @@ class HostInitialMigrationTests(SimpleTestCase):
         seed_operations = [operation for operation in migration_module.Migration.operations if isinstance(operation, migrations.RunPython)]
 
         self.assertEqual(seed_operations, [])
+
+
+class HostCredentialOptionalUsernameTests(TestCase):
+    def test_create_accepts_blank_and_omitted_username_for_both_types(self):
+        for kind in (HostCredential.TYPE_HOST, HostCredential.TYPE_APPLICATION):
+            for username_data in ({}, {"username": ""}, {"username": "   "}):
+                with self.subTest(kind=kind, username_data=username_data):
+                    serializer = HostCredentialSerializer(data={
+                        "name": f"credential-{HostCredential.objects.count()}",
+                        "credentialType": kind,
+                        "password": "secret",
+                        **username_data,
+                    })
+                    self.assertTrue(serializer.is_valid(), serializer.errors)
+                    saved = serializer.save()
+                    saved.refresh_from_db()
+                    self.assertEqual(saved.username, "")
+                    self.assertEqual(saved.password, "secret")
+
+    def test_edit_can_clear_username_without_changing_password(self):
+        credential = HostCredential.objects.create(name="redis", username="redis", password="secret")
+        serializer = HostCredentialSerializer(credential, data={"username": ""}, partial=True)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        serializer.save()
+        credential.refresh_from_db()
+        self.assertEqual(credential.username, "")
+        self.assertEqual(credential.password, "secret")
+
+    def test_import_preserves_password_only_credentials_and_can_clear_username(self):
+        from .import_export import import_credentials
+
+        imported = {"credentials": 0}
+        import_credentials([{"name": "redis", "username": "", "password": "secret"}], imported)
+        credential = HostCredential.objects.get(name="redis")
+        self.assertEqual(credential.username, "")
+        self.assertEqual(credential.password, "secret")
+        credential.username = "redis"
+        credential.save()
+        import_credentials([{"name": "redis", "username": ""}], imported)
+        credential.refresh_from_db()
+        self.assertEqual(credential.username, "")
+        self.assertEqual(credential.password, "secret")
+        import_credentials([{"name": "password-only", "password": "secret"}], imported)
+        self.assertEqual(HostCredential.objects.get(name="password-only").username, "")
 
 
 class HostVerifyTests(TestCase):
@@ -93,7 +138,7 @@ class HostVerifyTests(TestCase):
         )
         attempted_logins = []
 
-        def fake_connect(_host, candidate, attempts=1):
+        def fake_connect(_host, candidate, attempts=1, **_kwargs):
             attempted_logins.append((candidate.username, candidate.password))
             if candidate.username == "ops" and candidate.password == "secret":
                 return object()
@@ -129,6 +174,38 @@ class HostVerifyTests(TestCase):
         updated.refresh_from_db()
         self.assertEqual(updated.login_user, "ops")
         self.assertEqual(updated.login_password, "secret")
+
+    def test_host_credential_candidates_exclude_application_keys(self):
+        HostCredential.objects.create(name="host-key", username="ops", password="host-secret")
+        HostCredential.objects.create(
+            name="application-key",
+            username="db-user",
+            password="app-secret",
+            credential_type=HostCredential.TYPE_APPLICATION,
+        )
+
+        from web_terminal.services.connections import host_credential_login_candidates
+
+        candidates = host_credential_login_candidates(set())
+
+        self.assertEqual([(item.username, item.password) for item in candidates], [("ops", "host-secret")])
+
+    def test_host_credential_serializer_validates_and_returns_credential_type(self):
+        serializer = HostCredentialSerializer(data={
+            "name": "application-key",
+            "username": "db-user",
+            "credentialType": "application",
+        })
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        saved = serializer.save()
+        self.assertEqual(HostCredentialSerializer(saved).data["credentialType"], "application")
+
+        invalid = HostCredentialSerializer(data={
+            "name": "bad-key",
+            "username": "user",
+            "credentialType": "other",
+        })
+        self.assertFalse(invalid.is_valid())
 
     def test_managed_host_verify_reports_when_login_was_auto_saved(self):
         host = ManagedHost.objects.create(

@@ -59,12 +59,13 @@ class ManagedHostSerializer(serializers.ModelSerializer):
 
 
 class HostCredentialSerializer(serializers.ModelSerializer):
+    credentialType = serializers.ChoiceField(source="credential_type", choices=HostCredential.TYPE_CHOICES, required=False)
     privateKeyName = serializers.CharField(source="private_key_name", required=False, allow_blank=True)
     privateKey = serializers.CharField(source="private_key", required=False, allow_blank=True)
 
     class Meta:
         model = HostCredential
-        fields = ["id", "name", "username", "password", "port", "privateKeyName", "privateKey", "remark"]
+        fields = ["id", "name", "credentialType", "username", "password", "port", "privateKeyName", "privateKey", "remark"]
 
 
 class HostGroupSerializer(serializers.ModelSerializer):

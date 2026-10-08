@@ -25,7 +25,8 @@ import {
 } from '../api/databaseManagement';
 
 type Tab = 'tables' | 'structure' | 'data' | 'sql' | 'transfer';
-const { canUsePageAction, showToast, requestConfirm, currentUser } = useAppContext();
+const { canUsePageAction, showToast, requestConfirm, currentUser, hostCredentials, loadHostCredentials } = useAppContext();
+const applicationCredentials = computed(() => hostCredentials.value.filter(item => item.credentialType === 'application'));
 const can = (action: string) => canUsePageAction('databaseManagement', action);
 const assets = ref<DatabaseAsset[]>([]);
 const directories = ref<AssetDirectory[]>([]);
@@ -603,7 +604,13 @@ function toggleQuery() {
 
 function emptyForm(kind: string): DatabaseAssetPayload {
   const defaults: Record<string, number> = { mysql: 3306, mariadb: 3306, postgresql: 5432, kingbase: 54321, sqlserver: 1433, sqlite: 0, redis: 6379, clickhouse: 8123, oracle: 1521, dameng: 5236 };
-  return { name: '', dbType: kind, host: kind === 'sqlite' ? '' : '127.0.0.1', port: types.value?.find(item => item.key === kind)?.defaultPort || defaults[kind] || 0, username: '', password: '', databaseName: '', remark: '', options: kind === 'redis' ? { db: 0 } : {} };
+  return { name: '', dbType: kind, host: kind === 'sqlite' ? '' : '127.0.0.1', port: types.value?.find(item => item.key === kind)?.defaultPort || defaults[kind] || 0, username: '', password: '', databaseName: '', remark: '', options: kind === 'redis' ? { db: 0 } : {}, applicationCredentialId: null };
+}
+function applyApplicationCredential(id: number | null) {
+  const credential = applicationCredentials.value.find(item => item.id === id);
+  if (!credential) return;
+  form.value.username = credential.username;
+  form.value.password = credential.password;
 }
 async function loadAssets() {
   if (!can('view')) return;
@@ -784,6 +791,7 @@ function openEdit(asset: DatabaseAsset) { editing.value = asset; form.value = { 
 async function saveAsset() {
   try {
     const payload = { ...form.value };
+    delete payload.applicationCredentialId;
     if (editing.value && !payload.password) delete payload.password;
     if (editing.value) await updateDatabaseAsset(editing.value.id, payload);
     else await createDatabaseAsset(payload);
@@ -1406,6 +1414,7 @@ function onTransferComplete(event: Event) {
 onMounted(() => {
   window.addEventListener('database-transfer:completed', onTransferComplete);
   window.addEventListener('keydown', onDatabaseShortcut);
+  void loadHostCredentials().catch(() => undefined);
   void refreshCatalog();
   void listDatabaseTypes().then(result => { types.value = result.types; }).catch(error => showToast('加载数据库类型失败', errorMessage(error)));
   void listSQLiteFiles().then(result => { files.value = result.files; }).catch(error => showToast('加载 SQLite 文件失败', errorMessage(error)));
@@ -1560,7 +1569,28 @@ onUnmounted(() => {
     <el-dialog :close-on-click-modal="false" v-model="directoryDialog" :title="editingDirectory ? '重命名目录' : '新建目录'" width="min(420px, 94vw)"><el-input v-model="directoryName" maxlength="160" placeholder="目录名称" @keyup.enter="saveDirectory" /><template #footer><el-button @click="directoryDialog = false">取消</el-button><el-button type="primary" @click="saveDirectory">保存</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="moveDialog" title="移动到目录" width="min(420px, 94vw)"><el-select v-model="moveTarget" placeholder="选择目标目录" style="width:100%"><el-option label="根目录" :value="null" /><el-option v-for="folder in directories" :key="folder.id" :label="folder.name" :value="folder.id" /></el-select><template #footer><el-button @click="moveDialog = false">取消</el-button><el-button type="primary" @click="saveMove">移动</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="databaseDialog" :title="({ create: '新建数据库', delete: '删除数据库', clear: '清空数据库', import: '导入数据库' } as Record<string, string>)[databaseAction]" width="min(440px, 94vw)"><el-input v-model="databaseTarget" :placeholder="selected?.dbType === 'sqlite' ? '受限目录中的 .db 文件名' : selected?.dbType === 'redis' ? 'DB 编号 0-255' : '数据库名称'" /><template #footer><el-button @click="databaseDialog = false">取消</el-button><el-button type="primary" @click="saveDatabaseAction">确认</el-button></template></el-dialog>
-    <el-dialog v-model="dialog" :close-on-click-modal="false" :title="editing ? '编辑连接' : '新建连接'" width="min(520px, 94vw)"><el-form label-position="top"><el-form-item label="数据库类型"><el-select v-model="form.dbType" :disabled="!!editing" @change="form = emptyForm(form.dbType)"><el-option v-for="kind in types" :key="kind.key" :label="kind.label" :value="kind.key" /></el-select></el-form-item><el-form-item label="名称"><el-input v-model="form.name" /></el-form-item><template v-if="form.dbType === 'sqlite'"><el-form-item label="SQLite 文件"><el-select v-model="form.options.file" placeholder="选择服务器文件"><el-option v-for="file in files" :key="file" :label="file" :value="file" /></el-select></el-form-item></template><template v-else><el-form-item label="主机"><el-input v-model="form.host" /></el-form-item><el-form-item label="端口"><el-input-number v-model="form.port" :min="1" :max="65535" /></el-form-item><el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item><el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editing ? '留空保持原密码' : ''" /></el-form-item><el-form-item v-if="form.dbType !== 'redis'" label="默认数据库"><el-input v-model="form.databaseName" /></el-form-item><el-form-item v-for="field in activeType?.fields.filter(item => !['file'].includes(item))" :key="field" :label="({ db: 'Redis DB 编号', https: 'HTTPS', service: 'Oracle Service Name', sid: 'Oracle SID', schema: '默认 Schema', instance: '实例名', ssl: 'SSL' } as Record<string, string>)[field] || field"><el-switch v-if="['ssl', 'https'].includes(field)" v-model="form.options[field]" /><el-input-number v-else-if="field === 'db'" v-model="form.options[field]" :min="0" :max="255" /><el-input v-else v-model="form.options[field]" /></el-form-item></template><el-form-item label="备注"><el-input v-model="form.remark" type="textarea" /></el-form-item></el-form><template #footer><el-button @click="dialog = false">取消</el-button><el-button type="primary" @click="saveAsset">保存</el-button></template></el-dialog>
+    <el-dialog v-model="dialog" :close-on-click-modal="false" :title="editing ? '编辑连接' : '新建连接'" width="min(520px, 94vw)">
+      <el-form label-position="top">
+        <el-form-item label="数据库类型"><el-select v-model="form.dbType" :disabled="!!editing" @change="form = emptyForm(form.dbType)"><el-option v-for="kind in types" :key="kind.key" :label="kind.label" :value="kind.key" /></el-select></el-form-item>
+        <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
+        <el-form-item v-if="!editing" label="应用密钥">
+          <el-select v-model="form.applicationCredentialId" clearable placeholder="选择应用密钥" style="width:100%" @change="applyApplicationCredential">
+            <el-option v-for="credential in applicationCredentials" :key="credential.id" :label="credential.name" :value="credential.id" />
+          </el-select>
+        </el-form-item>
+        <template v-if="form.dbType === 'sqlite'"><el-form-item label="SQLite 文件"><el-select v-model="form.options.file" placeholder="选择服务器文件"><el-option v-for="file in files" :key="file" :label="file" :value="file" /></el-select></el-form-item></template>
+        <template v-else>
+          <el-form-item label="主机"><el-input v-model="form.host" /></el-form-item>
+          <el-form-item label="端口"><el-input-number v-model="form.port" :min="1" :max="65535" /></el-form-item>
+          <el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item>
+          <el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editing ? '留空保持原密码' : ''" /></el-form-item>
+          <el-form-item v-if="form.dbType !== 'redis'" label="默认数据库"><el-input v-model="form.databaseName" /></el-form-item>
+          <el-form-item v-for="field in activeType?.fields.filter(item => !['file'].includes(item))" :key="field" :label="({ db: 'Redis DB 编号', https: 'HTTPS', service: 'Oracle Service Name', sid: 'Oracle SID', schema: '默认 Schema', instance: '实例名', ssl: 'SSL' } as Record<string, string>)[field] || field"><el-switch v-if="['ssl', 'https'].includes(field)" v-model="form.options[field]" /><el-input-number v-else-if="field === 'db'" v-model="form.options[field]" :min="0" :max="255" /><el-input v-else v-model="form.options[field]" /></el-form-item>
+        </template>
+        <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" /></el-form-item>
+      </el-form>
+      <template #footer><el-button @click="dialog = false">取消</el-button><el-button type="primary" @click="saveAsset">保存</el-button></template>
+    </el-dialog>
     <el-dialog v-model="rowDialog" :close-on-click-modal="false" :title="editMode === 'insert' ? '新增数据行' : '编辑数据行'" width="min(520px, 94vw)"><el-form v-if="editingRow" label-position="top"><el-form-item v-for="field in allDataColumns" :key="field" :label="field"><el-input v-model="editingRow[field]" /></el-form-item></el-form><template #footer><el-button @click="rowDialog = false">取消</el-button><el-button type="primary" @click="saveRow">保存</el-button></template></el-dialog>
     <el-dialog v-model="schemaDialog" :close-on-click-modal="false" title="表结构操作" width="min(520px, 94vw)"><el-form label-position="top"><el-form-item v-if="['drop_column', 'drop_index'].includes(schemaAction)" label="名称"><el-input v-model="schemaForm.name" disabled /></el-form-item><template v-if="schemaAction === 'add_column'"><el-form-item label="字段名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段类型"><el-input v-model="schemaForm.columnType" placeholder="例如 VARCHAR(255)" /></el-form-item></template><template v-else-if="schemaAction === 'create_index'"><el-form-item label="索引名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段"><el-select v-model="schemaForm.columns" multiple><el-option v-for="column in columns" :key="column.name" :label="column.name" :value="column.name" /></el-select></el-form-item><el-form-item label="唯一索引"><el-switch v-model="schemaForm.unique" /></el-form-item></template></el-form><template #footer><el-button @click="schemaDialog = false">取消</el-button><el-button type="primary" @click="saveSchema">执行</el-button></template></el-dialog>
   </div>
