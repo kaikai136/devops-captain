@@ -3,6 +3,7 @@ import { computed, defineAsyncComponent, onMounted, onUnmounted, provide, ref, w
 
 import { appContextKey } from '@app/context';
 import AppIcon from '@shared/components/AppIcon.vue';
+import SidebarIcon from '@shared/components/SidebarIcon.vue';
 import HostExportDialog from '@features/hosts/components/HostExportDialog.vue';
 import HostImportDialog from '@features/hosts/components/HostImportDialog.vue';
 import WatermarkOverlay from '@shared/components/WatermarkOverlay.vue';
@@ -300,16 +301,16 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
             @select="handleSidebarSelect"
           >
             <el-menu-item v-if="dashboardNavItem" index="dashboard">
-              <AppIcon name="dashboard" :size="18" />
+              <SidebarIcon :name="navItemIcon(dashboardNavItem.key)" :size="20" />
               <span>{{ dashboardNavItem.label }}</span>
             </el-menu-item>
             <el-sub-menu v-for="group in navGroups" :key="group.key" :index="group.key" popper-class="workspace-nav-popper">
               <template #title>
-                <AppIcon :name="navGroupIcon(group.key)" :size="18" />
+                <SidebarIcon :name="navGroupIcon(group.key)" :size="20" />
                 <span>{{ group.label }}</span>
               </template>
               <el-menu-item v-for="item in group.items" :key="item.key" :index="item.key">
-                <AppIcon :name="navItemIcon(item.key)" :size="18" />
+                <SidebarIcon :name="navItemIcon(item.key)" :size="20" />
                 <span>{{ item.label }}</span>
               </el-menu-item>
             </el-sub-menu>

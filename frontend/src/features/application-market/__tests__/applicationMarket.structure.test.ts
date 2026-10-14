@@ -11,6 +11,7 @@ describe('application market frontend contract', () => {
     const types = readSource('types.ts');
     const navigation = readSource('app/navigation.ts');
     const shell = readSource('composables/app/useShellState.ts');
+    const sidebarIcons = readSource('app/sidebarIcons.ts');
     const app = readSource('App.vue');
     const styles = readSource('styles.css');
 
@@ -18,7 +19,8 @@ describe('application market frontend contract', () => {
     expect(navigation).toContain("key: 'market' as const");
     expect(navigation).toContain("key: 'applicationMarket' as const");
     expect(shell).toContain('market: true');
-    expect(shell).toMatch(/applicationMarket:\s*'(server|dashboard|settings|globe)'/);
+    expect(sidebarIcons).toContain("applicationMarket: 'applicationMarket'");
+    expect(sidebarIcons).toContain("market: 'marketGroup'");
     expect(app).toContain('ApplicationMarketPanel');
     expect(app).toContain("<ApplicationMarketPanel v-else-if=\"activeTool === 'applicationMarket'\" />");
     expect(styles).toContain('@import "./styles/tools/application-market.css";');

@@ -1,7 +1,8 @@
 import { computed, ref, watch } from 'vue';
 
-import type { IconName } from '@shared/components/AppIcon.vue';
+import type { SidebarIconName } from '@shared/components/SidebarIcon.vue';
 import { dashboardNavItem, navGroups } from '@app/navigation';
+import { navGroupIcons, navItemIcons } from '@app/sidebarIcons';
 import type { ToolKey } from '../../types';
 
 type WorkspaceTheme = 'light' | 'dark';
@@ -86,35 +87,12 @@ export function useShellState() {
   };
 }
 
-function navItemIcon(key: ToolKey): IconName {
-  const icons: Record<ToolKey, IconName> = {
-    dashboard: 'dashboard',
-    ip: 'network',
-    hosts: 'server',
-    sessionAudits: 'scan',
-    bulkExecution: 'terminal',
-    applicationMarket: 'server',
-    databaseManagement: 'server',
-    accounts: 'users',
-    companyDevices: 'laptop',
-    ports: 'gauge',
-    subnet: 'globe',
-    auth: 'shield',
-    password: 'key',
-    securityScan: 'scan',
-    loginLogs: 'bell',
-    operationLogs: 'clipboard',
-    users: 'user',
-    roles: 'shield',
-    profile: 'user',
-    systemSettings: 'settings',
-  };
-  return icons[key];
+function navItemIcon(key: ToolKey): SidebarIconName {
+  return navItemIcons[key];
 }
 
-function navGroupIcon(key: string): IconName {
-  const icons: Record<string, IconName> = { network: 'monitor', host: 'server', market: 'globe', company: 'monitor', security: 'settings', system: 'dashboard' };
-  return icons[key] ?? 'dashboard';
+function navGroupIcon(key: string): SidebarIconName {
+  return navGroupIcons[key as keyof typeof navGroupIcons] ?? 'dashboard';
 }
 
 function readWorkspaceTheme(): WorkspaceTheme {
