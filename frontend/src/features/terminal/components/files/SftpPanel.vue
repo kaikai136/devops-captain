@@ -18,6 +18,7 @@ import {
   useSftpBrowser,
 } from '../../composables/useSftpBrowser';
 import { TERMINAL_FILE_ROW_HEIGHT } from '../../utils/virtualList';
+import { terminalFileImageMime } from '../../utils/fileTypes';
 import FileCreateDialog from './FileCreateDialog.vue';
 import FileDownloadDialog from './FileDownloadDialog.vue';
 import FilePropertiesDialog from './FilePropertiesDialog.vue';
@@ -28,6 +29,7 @@ import FileUploadDialog from './FileUploadDialog.vue';
 interface Props {
   visible: boolean;
   active: boolean;
+  terminalAvailable: boolean;
   sessionKey: string | null;
   hostId: number | null;
   currentCwd: string;
@@ -76,7 +78,10 @@ const TRANSFER_PANEL_MIN_HEIGHT = 96;
 const TRANSFER_PANEL_MAX_HEIGHT = 360;
 
 const props = defineProps<Props>();
-const emit = defineEmits<{ writeTerminal: [text: string] }>();
+const emit = defineEmits<{
+  writeTerminal: [text: string];
+  openFile: [entry: TerminalFileEntry, mode: 'edit' | 'preview'];
+}>();
 const root = ref<HTMLElement | null>(null);
 const fileTable = ref<FileTableExpose | null>(null);
 const uploadDialog = ref<FileUploadExpose | null>(null);
@@ -125,7 +130,17 @@ const fileContextMenuItems = computed<FileContextMenuItem[]>(() => {
   const targetPathsText = targetEntries.map((item) => getEntryResolvedPath(item, browser.path.value)).join('\n');
   const targetNamesText = targetEntries.map((item) => item.name).join('\n');
   return [
-    { id: 'open', label: '打开', icon: 'folder', enabled: Boolean(isDirectory) && (isSingle || isParent), action: () => { if (entry) browser.openDirectory(entry); } },
+    {
+      id: 'open', label: '打开', icon: isDirectory ? 'folder' : 'file',
+      enabled: Boolean(entry) && (isDirectory ? (isSingle || isParent) : isSingle),
+      action: () => {
+        if (!entry) return;
+        if (isDirectory) browser.openDirectory(entry);
+        else emit('openFile', { ...entry, path: resolvedPath }, 'edit');
+      },
+    },
+    { id: 'preview', label: '预览', icon: 'eye', enabled: Boolean(entry) && !isParent && isSingle && !isDirectory, action: () => { if (entry) emit('openFile', { ...entry, path: resolvedPath }, 'preview'); } },
+    { id: 'edit', label: '使用内置编辑器打开', icon: 'edit', enabled: Boolean(entry) && !isParent && isSingle && !isDirectory && !terminalFileImageMime(name).startsWith('image/'), action: () => { if (entry) emit('openFile', { ...entry, path: resolvedPath }, 'edit'); } },
     { id: 'refresh', label: '刷新', icon: 'refresh', enabled: true, action: () => browser.loadDirectory(browser.path.value, { force: true }) },
     { id: 'upload', label: '上传到当前文件夹...', icon: 'upload', enabled: hasEntry && !isParent, action: openUpload },
     { id: 'download', label: isMultiple ? '下载所选到目录...' : '下载到目录...', icon: 'download', enabled: targetEntries.length > 0, action: () => browser.downloadFiles(targetEntries) },
@@ -136,9 +151,9 @@ const fileContextMenuItems = computed<FileContextMenuItem[]>(() => {
     { id: 'copy-path', label: isMultiple ? '复制所选路径' : '复制路径', icon: 'copy', enabled: targetEntries.length > 0 || hasEntry, separatorBefore: true, action: () => copyText(targetEntries.length > 0 ? targetPathsText : resolvedPath) },
     { id: 'copy-name', label: isMultiple ? '复制所选名称' : '复制名称', icon: 'copy', enabled: targetEntries.length > 0, action: () => copyText(isMultiple ? targetNamesText : name) },
     { id: 'copy-directory', label: '复制目录路径', icon: 'folder', enabled: hasEntry && !isParent, action: () => copyText(directoryPath) },
-    { id: 'send-path', label: isMultiple ? '将所选路径发送到终端' : '将路径发送到终端', icon: 'cornerDownLeft', enabled: targetEntries.length > 0 || hasEntry, separatorBefore: true, action: () => emit('writeTerminal', targetEntries.length > 0 ? targetPathsText : resolvedPath) },
-    { id: 'send-name', label: isMultiple ? '将所选名称发送到终端' : '将名称发送到终端', icon: 'chevronRight', enabled: targetEntries.length > 0, action: () => emit('writeTerminal', isMultiple ? targetNamesText : name) },
-    { id: 'send-directory', label: '将目录路径发送到终端', icon: 'chevronsRight', enabled: hasEntry && !isParent, action: () => emit('writeTerminal', directoryPath) },
+    { id: 'send-path', label: isMultiple ? '将所选路径发送到终端' : '将路径发送到终端', icon: 'cornerDownLeft', enabled: props.terminalAvailable && (targetEntries.length > 0 || hasEntry), separatorBefore: true, action: () => emit('writeTerminal', targetEntries.length > 0 ? targetPathsText : resolvedPath) },
+    { id: 'send-name', label: isMultiple ? '将所选名称发送到终端' : '将名称发送到终端', icon: 'chevronRight', enabled: props.terminalAvailable && targetEntries.length > 0, action: () => emit('writeTerminal', isMultiple ? targetNamesText : name) },
+    { id: 'send-directory', label: '将目录路径发送到终端', icon: 'chevronsRight', enabled: props.terminalAvailable && hasEntry && !isParent, action: () => emit('writeTerminal', directoryPath) },
     { id: 'properties', label: '属性...', icon: 'info', enabled: hasEntry && !isParent && isSingle, separatorBefore: true, action: async () => { if (entry) await browser.openProperties(entry); } },
   ];
 });
@@ -155,7 +170,7 @@ const directoryContextMenuItems = computed<FileContextMenuItem[]>(() => [
   { id: 'create-directory', label: '新建文件夹', icon: 'folderPlus', enabled: props.active, action: () => browser.openCreateDialog('directory') },
   { id: 'create-symlink', label: '新建符号链接', icon: 'link', enabled: props.active, action: () => browser.openCreateDialog('symlink') },
   { id: 'copy-directory', label: '复制目录路径', icon: 'copy', enabled: props.active, separatorBefore: true, action: () => copyText(browser.path.value) },
-  { id: 'send-directory', label: '将目录路径发送到终端', icon: 'cornerDownLeft', enabled: props.active, action: () => emit('writeTerminal', browser.path.value) },
+  { id: 'send-directory', label: '将目录路径发送到终端', icon: 'cornerDownLeft', enabled: props.active && props.terminalAvailable, action: () => emit('writeTerminal', browser.path.value) },
   { id: 'properties', label: '属性', icon: 'info', enabled: props.active, separatorBefore: true, action: () => browser.openCurrentDirectoryProperties() },
 ]);
 const deleteEntries = computed(() => browser.deleteDialog.value.entries.length
@@ -206,6 +221,12 @@ function selectEntry(entry: TerminalFileEntry, event: MouseEvent | KeyboardEvent
   }
   browser.select(entry, event.shiftKey);
 }
+function openEntry(entry: TerminalFileEntry) {
+  if (!props.active) return;
+  if (entry.type === 'directory') browser.openDirectory(entry);
+  else emit('openFile', { ...entry, path: getEntryResolvedPath(entry, browser.path.value) }, 'edit');
+}
+defineExpose({ refresh: () => browser.loadDirectory(browser.path.value, { force: true }) });
 function openFileContextMenu(entry: TerminalFileEntry, event: MouseEvent) {
   if (!props.active) return;
   if (!browser.isSelected(entry)) browser.setSelection([entry], isParentEntry(entry) ? '' : entry.path);
@@ -508,7 +529,7 @@ onBeforeUnmount(() => {
           @directory-context="openDirectoryContextMenu"
           @marquee-start="startMarquee"
           @drag-start="startDragDownload"
-          @open="browser.openDirectory"
+          @open="openEntry"
           @navigate="browser.loadDirectory($event)"
           @drag-enter="dragEnter"
           @drag-over="dragOver"

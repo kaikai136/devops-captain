@@ -1,5 +1,5 @@
 ﻿<script setup lang="ts">
-import { computed, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { InputInstance } from 'element-plus';
 import Guacamole from 'guacamole-common-js';
 import { FitAddon } from '@xterm/addon-fit';
@@ -13,6 +13,8 @@ import { useSshTerminal } from '../../features/terminal/composables/useSshTermin
 import { useTerminalResize } from '../../features/terminal/composables/useTerminalResize';
 import { useTerminalTabs } from '../../features/terminal/composables/useTerminalTabs';
 import SftpPanel from '../../features/terminal/components/files/SftpPanel.vue';
+import { useTerminalFiles, type FileOpenMode, type TerminalFileTab } from '../../features/terminal/composables/useTerminalFiles';
+import type { TerminalFileEntry } from '../../features/terminal/types';
 import {
   createTerminalQuickCommand,
   getTerminalMonitor,
@@ -516,6 +518,28 @@ const isResizingSidebar = ref(false);
 let sidebarResizeStartX = 0;
 let sidebarResizeStartWidth = TERMINAL_SIDEBAR_DEFAULT_WIDTH;
 const terminalContainers = new Map<string, HTMLElement>();
+const TerminalFileWorkspace = defineAsyncComponent(() => import('../../features/terminal/components/files/TerminalFileWorkspace.vue'));
+const sftpPanelRef = ref<InstanceType<typeof SftpPanel> | null>(null);
+const files = useTerminalFiles({
+  onUnauthorized: handleTerminalAuthExpired,
+  onSaved: target => {
+    if (fileBrowserContext.value.hostId === target.hostId) void sftpPanelRef.value?.refresh();
+  },
+});
+const fileTabs = files.tabs;
+const activeFileTabId = files.activeId;
+const fileBrowserContext = computed(() => {
+  const file = files.activeTab.value;
+  const terminal = file ? tabs.value.find(tab => tab.host.id === file.hostId && tab.kind === 'ssh') : activeTab.value;
+  return {
+    active: Boolean(file || terminal?.kind === 'ssh'),
+    terminalAvailable: Boolean(terminal?.kind === 'ssh' && terminal.status === 'connected' && terminal.socket?.readyState === WebSocket.OPEN),
+    hostId: file?.hostId ?? terminal?.host.id ?? null,
+    sessionKey: terminal?.id ?? (file ? `file-host-${file.hostId}` : null),
+    nodeName: file?.nodeName ?? terminal?.host.name ?? '',
+    currentCwd: terminal?.currentCwd ?? '',
+  };
+});
 const terminalHeartbeatTimers = new Map<string, number>();
 const pendingConnectTabIds: string[] = [];
 const connectingTabIds = new Set<string>();
@@ -539,7 +563,7 @@ const connectedTerminalTabs = computed(() => tabs.value.filter((tab) => tab.stat
 const isTerminalSplitActive = computed(
   () => terminalSplitMode.value !== 'single' && connectedTerminalTabs.value.length >= 2 && activeTab.value?.status === 'connected',
 );
-const visibleTerminalTabs = computed(() => (isTerminalSplitActive.value ? connectedTerminalTabs.value : activeTab.value ? [activeTab.value] : []));
+const visibleTerminalTabs = computed(() => activeFileTabId.value ? [] : (isTerminalSplitActive.value ? connectedTerminalTabs.value : activeTab.value ? [activeTab.value] : []));
 const terminalSplitModeLabel = computed(
   () => terminalSplitModeOptions.find((option) => option.mode === terminalSplitMode.value)?.label ?? '单屏模式',
 );
@@ -606,7 +630,7 @@ const canUseTerminalQuickCommands = computed(() => {
   return (user.featurePermissionCodes ?? []).includes('action_hosts_quick_commands');
 });
 const shouldShowTerminalQuickCommandPanel = computed(
-  () => activeTerminalSupportsSshTools.value && canUseTerminalQuickCommands.value && terminalQuickCommands.value.length > 0,
+  () => !activeFileTabId.value && activeTerminalSupportsSshTools.value && canUseTerminalQuickCommands.value && terminalQuickCommands.value.length > 0,
 );
 const terminalQuickCommandPanelStyle = computed<Record<string, string>>(() => ({
   '--terminal-quick-command-height':
@@ -1120,11 +1144,12 @@ function scrollTerminalTabs(direction: 'left' | 'right') {
 
 function scrollActiveTerminalTabIntoView() {
   const tabsElement = terminalTabsRef.value;
-  if (!tabsElement || !activeTabId.value) {
+  const currentId = activeFileTabId.value ?? activeTabId.value;
+  if (!tabsElement || !currentId) {
     syncTerminalTabsScrollStateSoon();
     return;
   }
-  const activeButton = tabsElement.querySelector<HTMLElement>(`[data-terminal-tab-id="${cssEscape(activeTabId.value)}"]`);
+  const activeButton = tabsElement.querySelector<HTMLElement>(`[data-terminal-tab-id="${cssEscape(currentId)}"]`);
   activeButton?.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
   window.setTimeout(syncTerminalTabsScrollState, 220);
 }
@@ -1879,13 +1904,15 @@ function getTerminalBufferContextMenu(tab: TerminalTab | null): TerminalContextM
 }
 
 function writeTerminalTextFromSftp(value: string) {
-  if (!value || !activeTab.value) return;
-  activeTab.value.terminal.write(value);
-  activeTab.value.terminal.focus();
+  const hostId = fileBrowserContext.value.hostId;
+  const tab = tabs.value.find(item => item.host.id === hostId && item.kind === 'ssh') ?? null;
+  if (!value || !tab || !fileBrowserContext.value.terminalAvailable) return;
+  tab.terminal.write(value);
+  if (!activeFileTabId.value && tab.id === activeTabId.value) tab.terminal.focus();
 }
 
 function toggleTerminalFilePanel() {
-  if (!activeTerminalSupportsSshTools.value) return;
+  if (!fileBrowserContext.value.active) return;
   if (terminalSidebarMode.value === 'files' && !isTerminalSidebarCollapsed.value) {
     setTerminalSidebarCollapsed(true);
     return;
@@ -2043,6 +2070,7 @@ async function loadTerminalMonitor() {
 
 function isTerminalMonitorVisible() {
   return (
+    !activeFileTabId.value &&
     isTerminalMonitorPanelOpen.value &&
     document.visibilityState === 'visible' &&
     activeTerminalSupportsSshTools.value
@@ -2124,9 +2152,9 @@ function monitorProgressStyle(value: number): Record<string, string> {
   };
 }
 
-watch([activeTabId, terminalSidebarMode], () => {
+watch([activeTabId, terminalSidebarMode, activeFileTabId], () => {
   closeTerminalContextMenus();
-  if (!activeTerminalSupportsSshTools.value && (terminalSidebarMode.value === 'files' || terminalSidebarMode.value === 'commands')) {
+  if (!activeTerminalSupportsSshTools.value && !activeFileTabId.value && (terminalSidebarMode.value === 'files' || terminalSidebarMode.value === 'commands')) {
     terminalSidebarMode.value = 'hosts';
   }
   if (
@@ -2176,6 +2204,7 @@ const terminalShellStyle = computed<Record<string, string>>(() => ({
     !shouldShowTerminalQuickCommandPanel.value || isTerminalQuickCommandPanelCollapsed.value ? '0px' : `${terminalQuickCommandPanelHeight.value}px`,
 }));
 onMounted(async () => {
+  window.addEventListener('beforeunload', guardUnsavedFiles);
   window.addEventListener('click', closeTerminalContextMenus);
   window.addEventListener('keydown', closeTerminalContextMenusOnEscape);
   window.addEventListener('resize', syncTerminalSidebarWidth);
@@ -2208,6 +2237,8 @@ onMounted(async () => {
 });
 
 onBeforeUnmount(() => {
+  window.removeEventListener('beforeunload', guardUnsavedFiles);
+  files.dispose();
   stopSidebarResize();
   stopTerminalQuickCommandPanelResize();
   stopTerminalMonitorPolling();
@@ -2223,6 +2254,7 @@ onBeforeUnmount(() => {
 });
 
 function closeTerminalContextMenusOnEscape(event: KeyboardEvent) {
+  if (activeFileTabId.value && event.key.toLowerCase() !== 'escape') return;
   if ((event.target as Element | null)?.closest('.shadcn-context-menu-content')) return;
   const key = event.key.toLowerCase();
   if ((event.ctrlKey || event.metaKey) && event.shiftKey && key === 'v') {
@@ -2274,6 +2306,7 @@ function toggleGroup(group: TerminalGroup) {
 }
 
 async function openHostTab(host: TerminalHost) {
+  activeFileTabId.value = null;
   const createdTab = addTerminalTab(() => createTerminalTab(host));
   saveTerminalWorkspace();
   await nextTick();
@@ -2283,11 +2316,37 @@ async function openHostTab(host: TerminalHost) {
   enqueueConnectTab(tab);
 }
 
+function openFileFromSftp(entry: TerminalFileEntry, mode: FileOpenMode) {
+  const hostId = fileBrowserContext.value.hostId;
+  if (hostId === null) return;
+  files.open({ hostId, nodeName: fileBrowserContext.value.nodeName, path: entry.path, name: entry.name }, mode);
+  closeTerminalPastePrompt();
+  void nextTick(scrollActiveTerminalTabIntoView);
+}
+
+function guardUnsavedFiles(event: BeforeUnloadEvent) {
+  if (!files.hasUnsaved.value) return;
+  event.preventDefault();
+  event.returnValue = '';
+}
+
+function closeFileTab(tab: TerminalFileTab) {
+  if (files.close(tab)) void nextTick(scrollActiveTerminalTabIntoView);
+}
+
+function activateFileTab(id: string) {
+  activeFileTabId.value = id;
+  closeTerminalTabMenu();
+  closeTerminalPastePrompt();
+  void nextTick(scrollActiveTerminalTabIntoView);
+}
+
 function toggleRoot() {
   rootExpanded.value = !rootExpanded.value;
 }
 
 async function activateTab(tabId: string) {
+  activeFileTabId.value = null;
   selectTerminalTab(tabId);
   saveTerminalWorkspace();
   await nextTick();
@@ -2816,7 +2875,7 @@ function stopSidebarResize() {
 }
 
 function selectTerminalSidebarMode(mode: TerminalSidebarMode) {
-  if ((mode === 'files' || mode === 'commands') && !activeTerminalSupportsSshTools.value) {
+  if ((mode === 'files' && !fileBrowserContext.value.active) || (mode === 'commands' && !activeTerminalSupportsSshTools.value)) {
     terminalSidebarMode.value = 'hosts';
     return;
   }
@@ -2945,6 +3004,7 @@ async function closeTab(tab: TerminalTab) {
 }
 
 async function closeTerminalTabs(targetTabs: TerminalTab[]) {
+  const previousFileId = activeFileTabId.value;
   const { nextActiveId, closedTabs } = removeTerminalTabs(targetTabs);
   if (!closedTabs.length) return;
 
@@ -2952,7 +3012,7 @@ async function closeTerminalTabs(targetTabs: TerminalTab[]) {
   pruneTerminalMultiExecutionExclusions();
   await nextTick();
 
-  if (nextActiveId) await activateTab(nextActiveId);
+  if (nextActiveId && !previousFileId) await activateTab(nextActiveId);
   if (!activeTabId.value) closeTerminalMonitorPanel();
   saveTerminalWorkspace();
   syncTerminalTabsScrollStateSoon();
@@ -3280,7 +3340,7 @@ function readTerminalQuickCommandPanelCollapsed() {
           title="FTP 文件夹"
           aria-label="FTP 文件夹"
           :class="{ active: terminalSidebarMode === 'files' }"
-          :disabled="!activeTerminalSupportsSshTools"
+          :disabled="!fileBrowserContext.active"
           @click="selectTerminalSidebarMode('files')"
         >
           <AppIcon name="folder" :size="19" />
@@ -3365,14 +3425,17 @@ function readTerminalQuickCommandPanelCollapsed() {
           </div>
         </template>
         <SftpPanel
+          ref="sftpPanelRef"
           :visible="terminalSidebarMode === 'files'"
-          :active="activeTerminalSupportsSshTools"
-          :session-key="activeTab?.id ?? null"
-          :host-id="activeTab?.host.id ?? null"
-          :current-cwd="activeTab?.currentCwd ?? ''"
-          :node-name="activeTerminalNodeName"
+          :active="fileBrowserContext.active"
+          :terminal-available="fileBrowserContext.terminalAvailable"
+          :session-key="fileBrowserContext.sessionKey"
+          :host-id="fileBrowserContext.hostId"
+          :current-cwd="fileBrowserContext.currentCwd"
+          :node-name="fileBrowserContext.nodeName"
           :handle-unauthorized="handleTerminalAuthExpired"
           @write-terminal="writeTerminalTextFromSftp"
+          @open-file="openFileFromSftp"
         />
       </div>
     </aside>
@@ -3393,7 +3456,7 @@ function readTerminalQuickCommandPanelCollapsed() {
       }"
       :style="terminalQuickCommandPanelStyle"
     >
-      <div class="terminal-hint">
+      <div class="terminal-hint" :inert="Boolean(activeFileTabId)">
         <div class="terminal-hint-actions">
           <el-button
             native-type="button"
@@ -3532,7 +3595,7 @@ function readTerminalQuickCommandPanelCollapsed() {
               class="terminal-tab"
               :data-terminal-tab-id="tab.id"
               :class="{
-                active: tab.id === activeTabId,
+                active: !activeFileTabId && tab.id === activeTabId,
                 closed: tab.status === 'closed',
                 error: tab.status === 'error',
                 'multi-execution-target': shouldShowTerminalMultiExecutionTabIndicator(tab),
@@ -3553,9 +3616,20 @@ function readTerminalQuickCommandPanelCollapsed() {
               <span class="terminal-tab-status" :class="[tab.status, { unread: tab.hasUnreadOutput && tab.id !== activeTabId }]"></span>
               <span class="terminal-tab-close" title="关闭" @click.stop="closeTab(tab)"><AppIcon name="x" :size="13" /></span>
             </el-button>
+            <el-button
+              v-for="tab in fileTabs" :key="tab.id" native-type="button"
+              class="terminal-tab terminal-file-tab" :data-terminal-tab-id="tab.id"
+              :class="{ active: tab.id === activeFileTabId, error: Boolean(tab.error || tab.saveError) }"
+              :title="`${tab.nodeName} · ${tab.path}`"
+              @click="activateFileTab(tab.id)" @contextmenu.stop.prevent
+            >
+              <span class="terminal-tab-label">{{ tab.name }}</span>
+              <span class="terminal-file-dirty" :title="tab.dirty ? '未保存' : '文件'">{{ tab.dirty ? '●' : '◇' }}</span>
+              <span class="terminal-tab-close" title="关闭文件标签" @click.stop="closeFileTab(tab)"><AppIcon name="x" :size="13" /></span>
+            </el-button>
           </div>
         </AppContextMenu>
-        <div v-if="tabs.length" class="terminal-tab-overview" @click.stop>
+        <div v-if="tabs.length || fileTabs.length" class="terminal-tab-overview" @click.stop>
           <el-button
             native-type="button"
             class="terminal-tab-scroll-button previous"
@@ -3594,21 +3668,25 @@ function readTerminalQuickCommandPanelCollapsed() {
               :key="`menu-${tab.id}`"
               native-type="button"
               class="terminal-tab-menu-item"
-              :class="{ active: tab.id === activeTabId, closed: tab.status === 'closed', error: tab.status === 'error' }"
+              :class="{ active: !activeFileTabId && tab.id === activeTabId, closed: tab.status === 'closed', error: tab.status === 'error' }"
               role="menuitem"
               @click="selectTerminalTabFromMenu(tab)"
             >
               <span class="terminal-tab-menu-check">
-                <AppIcon v-if="tab.id === activeTabId" name="check" :size="15" />
+                <AppIcon v-if="!activeFileTabId && tab.id === activeTabId" name="check" :size="15" />
               </span>
               <AppIcon name="server" :size="15" />
               <span class="terminal-tab-menu-label">{{ index + 1 }} {{ getTerminalTabLabel(tab) }}</span>
               <span class="terminal-tab-status" :class="[tab.status, { unread: tab.hasUnreadOutput && tab.id !== activeTabId }]"></span>
             </el-button>
+            <el-button v-for="tab in fileTabs" :key="tab.id" class="terminal-tab-menu-item" :class="{ active: activeFileTabId === tab.id }" @click="activateFileTab(tab.id)">
+              <span class="terminal-tab-menu-check"><AppIcon v-if="activeFileTabId === tab.id" name="check" :size="15" /></span>
+              <AppIcon name="file" :size="15" /><span class="terminal-tab-menu-label">{{ tab.name }} · {{ tab.nodeName }}</span><span>{{ tab.dirty ? '●' : '' }}</span>
+            </el-button>
           </div>
         </div>
       </div>
-      <div class="terminal-workspace-body" :class="{ 'monitor-open': isTerminalMonitorPanelOpen }">
+      <div class="terminal-workspace-body" :class="{ 'monitor-open': isTerminalMonitorPanelOpen && !activeFileTabId }">
         <AppContextMenu
           :open="terminalContextMenu.visible"
           :items="terminalContextMenuItems"
@@ -3618,16 +3696,20 @@ function readTerminalQuickCommandPanelCollapsed() {
         >
           <div
             class="terminal-screen"
-            :class="[`split-${terminalSplitMode}`, { 'split-active': isTerminalSplitActive }]"
+            :class="[`split-${terminalSplitMode}`, { 'split-active': isTerminalSplitActive && !activeFileTabId, 'file-active': Boolean(activeFileTabId) }]"
             :style="terminalScreenStyle"
           >
-            <div v-if="!tabs.length" class="terminal-empty">双击左侧主机名连接 SSH 终端。</div>
+            <TerminalFileWorkspace
+              v-for="fileTab in fileTabs" :key="fileTab.id" :tab="fileTab" :active="activeFileTabId === fileTab.id"
+              @change="files.change(fileTab, $event)" @save="files.save(fileTab)" @reload="files.reload(fileTab)" @edit="fileTab.mode = 'edit'"
+            />
+            <div v-if="!tabs.length && !activeFileTabId" class="terminal-empty">双击左侧主机名连接 SSH 终端。</div>
             <div
               v-for="tab in tabs"
               :key="tab.id"
               class="terminal-panel"
               :class="{
-                active: tab.id === activeTabId,
+                active: !activeFileTabId && tab.id === activeTabId,
                 visible: isTerminalTabVisible(tab),
                 excluded: isTerminalMultiExecutionEnabled && isTerminalMultiExecutionExcluded(tab),
               }"
@@ -3708,7 +3790,7 @@ function readTerminalQuickCommandPanelCollapsed() {
             <el-button native-type="button" @click="closeTerminalPastePrompt">取消</el-button>
           </div>
         </div>
-        <aside v-if="isTerminalMonitorPanelOpen" class="terminal-monitor-panel terminal-monitor-drawer">
+        <aside v-if="isTerminalMonitorPanelOpen && !activeFileTabId" class="terminal-monitor-panel terminal-monitor-drawer">
           <header class="terminal-monitor-title">
             <strong>资源监控</strong>
             <span>{{ terminalMonitorNodeName }}</span>

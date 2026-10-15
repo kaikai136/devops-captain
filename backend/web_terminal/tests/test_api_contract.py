@@ -5,6 +5,8 @@ from web_terminal import views
 
 
 ENDPOINTS = [
+    ("files", "terminal_file_content", "/api/web-terminal/hosts/1/files/content/", ("get",)),
+    ("files", "terminal_file_content_update", "/api/web-terminal/hosts/1/files/content/update/", ("post",)),
     ("sessions", "terminal_tree", "/api/web-terminal/tree/", ("get",)),
     ("sessions", "terminal_sessions", "/api/web-terminal/sessions/", ("post",)),
     (

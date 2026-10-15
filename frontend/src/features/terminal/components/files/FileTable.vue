@@ -92,8 +92,8 @@ function handleScroll(event: Event) {
   scrollTop.value = (event.currentTarget as HTMLElement).scrollTop;
 }
 function openDirectory(entry: TerminalFileEntry) {
-  if (!props.rename || props.rename.path !== entry.path) {
-    if (entry.type === 'directory') emit('open', entry);
+  if (props.active && (!props.rename || props.rename.path !== entry.path)) {
+    emit('open', entry);
   }
 }
 

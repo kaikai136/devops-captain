@@ -76,6 +76,55 @@ def download_remote_file_content(host: ManagedHost, path: str) -> dict:
     )
     return {"filename": path.rstrip("/").split("/")[-1] or "download", "content": payload["content"]}
 
+
+def update_remote_file_content(host: ManagedHost, path: str, source) -> dict:
+    """Stage edits beside the resolved file, retaining mode/ownership and symlinks."""
+    path = normalize_remote_file_path(path)
+    path = resolve_remote_file_path(host, path)
+    temp_path = temporary_remote_upload_path(path)
+    quoted_path = shlex.quote(path)
+    quoted_temp = shlex.quote(temp_path)
+    source.seek(0, 2)
+    expected_size = source.tell()
+    # Copy attributes before writing; never delete the destination on a failed save.
+    command = (
+        f"test -f {quoted_path} && test -w {quoted_path} && "
+        f"cp -p -- {quoted_path} {quoted_temp} && "
+        f"cat > {quoted_temp} && test $(wc -c < {quoted_temp}) -eq {expected_size} && "
+        f"mv -f -- {quoted_temp} {quoted_path}"
+    )
+    written = 0
+    rewind_upload_source(source)
+    try:
+        with borrow_ssh_client(host) as client:
+            stdin, stdout, stderr = client.exec_command(command, timeout=60)
+            try:
+                for chunk in iter_upload_chunks(source):
+                    if chunk:
+                        stdin.write(chunk)
+                        written += len(chunk)
+                stdin.flush()
+                stdin.channel.shutdown_write()
+                error_output = stderr.read().decode("utf-8", errors="replace").strip()
+                if stdout.channel.recv_exit_status() != 0:
+                    raise TerminalConnectionError(error_output or "文件保存失败，请检查文件和目录写入权限")
+            except Exception:
+                try:
+                    client.exec_command(f"rm -f -- {quoted_temp}", timeout=10)
+                except Exception:
+                    pass
+                raise
+            finally:
+                stdin.close()
+                stdout.close()
+                stderr.close()
+    except TerminalConnectionError:
+        raise
+    except Exception as error:
+        raise TerminalConnectionError(f"文件保存失败：{error}") from error
+    return {"path": path, "size": written, "protocol": "SSH stream"}
+
+
 def stream_remote_file_content(host: ManagedHost, path: str, protocol: str = "auto") -> dict:
     path = normalize_remote_file_path(path)
     protocol = normalize_remote_download_protocol(protocol)

@@ -1,3 +1,4 @@
+import mimetypes
 from functools import wraps
 from urllib.parse import quote
 
@@ -20,6 +21,7 @@ from ..services import (
     list_remote_directory,
     rename_remote_file,
     stream_remote_file_content,
+    update_remote_file_content,
     update_remote_file_properties,
     upload_remote_file,
     upload_remote_file_stream,
@@ -121,6 +123,10 @@ def terminal_file_download(request, host):
 @terminal_permission_required
 @with_terminal_host
 def terminal_file_download_attachment(request, host):
+    return file_content_response(request, host)
+
+
+def file_content_response(request, host, *, preview=False):
     requested_path = str(request.query_params.get("path", ""))
     requested_protocol = str(request.query_params.get("protocol", "auto"))
     try:
@@ -167,12 +173,56 @@ def terminal_file_download_attachment(request, host):
             audited_download_stream(content, host=host, user=request.user, path=path, protocol=protocol),
             content_type="application/octet-stream",
         )
-    response["Content-Disposition"] = f"attachment; filename*=UTF-8''{quote(filename)}"
+    if preview:
+        mime = mimetypes.guess_type(filename)[0] or "application/octet-stream"
+        response["Content-Type"] = mime
+        response["X-Content-Type-Options"] = "nosniff"
+        response["Content-Security-Policy"] = "sandbox; default-src 'none'"
+        response["Cache-Control"] = "no-store"
+    disposition = "inline" if preview else "attachment"
+    response["Content-Disposition"] = f"{disposition}; filename*=UTF-8''{quote(filename)}"
     if "size" in payload:
         response["Content-Length"] = str(int(payload.get("size") or 0))
     else:
         response["Content-Length"] = str(len(content))
     return response
+
+
+@api_view(["GET"])
+@terminal_permission_required
+@with_terminal_host
+def terminal_file_content(request, host):
+    return file_content_response(request, host, preview=True)
+
+
+@api_view(["POST"])
+@terminal_permission_required
+@with_terminal_host
+def terminal_file_content_update(request, host):
+    requested_path = str(request.data.get("path", ""))
+    uploaded_file = request.FILES.get("file")
+    if uploaded_file is None:
+        return bad_request("请选择文件内容")
+    try:
+        payload = update_remote_file_content(host, requested_path, uploaded_file)
+        record_file_audit(
+            operation="write", host=host, user=request.user, path=requested_path,
+            size=int(payload.get("size") or getattr(uploaded_file, "size", 0) or 0),
+            protocol=audit_protocol(payload.get("protocol")),
+        )
+        return Response(payload)
+    except TerminalConnectionError as error:
+        record_file_audit(
+            operation="write", host=host, user=request.user, path=requested_path,
+            protocol="auto", status="failed", error_message=str(error),
+        )
+        return bad_request(error)
+    except Exception as error:
+        record_file_audit(
+            operation="write", host=host, user=request.user, path=requested_path,
+            protocol="auto", status="failed", error_message=str(error) or error.__class__.__name__,
+        )
+        return bad_request("文件保存失败")
 
 
 @api_view(["POST"])

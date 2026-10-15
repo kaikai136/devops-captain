@@ -8,6 +8,16 @@ function source() {
 }
 
 describe('WebTerminalPage structure', () => {
+  it('keeps file tabs mounted independently from terminal sessions and preserves split mode', () => {
+    const { descriptor } = parseSfc(source());
+    const template = descriptor.template?.content ?? '';
+    const script = descriptor.scriptSetup?.content ?? '';
+    expect(template).toContain('v-for="fileTab in fileTabs"');
+    expect(template).toContain('isTerminalSplitActive && !activeFileTabId');
+    expect(template).toContain('@open-file="openFileFromSftp"');
+    expect(script).toContain("window.addEventListener('beforeunload', guardUnsavedFiles)");
+    expect(script).toContain('if (nextActiveId && !previousFileId)');
+  });
   it('writes live SSH output to xterm without rewriting terminal control streams', () => {
     const script = parseSfc(source(), { filename: 'WebTerminalPage.vue' }).descriptor.scriptSetup?.content ?? '';
 
