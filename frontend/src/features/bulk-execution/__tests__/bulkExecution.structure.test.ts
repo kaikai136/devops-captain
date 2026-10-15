@@ -9,13 +9,13 @@ describe('bulk execution frontend contract', () => {
   it('registers bulkExecution as a host-management sibling page in navigation and app shell', () => {
     const types = readSource('types.ts');
     const navigation = readSource('app/navigation.ts');
-    const shellState = readSource('composables/app/useShellState.ts');
+    const sidebarIcons = readSource('app/sidebarIcons.ts');
     const app = readSource('App.vue');
 
     expect(types).toContain("'bulkExecution'");
     expect(navigation).toContain("key: 'bulkExecution' as const");
     expect(navigation).toMatch(/sessionAudits[\s\S]+bulkExecution[\s\S]+accounts/);
-    expect(shellState).toMatch(/bulkExecution:\s*'(terminal|zap)'/);
+    expect(sidebarIcons).toContain("bulkExecution: 'bulkExecution'");
     expect(app).toContain('BulkExecutionPanel');
     expect(app).toContain("activeTool === 'bulkExecution'");
   });

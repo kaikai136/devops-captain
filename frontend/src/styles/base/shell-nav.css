@@ -685,6 +685,16 @@
   font-weight: inherit;
 }
 
+.workspace-nav-menu .sidebar-menu-icon,
+.workspace-nav-popper .sidebar-menu-icon {
+  display: block;
+  justify-self: center;
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  color: currentColor;
+}
+
 .workspace-nav-menu .el-sub-menu__title {
   color: var(--ui-primary);
 }

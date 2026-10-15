@@ -52,7 +52,7 @@ describe('DeviceManager page structure', () => {
   it('registers device asset navigation and app rendering', () => {
     const types = readSource('types.ts');
     const navigation = readSource('app/navigation.ts');
-    const shell = readSource('composables/app/useShellState.ts');
+    const sidebarIcons = readSource('app/sidebarIcons.ts');
     const app = readSource('App.vue');
     const styles = readSource('styles.css');
 
@@ -62,10 +62,10 @@ describe('DeviceManager page structure', () => {
     expect(navigation).toContain("{ key: 'companyDevices' as const, label: '设备资产'");
     expect(navigation).not.toContain("label: '公司管理'");
     expect(navigation).not.toContain("{ key: 'companyDevices' as const, label: '设备管理'");
-    expect(shell).toContain("companyDevices: 'laptop'");
-    expect(shell).toContain("company: 'monitor'");
-    expect(shell).not.toContain("companyDevices: 'hardDrive'");
-    expect(shell).not.toContain("company: 'users'");
+    expect(sidebarIcons).toContain("companyDevices: 'companyDevices'");
+    expect(sidebarIcons).toContain("company: 'deviceGroup'");
+    expect(sidebarIcons).not.toContain("companyDevices: 'hardDrive'");
+    expect(sidebarIcons).not.toContain("company: 'users'");
     expect(app).toContain("const DeviceManager = defineAsyncComponent(() => import('./features/company/components/DeviceManager.vue'))");
     expect(app).toContain("<DeviceManager v-else-if=\"activeTool === 'companyDevices'\" />");
     expect(styles).toContain('@import "./styles/tools/device-manager.css";');
