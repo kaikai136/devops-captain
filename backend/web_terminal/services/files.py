@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import re
 import shlex
 import stat
 import time
@@ -10,7 +11,7 @@ from host_management.models import ManagedHost
 
 from .commands import run_one_shot_ssh_command, run_one_shot_ssh_upload
 from .connections import borrow_sftp_client, borrow_ssh_client, ssh_client_pool_key
-from .errors import TerminalConnectionError
+from .errors import TerminalConnectionError, TerminalFileChangedError
 from .file_parsers import (
     format_remote_timestamp,
     join_remote_path,
@@ -77,8 +78,10 @@ def download_remote_file_content(host: ManagedHost, path: str) -> dict:
     return {"filename": path.rstrip("/").split("/")[-1] or "download", "content": payload["content"]}
 
 
-def update_remote_file_content(host: ManagedHost, path: str, source) -> dict:
+def update_remote_file_content(host: ManagedHost, path: str, source, *, expected_hash=None, force=False) -> dict:
     """Stage edits beside the resolved file, retaining mode/ownership and symlinks."""
+    if not force and (not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash)):
+        raise TerminalConnectionError("缺少有效的文件内容基线，请重新打开文件")
     path = normalize_remote_file_path(path)
     path = resolve_remote_file_path(host, path)
     temp_path = temporary_remote_upload_path(path)
@@ -87,10 +90,15 @@ def update_remote_file_content(host: ManagedHost, path: str, source) -> dict:
     source.seek(0, 2)
     expected_size = source.tell()
     # Copy attributes before writing; never delete the destination on a failed save.
+    verification = "" if force else (
+        f"current_hash=$(sha256sum < {quoted_path}) && "
+        f"{{ test \"${{current_hash%% *}}\" = {shlex.quote(expected_hash)} || exit 73; }} && "
+    )
     command = (
         f"test -f {quoted_path} && test -w {quoted_path} && "
         f"cp -p -- {quoted_path} {quoted_temp} && "
         f"cat > {quoted_temp} && test $(wc -c < {quoted_temp}) -eq {expected_size} && "
+        f"{verification}"
         f"mv -f -- {quoted_temp} {quoted_path}"
     )
     written = 0
@@ -106,7 +114,10 @@ def update_remote_file_content(host: ManagedHost, path: str, source) -> dict:
                 stdin.flush()
                 stdin.channel.shutdown_write()
                 error_output = stderr.read().decode("utf-8", errors="replace").strip()
-                if stdout.channel.recv_exit_status() != 0:
+                status = stdout.channel.recv_exit_status()
+                if status == 73:
+                    raise TerminalFileChangedError("文件在打开后已被修改")
+                if status != 0:
                     raise TerminalConnectionError(error_output or "文件保存失败，请检查文件和目录写入权限")
             except Exception:
                 try:

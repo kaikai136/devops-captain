@@ -18,4 +18,16 @@ describe('file context actions', () => {
     expect(workspace).toContain('lineNumbers()');
     expect(workspace).toContain('searchKeymap');
   });
+
+  it('offers three conflict actions and guards dismissal while busy', () => {
+    expect(workspace).toContain('title="文件已变更"');
+    expect(workspace).toContain('active && tab.conflict');
+    expect(workspace).toContain("emit('cancelConflict')");
+    expect(workspace).toContain("emit('reloadConflict')");
+    expect(workspace).toContain("emit('forceSave')");
+    expect(workspace).toContain(':close-on-press-escape="!tab.loading && !tab.saving"');
+    expect(workspace).toContain(':close-on-click-modal="false"');
+    expect(workspace.indexOf('>取消</el-button>')).toBeLessThan(workspace.indexOf('>放弃并重新加载</el-button>'));
+    expect(workspace.indexOf('>放弃并重新加载</el-button>')).toBeLessThan(workspace.indexOf('>强制保存</el-button>'));
+  });
 });

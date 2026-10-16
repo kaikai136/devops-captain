@@ -12,7 +12,7 @@ import type { TerminalFileTab } from '../../composables/useTerminalFiles';
 import { terminalFileLanguageExtension } from '../../utils/fileEditor';
 
 const props = defineProps<{ tab: TerminalFileTab; active: boolean }>();
-const emit = defineEmits<{ change: [content: string]; save: []; reload: []; edit: [] }>();
+const emit = defineEmits<{ change: [content: string]; save: []; reload: []; edit: []; cancelConflict: []; reloadConflict: []; forceSave: [] }>();
 const editorHost = ref<HTMLElement | null>(null);
 const wrapLines = ref(false);
 const readOnly = computed(() => props.tab.mode === 'preview');
@@ -66,6 +66,19 @@ function download() {
 
 <template>
   <section v-show="active" class="terminal-file-workspace" @keydown.stop @contextmenu.stop>
+    <el-dialog
+      :model-value="active && tab.conflict" title="文件已变更" width="512px" append-to-body
+      :close-on-click-modal="false" :close-on-press-escape="!tab.loading && !tab.saving"
+      :show-close="!tab.loading && !tab.saving" @update:model-value="value => { if (!value) emit('cancelConflict'); }"
+    >
+      <span>文件在打开后已被修改。取消会保留未保存修改；放弃并重新加载会用最新文件替换它们；强制保存会用当前修改覆盖最新文件。</span>
+      <el-alert v-if="tab.saveError" type="error" :title="tab.saveError" :closable="false" />
+      <template #footer>
+        <el-button :disabled="tab.loading || tab.saving" @click="emit('cancelConflict')">取消</el-button>
+        <el-button :loading="tab.loading" :disabled="tab.loading || tab.saving" @click="emit('reloadConflict')">放弃并重新加载</el-button>
+        <el-button type="primary" :loading="tab.saving" :disabled="tab.loading || tab.saving" @click="emit('forceSave')">强制保存</el-button>
+      </template>
+    </el-dialog>
     <header class="terminal-file-workspace-toolbar">
       <div class="terminal-file-workspace-location"><strong>{{ tab.name }}</strong><span :title="`${tab.nodeName} · ${tab.path}`">{{ tab.nodeName }} · {{ tab.path }}</span></div>
       <div class="terminal-file-workspace-actions">

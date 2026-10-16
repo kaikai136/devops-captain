@@ -1,4 +1,5 @@
 import mimetypes
+import re
 from functools import wraps
 from urllib.parse import quote
 
@@ -27,6 +28,7 @@ from ..services import (
     upload_remote_file_stream,
 )
 from .common import terminal_permission_required
+from ..services.errors import TerminalFileChangedError
 
 
 def with_terminal_host(view_func):
@@ -203,14 +205,27 @@ def terminal_file_content_update(request, host):
     uploaded_file = request.FILES.get("file")
     if uploaded_file is None:
         return bad_request("请选择文件内容")
+    expected_hash = request.data.get("expected_hash")
+    force_value = request.data.get("force", "false")
+    if force_value not in ("true", "false"):
+        return bad_request("force 必须为 true 或 false")
+    force = force_value == "true"
+    if not force and (not isinstance(expected_hash, str) or not re.fullmatch(r"[0-9a-f]{64}", expected_hash)):
+        return bad_request("缺少有效的文件内容基线，请重新打开文件")
     try:
-        payload = update_remote_file_content(host, requested_path, uploaded_file)
+        payload = update_remote_file_content(host, requested_path, uploaded_file, expected_hash=expected_hash, force=force)
         record_file_audit(
             operation="write", host=host, user=request.user, path=requested_path,
             size=int(payload.get("size") or getattr(uploaded_file, "size", 0) or 0),
             protocol=audit_protocol(payload.get("protocol")),
         )
         return Response(payload)
+    except TerminalFileChangedError as error:
+        record_file_audit(
+            operation="write", host=host, user=request.user, path=requested_path,
+            protocol="auto", status="failed", error_message=str(error),
+        )
+        return Response({"code": "file_changed", "error": str(error)}, status=409)
     except TerminalConnectionError as error:
         record_file_audit(
             operation="write", host=host, user=request.user, path=requested_path,

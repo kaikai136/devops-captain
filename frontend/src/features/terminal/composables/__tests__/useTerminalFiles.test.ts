@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { ApiResponseError } from '../../../../api';
+import { terminalFileHash } from '../../utils/fileHash';
 import type { TerminalFileContentResponse } from '../../api/terminal';
 import { useTerminalFiles, type TerminalFileTarget } from '../useTerminalFiles';
 
@@ -8,6 +10,65 @@ function response(content: string, size = content.length) {
 }
 
 describe('useTerminalFiles', () => {
+  it('keeps conflicts separate, cancels drafts safely, and forces the current draft', async () => {
+    const conflict = new ApiResponseError('changed', 409, { code: 'file_changed' });
+    const write = vi.fn().mockRejectedValueOnce(conflict).mockRejectedValueOnce(conflict).mockResolvedValue({ size: 5 });
+    const files = useTerminalFiles({ api: { read: vi.fn().mockResolvedValue(response('old')), write } });
+    const tab = files.open(target, 'edit');
+    const other = files.open({ ...target, hostId: 8 }, 'edit');
+    await vi.waitFor(() => expect(tab.loading || other.loading).toBe(false));
+    const baseline = tab.expectedHash;
+    files.change(tab, 'draft');
+    await files.save(tab);
+    expect(tab.conflict).toBe(true);
+    expect(other.conflict).toBe(false);
+    expect(tab.saveError).toBe('');
+    await files.save(tab);
+    expect(write).toHaveBeenCalledTimes(1);
+    files.cancelConflict(tab);
+    expect(tab.conflict).toBe(false);
+    expect(tab.content).toBe('draft');
+    expect(tab.expectedHash).toBe(baseline);
+    await files.save(tab);
+    files.change(tab, 'newer');
+    await files.save(tab, true);
+    expect(write).toHaveBeenLastCalledWith(7, target.path, 'newer', { expectedHash: baseline, force: true });
+    expect(tab.conflict || tab.dirty).toBe(false);
+    files.change(tab, 'next');
+    await files.save(tab);
+    expect(write).toHaveBeenLastCalledWith(7, target.path, 'next', {
+      expectedHash: terminalFileHash(new TextEncoder().encode('newer')), force: false,
+    });
+  });
+
+  it('reloads conflicts without another prompt and preserves drafts on reload or force failure', async () => {
+    const confirm = vi.fn();
+    const read = vi.fn().mockResolvedValueOnce(response('old')).mockRejectedValueOnce(new Error('read denied'))
+      .mockResolvedValueOnce(response('latest'));
+    const write = vi.fn().mockRejectedValueOnce(new ApiResponseError('changed', 409, { code: 'file_changed' }))
+      .mockRejectedValueOnce(new Error('write denied'));
+    const files = useTerminalFiles({ api: { read, write }, confirm });
+    const tab = files.open(target, 'edit');
+    await vi.waitFor(() => expect(tab.loading).toBe(false));
+    files.change(tab, 'draft');
+    await files.save(tab);
+    const baseline = tab.expectedHash;
+    await files.save(tab, true);
+    expect(tab.saveError).toBe('write denied');
+    expect(tab.conflict).toBe(true);
+    await files.reloadConflict(tab);
+    expect(tab.content).toBe('draft');
+    expect(tab.dirty).toBe(true);
+    expect(tab.expectedHash).toBe(baseline);
+    expect(tab.error).toBe('');
+    expect(tab.saveError).toBe('read denied');
+    await files.reloadConflict(tab);
+    expect(tab.content).toBe('latest');
+    expect(tab.expectedHash).toBe(terminalFileHash(new TextEncoder().encode('latest')));
+    expect(tab.conflict || tab.dirty).toBe(false);
+    expect(confirm).not.toHaveBeenCalled();
+  });
+
   it('preserves BOM and CRLF on save and does not clear edits made during a save', async () => {
     let finish!: (value: { size: number }) => void;
     const write = vi.fn(() => new Promise<{ size: number }>(resolve => { finish = resolve; }));
@@ -19,7 +80,10 @@ describe('useTerminalFiles', () => {
     files.change(tab, 'a\nbbb\n');
     finish({ size: 10 });
     await saving;
-    expect(write).toHaveBeenCalledWith(7, target.path, '\ufeffa\r\nbb\r\n');
+    expect(write).toHaveBeenCalledWith(7, target.path, '\ufeffa\r\nbb\r\n', {
+      expectedHash: terminalFileHash(new TextEncoder().encode('\ufeffa\r\nb\r\n')), force: false,
+    });
+    expect(tab.expectedHash).toBe(terminalFileHash(new TextEncoder().encode('\ufeffa\r\nbb\r\n')));
     expect(tab.dirty).toBe(true);
     expect(tab.content).toBe('a\nbbb\n');
   });

@@ -1,6 +1,8 @@
 import { computed, ref } from 'vue';
-import { getTerminalFileContent, updateTerminalFileContent, type TerminalFileContentResponse } from '../api/terminal';
+import { ApiResponseError } from '../../../api';
+import { getTerminalFileContent, updateTerminalFileContent, type TerminalFileContentResponse, type TerminalFileSaveOptions } from '../api/terminal';
 import { terminalFileImageMime } from '../utils/fileTypes';
+import { terminalFileHash } from '../utils/fileHash';
 
 export type FileOpenMode = 'edit' | 'preview';
 export interface TerminalFileTarget { hostId: number; nodeName: string; path: string; name: string }
@@ -10,6 +12,8 @@ export interface TerminalFileTab extends TerminalFileTarget {
   kind: 'text' | 'image' | 'binary';
   content: string;
   savedContent: string;
+  expectedHash: string;
+  conflict: boolean;
   bom: string;
   lineEnding: string;
   contentType: string;
@@ -24,7 +28,7 @@ export interface TerminalFileTab extends TerminalFileTarget {
 }
 interface FileApi {
   read(hostId: number, path: string, options: RequestInit): Promise<TerminalFileContentResponse>;
-  write(hostId: number, path: string, content: string): Promise<{ size: number }>;
+  write(hostId: number, path: string, content: string, options: TerminalFileSaveOptions): Promise<{ size: number }>;
 }
 interface Options {
   api?: FileApi;
@@ -48,7 +52,7 @@ export function useTerminalFiles(options: Options = {}) {
     if (tab.imageUrl) URL.revokeObjectURL(tab.imageUrl);
     tab.imageUrl = '';
   }
-  async function load(tab: TerminalFileTab) {
+  async function load(tab: TerminalFileTab, preserveOnFailure = false) {
     release(tab);
     const controller = new AbortController();
     requests.set(tab.id, controller);
@@ -57,6 +61,7 @@ export function useTerminalFiles(options: Options = {}) {
     tab.saveError = '';
     try {
       const response = await api.read(tab.hostId, tab.path, { signal: controller.signal });
+      const expectedHash = response.isText ? terminalFileHash(new Uint8Array(await response.blob.arrayBuffer())) : '';
       if (requests.get(tab.id) !== controller || controller.signal.aborted) return;
       tab.byteSize = response.size;
       tab.contentType = response.contentType;
@@ -78,15 +83,21 @@ export function useTerminalFiles(options: Options = {}) {
         tab.lineEnding = source.match(/\r\n|\r|\n/)?.[0] ?? '\n';
         tab.content = source.slice(tab.bom.length).replace(/\r\n|\r/g, '\n');
         tab.savedContent = tab.content;
+        tab.expectedHash = expectedHash;
       } else {
         tab.kind = 'binary';
         tab.mode = 'preview';
       }
       tab.dirty = false;
+      tab.conflict = false;
       tab.revision += 1;
     } catch (error) {
       if (requests.get(tab.id) !== controller || controller.signal.aborted) return;
-      if (!options.onUnauthorized?.(error)) tab.error = error instanceof Error ? error.message : '读取文件失败';
+      if (!options.onUnauthorized?.(error)) {
+        const message = error instanceof Error ? error.message : '读取文件失败';
+        if (preserveOnFailure) tab.saveError = message;
+        else tab.error = message;
+      }
     } finally {
       if (requests.get(tab.id) === controller) { requests.delete(tab.id); tab.loading = false; }
     }
@@ -95,7 +106,7 @@ export function useTerminalFiles(options: Options = {}) {
     const id = JSON.stringify([target.hostId, target.path]);
     let tab = tabs.value.find(item => item.id === id);
     if (!tab) {
-      tabs.value.push({ ...target, id, mode, kind: 'text', content: '', savedContent: '', bom: '', lineEnding: '\n',
+      tabs.value.push({ ...target, id, mode, kind: 'text', content: '', savedContent: '', expectedHash: '', conflict: false, bom: '', lineEnding: '\n',
         contentType: '', imageUrl: '', loading: true, saving: false, dirty: false, error: '', saveError: '', byteSize: 0, revision: 0 });
       tab = tabs.value[tabs.value.length - 1];
       void load(tab);
@@ -111,25 +122,39 @@ export function useTerminalFiles(options: Options = {}) {
     tab.content = content;
     tab.dirty = content !== tab.savedContent;
   }
-  async function save(tab: TerminalFileTab) {
+  async function save(tab: TerminalFileTab, force = false) {
     if (tab.loading || tab.saving || !tab.dirty || tab.mode !== 'edit' || tab.kind !== 'text') return;
+    if (tab.conflict && !force) return;
     const snapshot = tab.content;
     const bytesText = tab.bom + snapshot.replace(/\n/g, tab.lineEnding);
     tab.saving = true;
     tab.saveError = '';
     try {
-      const result = await api.write(tab.hostId, tab.path, bytesText);
+      const expectedHash = terminalFileHash(new TextEncoder().encode(bytesText));
+      const result = await api.write(tab.hostId, tab.path, bytesText, { expectedHash: tab.expectedHash, force });
       tab.savedContent = snapshot;
+      tab.expectedHash = expectedHash;
+      tab.conflict = false;
       tab.dirty = tab.content !== snapshot;
       tab.byteSize = result.size;
       options.onSaved?.(tab);
     } catch (error) {
-      if (!options.onUnauthorized?.(error)) tab.saveError = error instanceof Error ? error.message : '保存文件失败';
+      if (error instanceof ApiResponseError && error.status === 409 &&
+        (error.payload as { code?: string } | null)?.code === 'file_changed') {
+        tab.conflict = true;
+      } else if (!options.onUnauthorized?.(error)) tab.saveError = error instanceof Error ? error.message : '保存文件失败';
     } finally { tab.saving = false; }
   }
   function reload(tab: TerminalFileTab) {
     if (tab.saving || (tab.dirty && !confirm(`“${tab.name}”有未保存的修改，重新加载会丢失修改。继续吗？`))) return;
-    return load(tab);
+    return load(tab, tab.revision > 0);
+  }
+  function cancelConflict(tab: TerminalFileTab) {
+    if (!tab.loading && !tab.saving) tab.conflict = false;
+  }
+  function reloadConflict(tab: TerminalFileTab) {
+    if (tab.loading || tab.saving || !tab.conflict) return;
+    return load(tab, true);
   }
   function close(tab: TerminalFileTab) {
     if (tab.saving || (tab.dirty && !confirm(`“${tab.name}”有未保存的修改，确定放弃修改并关闭吗？`))) return false;
@@ -140,5 +165,5 @@ export function useTerminalFiles(options: Options = {}) {
     return true;
   }
   function dispose() { for (const tab of tabs.value) release(tab); }
-  return { tabs, activeId, activeTab, hasUnsaved, open, change, save, reload, close, dispose };
+  return { tabs, activeId, activeTab, hasUnsaved, open, change, save, reload, close, dispose, cancelConflict, reloadConflict };
 }

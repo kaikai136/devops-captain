@@ -148,9 +148,13 @@ export function getTerminalFileContent(hostId: number, path: string, options: Re
     });
 }
 
-export function updateTerminalFileContent(hostId: number, path: string, content: string) {
+export interface TerminalFileSaveOptions { expectedHash: string; force?: boolean }
+
+export function updateTerminalFileContent(hostId: number, path: string, content: string, options: TerminalFileSaveOptions) {
   const body = new FormData();
   body.set('path', path);
+  body.set('expected_hash', options.expectedHash);
+  body.set('force', String(options.force ?? false));
   body.set('file', new Blob([content], { type: 'text/plain;charset=utf-8' }), path.split('/').pop() || 'file');
   return apiPostForm<{ path: string; size: number; protocol?: string }>(
     `${terminalBaseUrl}/hosts/${hostId}/files/content/update/`, body,

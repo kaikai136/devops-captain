@@ -3702,6 +3702,7 @@ function readTerminalQuickCommandPanelCollapsed() {
             <TerminalFileWorkspace
               v-for="fileTab in fileTabs" :key="fileTab.id" :tab="fileTab" :active="activeFileTabId === fileTab.id"
               @change="files.change(fileTab, $event)" @save="files.save(fileTab)" @reload="files.reload(fileTab)" @edit="fileTab.mode = 'edit'"
+              @cancel-conflict="files.cancelConflict(fileTab)" @reload-conflict="files.reloadConflict(fileTab)" @force-save="files.save(fileTab, true)"
             />
             <div v-if="!tabs.length && !activeFileTabId" class="terminal-empty">双击左侧主机名连接 SSH 终端。</div>
             <div
