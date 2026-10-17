@@ -21,9 +21,9 @@
 .security-scan-filters,
 .security-report-pane,
 .security-drawer {
-  border: 1px solid #c4d2e3;
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.96);
+  background: color-mix(in srgb, var(--ui-card) 96%, transparent);
 }
 
 .security-workbench-header {
@@ -81,7 +81,7 @@
   padding: 0 10px;
   border: 1px solid #9cb6d4;
   border-radius: 4px;
-  background: #fff;
+  background: var(--ui-card);
   color: var(--report-blue);
   cursor: pointer;
   font: inherit;
@@ -123,9 +123,9 @@
   min-height: 44px;
   overflow: hidden;
   padding: 8px var(--workspace-panel-padding);
-  border: 1px solid #c4d2e3;
+  border: 1px solid var(--ui-border);
   border-radius: 6px;
-  background: rgba(255, 255, 255, 0.96);
+  background: color-mix(in srgb, var(--ui-card) 96%, transparent);
 }
 
 .security-scan-filters label {
@@ -150,9 +150,9 @@
 .scan-form-grid input,
 .scan-form-grid textarea,
 .target-picker-head input {
-  border: 1px solid #9fb7d2;
+  border: 1px solid var(--ui-border);
   border-radius: 3px;
-  background: #fff;
+  background: var(--ui-card);
   color: var(--report-ink);
   font: inherit;
 }
@@ -216,7 +216,7 @@
   padding: 10px var(--workspace-panel-padding);
   border: 1px solid var(--report-line);
   border-radius: 4px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .security-report-head h3 {
@@ -234,7 +234,7 @@
   border-radius: 4px;
   overflow-x: auto;
   overflow-y: hidden;
-  background: #fff;
+  background: var(--ui-card);
   scrollbar-width: thin;
 }
 
@@ -249,7 +249,7 @@
   padding: 0 10px;
   border: 1px solid #9cb6d4;
   border-radius: 3px;
-  background: #f7faff;
+  background: var(--ui-muted);
   color: var(--report-blue);
   cursor: pointer;
   font: inherit;
@@ -278,13 +278,13 @@
   padding: 0 5px;
   border-radius: 999px;
   background: #dce6f1;
-  color: #17365d;
+  color: var(--ui-foreground);
   font-style: normal;
   font-size: 12px;
 }
 
 .report-tabs button.active em {
-  background: #fff;
+  background: var(--ui-card);
   color: var(--report-blue);
 }
 
@@ -293,7 +293,7 @@
   border: 1px solid var(--report-line);
   border-radius: 4px;
   overflow: hidden;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .security-report-section > h3 {
@@ -326,12 +326,12 @@
 }
 
 .report-table-scroll::-webkit-scrollbar-track {
-  background: #eef4fb;
-  border: 1px solid #c4d2e3;
+  background: var(--ui-muted);
+  border: 1px solid var(--ui-border);
 }
 
 .report-table-scroll::-webkit-scrollbar-thumb {
-  border: 2px solid #eef4fb;
+  border: 2px solid var(--ui-border);
   border-radius: 999px;
   background: #7f9fc4;
 }
@@ -345,7 +345,7 @@
   min-width: 760px;
   border-collapse: collapse;
   table-layout: fixed;
-  background: #fff;
+  background: var(--ui-card);
   font-size: 12px;
   line-height: 1.35;
 }
@@ -365,7 +365,7 @@
   top: 0;
   z-index: 1;
   background: var(--report-blue-soft);
-  color: #000;
+  color: var(--ui-foreground);
   font-weight: 700;
   text-align: center;
 }
@@ -383,7 +383,7 @@
 }
 
 .overview-table td {
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .asset-report-table {
@@ -424,7 +424,7 @@
 
 .status-running {
   color: #0e55a8;
-  background: #e4f0ff;
+  background: var(--ui-muted);
 }
 
 .status-completed {
@@ -434,12 +434,12 @@
 
 .status-failed {
   color: #b42323;
-  background: #fee2e2;
+  background: var(--ui-muted);
 }
 
 .status-canceled,
 .status-skipped {
-  color: #475569;
+  color: var(--ui-muted-foreground);
   background: #e2e8f0;
 }
 
@@ -481,7 +481,7 @@
 }
 
 .severity-info {
-  color: #166534;
+  color: var(--ui-foreground);
   background: #dcfce7;
 }
 
@@ -494,16 +494,16 @@
   min-height: 34px;
   border: 0;
   border-top: 1px solid var(--report-line);
-  background: #f7faff;
+  background: var(--ui-muted);
   color: var(--report-blue);
   cursor: pointer;
 }
 
 .security-empty {
   padding: 28px;
-  color: #718198;
+  color: var(--ui-muted-foreground);
   text-align: center;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .security-drawer-backdrop {
@@ -534,7 +534,7 @@
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px;
-  border-bottom: 1px solid #d8e3f1;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .security-drawer header button {
@@ -545,7 +545,7 @@
 
 .security-drawer footer {
   margin-top: auto;
-  border-top: 1px solid #d8e3f1;
+  border-top: 1px solid var(--ui-border);
   border-bottom: 0;
 }
 
@@ -586,7 +586,7 @@
 }
 
 .scan-module-options label.disabled {
-  color: #94a3b8;
+  color: var(--ui-muted-foreground);
 }
 
 .target-picker-list {
@@ -601,9 +601,9 @@
 .target-picker-list label {
   min-height: 48px;
   padding: 10px;
-  border: 1px solid #d8e3f1;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .target-picker-list strong {
@@ -612,7 +612,7 @@
 
 .target-picker-list span {
   min-width: 0;
-  color: #64748b;
+  color: var(--ui-muted-foreground);
   overflow-wrap: anywhere;
 }
 

@@ -20,6 +20,7 @@ from .api.files import (
     terminal_file_properties_update,
     terminal_file_rename,
     terminal_file_upload,
+    terminal_file_transfer,
 )
 from .api.monitoring import terminal_monitor
 from .api.recordings import terminal_rdp_recording, terminal_session_recording
@@ -59,6 +60,7 @@ __all__ = [
     "terminal_file_properties_update",
     "terminal_file_rename",
     "terminal_file_upload",
+    "terminal_file_transfer",
     "terminal_file_audits",
     "terminal_login_required",
     "terminal_monitor",

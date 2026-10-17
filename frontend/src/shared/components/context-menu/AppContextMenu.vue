@@ -11,6 +11,7 @@ withDefaults(defineProps<{
   label?: string;
   heading?: string;
   disabled?: boolean;
+  appearance?: 'files';
 }>(), { label: '\u64cd\u4f5c\u83dc\u5355', disabled: false });
 const emit = defineEmits<{
   'update:open': [open: boolean];
@@ -27,6 +28,7 @@ const emit = defineEmits<{
     <ContextMenuPortal>
       <ContextMenuContent
         class="shadcn-context-menu-content"
+        :class="{ 'terminal-files-menu': appearance === 'files' }"
         :aria-label="label"
         :collision-padding="8"
         loop
@@ -36,7 +38,11 @@ const emit = defineEmits<{
       >
         <div v-if="heading" class="shadcn-context-menu-heading">{{ heading }}</div>
         <div v-if="heading" class="shadcn-context-menu-separator" role="separator" />
-        <ContextMenuItems :items="items" @select="emit('select', $event)" />
+        <div v-if="items.some(item => item.toolbar)" class="shadcn-context-menu-toolbar">
+          <ContextMenuItems :items="items.filter(item => item.toolbar)" :appearance="appearance" @select="emit('select', $event)" />
+        </div>
+        <div v-if="items.some(item => item.toolbar)" class="shadcn-context-menu-separator" role="separator" />
+        <ContextMenuItems :items="items.filter(item => !item.toolbar)" :appearance="appearance" @select="emit('select', $event)" />
       </ContextMenuContent>
     </ContextMenuPortal>
   </ContextMenuRoot>

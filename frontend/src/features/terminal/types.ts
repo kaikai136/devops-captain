@@ -78,7 +78,7 @@ export interface TerminalFileAudit {
   id: number;
   username: string;
   protocol: string;
-  operation: 'list' | 'read' | 'write' | 'mkdir' | 'remove' | 'rename' | 'stat';
+  operation: 'list' | 'read' | 'write' | 'mkdir' | 'remove' | 'rename' | 'copy' | 'move' | 'stat';
   path: string;
   targetPath: string;
   size: number;

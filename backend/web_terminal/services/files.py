@@ -231,6 +231,11 @@ def rename_remote_file(host: ManagedHost, path: str, new_name: str) -> dict:
     run_one_shot_ssh_command(host, command)
     return get_remote_file_properties(host, target)
 
+def transfer_remote_files(host: ManagedHost, paths: list[str], target_directory: str, operation: str, overwrite: bool = False) -> dict:
+    from .file_operations import transfer_files
+
+    return transfer_files(host, paths, target_directory, operation, overwrite)
+
 def delete_remote_file(host: ManagedHost, path: str) -> dict:
     path = normalize_remote_file_path(path)
     current = get_remote_file_properties(host, path)
@@ -741,6 +746,7 @@ __all__ = [
     'create_remote_directory',
     'create_remote_symlink',
     'rename_remote_file',
+    'transfer_remote_files',
     'delete_remote_file',
     'get_remote_file_properties',
     'update_remote_file_properties',

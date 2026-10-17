@@ -96,7 +96,7 @@ describe('app shell upgrade contract', () => {
 
     expect(navStyles).toContain('grid-template-columns: clamp(190px, 12vw, 220px) minmax(0, 1fr)');
     expect(navStyles).toContain('grid-template-columns: 76px minmax(0, 1fr)');
-    expect(navStyles).toContain('background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%)');
+    expect(navStyles).toContain('background: linear-gradient(180deg, var(--ui-card) 0%, var(--ui-card) 100%)');
     expect(navStyles).toContain('background: linear-gradient(180deg, #111827 0%, #0f172a 100%)');
 
     const collapsedBrandRule = navStyles.match(/\.sidebar\.collapsed \.sidebar-brand \{[\s\S]*?\n\}/)?.[0] ?? '';
@@ -126,7 +126,7 @@ describe('app shell upgrade contract', () => {
     const nestedActiveRule = navStyles.match(/\.workspace-nav-menu \.el-sub-menu \.el-menu-item\.is-active \{[\s\S]*?\n\}/)?.[0] ?? '';
     const nestedActiveMarker = navStyles.match(/\.workspace-nav-menu \.el-sub-menu \.el-menu-item\.is-active::before \{[\s\S]*?\n\}/)?.[0] ?? '';
 
-    expect(nestedActiveRule).toContain('background: #fff');
+    expect(nestedActiveRule).toMatch(/background: var\(--(?:workspace-surface|ui-card)\)/);
     expect(nestedActiveRule).toContain('inset 0 0 0 2px var(--ui-primary)');
     expect(nestedActiveMarker).toContain('background: var(--ui-primary)');
   });

@@ -1,7 +1,7 @@
 :root {
-  color: #06214a;
+  color: var(--ui-foreground);
   font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
-  background: #edf3fb;
+  background: var(--ui-background);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -14,7 +14,7 @@ body {
   margin: 0;
   height: 100vh;
   min-height: 100vh;
-  background: #eaf1fa;
+  background: var(--ui-background);
   overflow: hidden;
 }
 

@@ -7,6 +7,15 @@ function source(name: string) {
 }
 
 describe('shared shadcn-style context menu', () => {
+  it('renders toolbar actions once with accessible menu primitives and file-only styling', () => {
+    const component = source('AppContextMenu.vue');
+    expect(component).toContain('items.filter(item => item.toolbar)');
+    expect(component).toContain('items.filter(item => !item.toolbar)');
+    expect(component).toContain("appearance === 'files'");
+    expect(source('ContextMenuItems.vue')).toContain("'shadcn-context-menu-toolbar-item': item.toolbar");
+    expect(source('context-menu.css')).toContain('.terminal-files-menu');
+    expect(source('context-menu.css')).toContain('var(--ui-muted');
+  });
   it('uses non-modal Reka primitives with portalled, viewport-aware contents', () => {
     const template = parse(source('AppContextMenu.vue')).descriptor.template?.content ?? '';
     expect(template).toContain('<ContextMenuRoot :modal="false"');

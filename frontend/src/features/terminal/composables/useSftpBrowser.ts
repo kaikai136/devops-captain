@@ -1,6 +1,6 @@
-import { computed, ref, toValue, type MaybeRefOrGetter } from 'vue';
+import { computed, ref, toValue, watch, type MaybeRefOrGetter } from 'vue';
 
-import { ApiUnauthorizedError } from '../../../api';
+import { ApiResponseError, ApiUnauthorizedError } from '../../../api';
 import {
   buildTerminalFileDownloadRawUrl,
   createTerminalFileEntry,
@@ -11,6 +11,7 @@ import {
   renameTerminalFileEntry,
   updateTerminalFileProperties,
   uploadTerminalFile,
+  transferTerminalFiles,
 } from '../api/terminal';
 import type { TerminalDownloadProtocol, TerminalFileEntry, TerminalFileListResponse, TerminalFileProperties } from '../types';
 import { joinTerminalPath, parentTerminalDirectoryPath } from '../utils/paths';
@@ -22,6 +23,12 @@ export type SftpFileCreateMode = 'file' | 'directory' | 'symlink';
 
 export interface SftpSession { key: string; hostId: number; currentCwd: string }
 export interface SftpFileUploadItem { file: File; relativePath?: string }
+export interface SftpFileOperationResult { items: Array<{ path: string; targetPath: string }>; warnings?: string[] }
+interface SftpFileClipboard { mode: 'copy' | 'cut'; hostId: number; paths: string[] }
+
+const sharedFileClipboard = ref<SftpFileClipboard | null>(null);
+const busyFileOperationHosts = ref<Set<number>>(new Set());
+const fileOperationRevisions = ref<Record<number, number>>({});
 export interface SftpTransferRecord {
   id: string; kind: SftpTransferKind; status: SftpTransferStatus; name: string; path: string; currentFile: string;
   currentBytes: number; currentTotalBytes: number; completedFiles: number; totalFiles: number; progress: number; error: string;
@@ -53,6 +60,7 @@ export interface SftpBrowserApi {
   createEntry(hostId: number, endpoint: string, payload: unknown): Promise<TerminalFileProperties>;
   deleteEntry(hostId: number, payload: { path: string }): Promise<{ deleted: boolean }>;
   renameEntry(hostId: number, payload: { path: string; newName: string }): Promise<TerminalFileProperties>;
+  transferFiles(hostId: number, payload: { paths: string[]; targetDirectory: string; operation: 'copy' | 'move'; overwrite?: boolean }): Promise<SftpFileOperationResult>;
   getProperties(hostId: number, path: string): Promise<TerminalFileProperties>;
   updateProperties(hostId: number, payload: unknown): Promise<TerminalFileProperties>;
   buildDownloadUrl(hostId: number, path: string, protocol: TerminalDownloadProtocol): string;
@@ -61,6 +69,11 @@ export interface UseSftpBrowserOptions {
   session: MaybeRefOrGetter<SftpSession | null>; api?: SftpBrowserApi; onUnauthorized?: (error: unknown) => boolean;
   confirm?: (message: string) => boolean; fetcher?: typeof fetch;
   pickDownloadDirectory?: () => Promise<SftpLocalDirectoryHandle | null>;
+  confirmOverwrite?: (message: string) => Promise<boolean> | boolean;
+}
+
+export function clearSftpFileClipboard() {
+  sharedFileClipboard.value = null;
 }
 
 interface DirectoryCacheEntry {
@@ -79,6 +92,7 @@ const LOCAL_FILENAME_RESERVED_NAMES = new Set([
 const defaultApi: SftpBrowserApi = {
   listFiles: listTerminalFiles, listDownloadFiles: listTerminalDownloadFiles, uploadFile: uploadTerminalFile,
   createEntry: createTerminalFileEntry, deleteEntry: deleteTerminalFileEntry, renameEntry: renameTerminalFileEntry,
+  transferFiles: transferTerminalFiles,
   getProperties: getTerminalFileProperties, updateProperties: updateTerminalFileProperties, buildDownloadUrl: buildTerminalFileDownloadRawUrl,
 };
 const emptyDeleteDialog = (): SftpDeleteDialogState => ({ visible: false, entry: null, entries: [], deleting: false, error: '' });
@@ -97,6 +111,9 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
   const entries = ref<TerminalFileEntry[]>([]);
   const selectedEntry = ref<TerminalFileEntry | null>(null);
   const selectedPaths = ref<Set<string>>(new Set());
+  const fileClipboard = sharedFileClipboard;
+  const isTransferringFiles = computed(() => busyFileOperationHosts.value.has(toValue(options.session)?.hostId ?? -1));
+  const fileOperationRevision = computed(() => fileOperationRevisions.value[toValue(options.session)?.hostId ?? -1] ?? 0);
   const selectionAnchorPath = ref('');
   const path = ref('.');
   const listProtocol = ref('');
@@ -116,6 +133,10 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
 
   const selectedEntries = computed(() => entries.value.filter((entry) => selectedPaths.value.has(entry.path) && !isParentEntry(entry)));
   const selectedCount = computed(() => selectedEntries.value.length);
+  const canPasteFiles = computed(() => Boolean(fileClipboard.value && currentSession()?.hostId === fileClipboard.value.hostId && !isTransferringFiles.value));
+  watch(fileOperationRevision, () => {
+    if (currentSession()) void loadDirectory(path.value, { force: true });
+  });
   const canDownloadSelection = computed(() => selectedEntries.value.length > 0);
   const selectionStatusText = computed(() => selectedCount.value > 1
     ? `已选 ${selectedCount.value} 项 / 共 ${entries.value.length} 项`
@@ -192,7 +213,7 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
     }
   }
   function directoryCacheKey(session: SftpSession, target: string) {
-    return `${session.key}:${session.hostId}:${target}`;
+    return `${session.key}:${session.hostId}:${fileOperationRevisions.value[session.hostId] ?? 0}:${target}`;
   }
   function cancelActiveListRequest() {
     activeListRequest?.controller.abort();
@@ -265,6 +286,63 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
     if (!currentSession() || isParentEntry(entry)) return;
     setSelection([entry], entry.path);
     rename.value = { path: entry.path, originalName: entry.name, draftName: entry.name, saving: false, error: '' };
+  }
+  function copyFiles(target: TerminalFileEntry[] = actionEntries()) {
+    const session = currentSession();
+    const paths = target.filter((entry) => !isParentEntry(entry)).map((entry) => getEntryResolvedPath(entry, path.value));
+    if (session && paths.length && !isTransferringFiles.value) fileClipboard.value = { mode: 'copy', hostId: session.hostId, paths };
+  }
+  function cutFiles(target: TerminalFileEntry[] = actionEntries()) {
+    const session = currentSession();
+    const paths = target.filter((entry) => !isParentEntry(entry)).map((entry) => getEntryResolvedPath(entry, path.value));
+    if (session && paths.length && !isTransferringFiles.value) fileClipboard.value = { mode: 'cut', hostId: session.hostId, paths };
+  }
+  async function transferFilesTo(targetDirectory: string, operation: 'copy' | 'move', paths = actionEntries().map((entry) => getEntryResolvedPath(entry, path.value)), overwrite = false): Promise<SftpFileOperationResult | undefined> {
+    const session = currentSession();
+    if (!session || !paths.length || isTransferringFiles.value) return;
+    busyFileOperationHosts.value = new Set([...busyFileOperationHosts.value, session.hostId]);
+    const sessionUnchanged = () => currentSession()?.key === session.key && currentSession()?.hostId === session.hostId;
+    try {
+      let response: SftpFileOperationResult;
+      let overwriteExisting = overwrite;
+      while (true) {
+        try {
+          response = await api.transferFiles(session.hostId, { paths, targetDirectory, operation, overwrite: overwriteExisting });
+          break;
+        } catch (caught) {
+          const payload = caught instanceof ApiResponseError ? caught.payload as { code?: string } | null : null;
+          if (!overwriteExisting && payload?.code === 'file_exists' && sessionUnchanged()) {
+            const confirm = options.confirmOverwrite ?? confirmAction;
+            if (!await confirm(`${caught instanceof Error ? caught.message : '目标已存在'}\n\n覆盖同名文件并合并同名目录？目标独有文件将保留。`)) return;
+            if (!sessionUnchanged()) return;
+            overwriteExisting = true;
+            continue;
+          }
+          throw caught;
+        }
+      }
+      fileOperationRevisions.value = { ...fileOperationRevisions.value, [session.hostId]: (fileOperationRevisions.value[session.hostId] ?? 0) + 1 };
+      return response;
+    } catch (caught) {
+      if (options.onUnauthorized?.(caught)) return;
+      throw caught;
+    } finally {
+      const remaining = new Set(busyFileOperationHosts.value);
+      remaining.delete(session.hostId);
+      busyFileOperationHosts.value = remaining;
+    }
+  }
+  async function pasteFiles(targetDirectory = path.value, overwrite = false) {
+    const clipboard = fileClipboard.value;
+    const session = currentSession();
+    if (!clipboard || !session || clipboard.hostId !== session.hostId) return;
+    try {
+      const response = await transferFilesTo(targetDirectory, clipboard.mode === 'cut' ? 'move' : 'copy', clipboard.paths, overwrite);
+      if (response && clipboard.mode === 'cut' && fileClipboard.value === clipboard) fileClipboard.value = null;
+      return response;
+    } catch (caught) {
+      if (currentSession()?.key === session.key && currentSession()?.hostId === session.hostId) error.value = caught instanceof Error ? caught.message : '文件操作失败';
+    }
   }
   function cancelRename() { rename.value = null }
   const isRenaming = (entry: TerminalFileEntry) => rename.value?.path === entry.path;
@@ -546,14 +624,14 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
   }
 
   return {
-    entries, selectedEntry, selectedPaths, selectionAnchorPath, path, listProtocol, error, followingCwd, isLoading, rename,
+    entries, selectedEntry, selectedPaths, selectionAnchorPath, fileClipboard, fileOperationRevision, isTransferringFiles, canPasteFiles, path, listProtocol, error, followingCwd, isLoading, rename,
     deleteDialog, createDialog, propertiesDialog, transferRecords, downloadProtocol, isDragOver, selectedEntries, selectedCount,
     canDownloadSelection, selectionStatusText, protocolLabel, status, statusText, followCwdLabel, hasRunningTransfers,
     hasClearableTransfers, loadDirectory, reset, resolveDirectoryPath, openDirectory, openParentDirectory, toggleFollowCwd,
     syncFollowedCwd, select, setSelection, selectRange, syncSelectionAfterEntriesChange, isSelected, actionEntries, startRename,
     cancelRename, isRenaming, saveRename, openDeleteDialog, closeDeleteDialog, confirmDelete, openCreateDialog, closeCreateDialog,
     saveCreateDialog, createTitle, createNameLabel, createOpenLabel, openProperties, openCurrentDirectoryProperties,
-    currentDirectoryName, closePropertiesDialog, saveProperties, uploadFiles, downloadFile, downloadFiles, createTransferRecord,
+    currentDirectoryName, closePropertiesDialog, saveProperties, uploadFiles, downloadFile, downloadFiles, copyFiles, cutFiles, pasteFiles, transferFilesTo, createTransferRecord,
     runTransfer, cancelTransfer, cancelAllTransfers, clearTransferRecords, closeDialogs, getDownloadUrl,
   };
 }

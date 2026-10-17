@@ -16,9 +16,9 @@
   align-items: center;
   gap: 10px;
   padding: 0 14px;
-  border: 1px solid #cfe0f6;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--ui-card);
   font-size: 13px;
   font-weight: 900;
 }
@@ -38,7 +38,7 @@
 .progress {
   height: 10px;
   border-radius: 999px;
-  background: #e6eef9;
+  background: var(--ui-muted);
   overflow: hidden;
 }
 
@@ -59,9 +59,9 @@
 .metric-row article {
   min-height: 68px;
   padding: 14px;
-  border: 1px solid #cfe0f6;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .metric-row strong {
@@ -71,7 +71,7 @@
 }
 
 .metric-row span {
-  color: #4e6787;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
 }
 
@@ -84,7 +84,7 @@
 }
 
 .muted {
-  color: #8896a8 !important;
+  color: var(--ui-muted-foreground);
 }
 
 .ip-grid-panel {
@@ -93,7 +93,7 @@
   grid-auto-rows: minmax(0, 1fr);
   align-self: stretch;
   min-height: 0;
-  border: 1px solid #bfd3ee;
+  border: 1px solid var(--ui-border);
   border-radius: 12px;
   background: #d9e6f6;
   overflow: hidden;
@@ -104,11 +104,11 @@
   height: 100%;
   min-height: 0;
   border: 0;
-  border-right: 1px solid #bfd3ee;
-  border-bottom: 1px solid #bfd3ee;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #f4f8fd;
-  color: #071f43;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
   font-size: clamp(14px, 0.9vw, 18px);
   font-weight: 900;
   transition: background 0.14s ease, color 0.14s ease, box-shadow 0.14s ease;
@@ -116,7 +116,7 @@
 
 .ip-cell.online {
   background: #33d972;
-  color: #071f43;
+  color: var(--ui-foreground);
 }
 
 .ip-cell:hover,

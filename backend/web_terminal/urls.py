@@ -27,6 +27,7 @@ urlpatterns = [
     path("web-terminal/hosts/<int:host_id>/files/create-symlink/", views.terminal_file_create_symlink),
     path("web-terminal/hosts/<int:host_id>/files/rename/", views.terminal_file_rename),
     path("web-terminal/hosts/<int:host_id>/files/delete/", views.terminal_file_delete),
+    path("web-terminal/hosts/<int:host_id>/files/transfer/", views.terminal_file_transfer),
     path("web-terminal/hosts/<int:host_id>/files/properties/", views.terminal_file_properties),
     path("web-terminal/hosts/<int:host_id>/files/properties/update/", views.terminal_file_properties_update),
 ]

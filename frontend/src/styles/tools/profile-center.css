@@ -8,7 +8,7 @@
   min-height: 0;
   overflow: auto;
   padding: var(--workspace-page-gutter);
-  background: linear-gradient(135deg, #eefbfa 0%, #f8fbfb 44%, #f1f6fb 100%);
+  background: linear-gradient(135deg, var(--ui-muted) 0%, var(--ui-muted) 44%, var(--ui-muted) 100%);
   color: var(--workspace-text);
 }
 
@@ -20,9 +20,9 @@
   grid-column: 1 / -1;
   margin: 0;
   padding: 11px 13px;
-  border: 1px solid #fecaca;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff1f2;
+  background: var(--ui-muted);
   color: #be123c;
   font-size: 13px;
   font-weight: 800;
@@ -40,8 +40,8 @@
   border: 1px solid rgba(199, 226, 224, 0.86);
   border-radius: 8px;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(252, 254, 254, 0.9)),
-    rgba(255, 255, 255, 0.82);
+    linear-gradient(180deg, color-mix(in srgb, var(--ui-card) 96%, transparent), rgba(252, 254, 254, 0.9)),
+    color-mix(in srgb, var(--ui-card) 82%, transparent);
   box-shadow: 0 14px 34px rgba(44, 62, 86, 0.08);
   backdrop-filter: blur(16px);
 }
@@ -88,7 +88,7 @@
   display: block;
   width: 80px;
   height: 80px;
-  border: 3px solid rgba(255, 255, 255, 0.9);
+  border: 3px solid color-mix(in srgb, var(--ui-card) 90%, transparent);
   border-radius: 8px;
   box-shadow: 0 18px 28px rgba(20, 48, 78, 0.14);
 }
@@ -130,7 +130,7 @@
 .profile-name-row > strong {
   max-width: 100%;
   overflow: hidden;
-  color: #0f2742;
+  color: var(--ui-foreground);
   font-size: 24px;
   font-weight: 900;
   line-height: 1.2;
@@ -192,7 +192,7 @@
   border: 1px solid rgba(229, 235, 243, 0.72);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(252, 254, 253, 0.7)),
+    linear-gradient(135deg, color-mix(in srgb, var(--ui-card) 88%, transparent), rgba(252, 254, 253, 0.7)),
     rgba(248, 251, 255, 0.78);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
 }
@@ -217,7 +217,7 @@
 }
 
 .profile-overview-card dd {
-  color: #0f2742;
+  color: var(--ui-foreground);
   font-size: 19px;
   font-weight: 900;
 }
@@ -247,8 +247,8 @@
   align-self: start;
   justify-self: end;
   margin-top: 0;
-  border: 1px solid #fecaca;
-  background: #fff1f2;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-muted);
   color: #be123c;
 }
 
@@ -273,7 +273,7 @@
 
 .profile-panel h2 {
   margin: 0;
-  color: #0f2742;
+  color: var(--ui-foreground);
   font-size: 18px;
   font-weight: 900;
 }
@@ -316,7 +316,7 @@
   border: 1px solid rgba(229, 235, 243, 0.72);
   border-radius: 8px;
   background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(252, 254, 253, 0.72)),
+    linear-gradient(135deg, color-mix(in srgb, var(--ui-card) 88%, transparent), rgba(252, 254, 253, 0.72)),
     rgba(248, 251, 255, 0.78);
   box-shadow: 0 10px 22px rgba(15, 23, 42, 0.04);
 }
@@ -329,7 +329,7 @@
   display: block;
   width: 72px;
   height: 72px;
-  border: 3px solid rgba(255, 255, 255, 0.92);
+  border: 3px solid color-mix(in srgb, var(--ui-card) 92%, transparent);
   border-radius: 8px;
   box-shadow: 0 14px 24px rgba(20, 48, 78, 0.14);
 }
@@ -341,7 +341,7 @@
 }
 
 .profile-avatar-editor strong {
-  color: #0f2742;
+  color: var(--ui-foreground);
   font-size: 14px;
   font-weight: 900;
 }
@@ -366,7 +366,7 @@
 }
 
 .profile-form-grid label span {
-  color: #24384f;
+  color: var(--ui-foreground);
   font-size: 13px;
   font-weight: 900;
 }
@@ -382,8 +382,8 @@
   border: 1px solid rgba(205, 218, 233, 0.9);
   border-radius: 8px;
   outline: 0;
-  background: rgba(255, 255, 255, 0.78);
-  color: #10233d;
+  background: color-mix(in srgb, var(--ui-card) 78%, transparent);
+  color: var(--ui-foreground);
   padding: 0 12px;
   font: inherit;
   font-size: 14px;
@@ -427,8 +427,8 @@
 }
 
 .profile-danger-button {
-  border: 1px solid #fecaca;
-  background: #fff1f2;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-muted);
   color: #be123c;
 }
 
@@ -491,7 +491,7 @@
 .profile-status-pill {
   flex: 0 0 auto;
   background: rgba(100, 116, 139, 0.12);
-  color: #64748b;
+  color: var(--ui-muted-foreground);
 }
 
 .profile-status-pill.enabled {
@@ -523,12 +523,12 @@
   width: 148px;
   height: 148px;
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .profile-qr-setup strong {
   display: block;
-  color: #0f2742;
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 900;
 }

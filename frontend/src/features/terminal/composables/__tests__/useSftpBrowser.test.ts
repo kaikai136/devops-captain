@@ -1,5 +1,6 @@
-import { ref } from 'vue';
-import { describe, expect, it, vi } from 'vitest';
+import { nextTick, ref } from 'vue';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { ApiResponseError } from '../../../../api';
 
 import type { TerminalFileEntry, TerminalFileProperties } from '../../types';
 import {
@@ -10,6 +11,7 @@ import {
   propertiesTypeLabel,
   sortEntries,
   useSftpBrowser,
+  clearSftpFileClipboard,
   type SftpBrowserApi,
   type SftpSession,
 } from '../useSftpBrowser';
@@ -64,6 +66,7 @@ function createApi(overrides: Partial<SftpBrowserApi> = {}): SftpBrowserApi {
     createEntry: vi.fn().mockResolvedValue(properties(alphaEntry)),
     deleteEntry: vi.fn().mockResolvedValue({ deleted: true }),
     renameEntry: vi.fn().mockResolvedValue(properties(alphaEntry)),
+    transferFiles: vi.fn().mockResolvedValue({ items: [{ path: alphaEntry.path, targetPath: '/target/alpha.txt' }] }),
     getProperties: vi.fn().mockResolvedValue(properties(alphaEntry)),
     updateProperties: vi.fn().mockResolvedValue(properties(alphaEntry)),
     buildDownloadUrl: vi.fn().mockReturnValue('/download/raw/'),
@@ -81,6 +84,86 @@ function createBrowser(api = createApi(), options: Record<string, unknown> = {})
 }
 
 describe('useSftpBrowser', () => {
+  beforeEach(() => clearSftpFileClipboard());
+
+  it('copies and pastes across tabs on the same host but not across hosts', async () => {
+    const first = createBrowser();
+    const second = createBrowser();
+    second.session.value = { key: 'tab-2', hostId: 7, currentCwd: '/' };
+    first.browser.copyFiles([alphaEntry, betaEntry]);
+    expect(second.browser.canPasteFiles.value).toBe(true);
+    await second.browser.pasteFiles('/target');
+    expect(second.api.transferFiles).toHaveBeenCalledWith(7, {
+      paths: [alphaEntry.path, betaEntry.path], targetDirectory: '/target', operation: 'copy', overwrite: false,
+    });
+    expect(first.browser.fileClipboard.value?.mode).toBe('copy');
+    second.session.value = { key: 'tab-3', hostId: 8, currentCwd: '/' };
+    expect(second.browser.canPasteFiles.value).toBe(false);
+    await second.browser.pasteFiles('/other');
+    expect(second.api.transferFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it('clears cut items only after success and keeps them on failure', async () => {
+    const { api, browser } = createBrowser();
+    browser.cutFiles([alphaEntry]);
+    vi.mocked(api.transferFiles).mockRejectedValueOnce(new Error('permission denied'));
+    await browser.pasteFiles('/target');
+    expect(browser.fileClipboard.value?.paths).toEqual([alphaEntry.path]);
+    expect(browser.error.value).toBe('permission denied');
+    await browser.pasteFiles('/target');
+    expect(browser.fileClipboard.value).toBeNull();
+    expect(api.transferFiles).toHaveBeenLastCalledWith(7, expect.objectContaining({ operation: 'move' }));
+  });
+
+  it('keeps clipboard after canceling overwrite and retries only with explicit confirmation', async () => {
+    const confirmOverwrite = vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const { api, browser } = createBrowser(createApi(), { confirmOverwrite });
+    browser.cutFiles([alphaEntry]);
+    const conflict = new ApiResponseError('目标已存在', 409, { code: 'file_exists' });
+    vi.mocked(api.transferFiles).mockRejectedValueOnce(conflict);
+    await browser.pasteFiles('/target');
+    expect(api.transferFiles).toHaveBeenCalledTimes(1);
+    expect(browser.fileClipboard.value?.mode).toBe('cut');
+    vi.mocked(api.transferFiles).mockRejectedValueOnce(conflict);
+    await browser.pasteFiles('/target');
+    expect(api.transferFiles).toHaveBeenLastCalledWith(7, expect.objectContaining({ overwrite: true }));
+    expect(browser.fileClipboard.value).toBeNull();
+    expect(confirmOverwrite).toHaveBeenCalledTimes(2);
+  });
+
+  it('prevents duplicate host operations and refreshes other same-host browsers', async () => {
+    let finish!: (value: { items: [] }) => void;
+    const transferFiles = vi.fn(() => new Promise<{ items: [] }>((resolve) => { finish = resolve; }));
+    const first = createBrowser(createApi({ transferFiles }));
+    const second = createBrowser();
+    first.browser.copyFiles([alphaEntry]);
+    const pending = first.browser.pasteFiles('/target');
+    expect(first.browser.isTransferringFiles.value).toBe(true);
+    expect(second.browser.canPasteFiles.value).toBe(false);
+    await second.browser.pasteFiles('/target');
+    expect(second.api.transferFiles).not.toHaveBeenCalled();
+    finish({ items: [] });
+    await pending;
+    await nextTick();
+    expect(first.browser.isTransferringFiles.value).toBe(false);
+    expect(second.api.listFiles).toHaveBeenCalled();
+  });
+
+  it('does not retry overwrite in another session or report failures to the new tab', async () => {
+    let reject!: (error: unknown) => void;
+    const transferFiles = vi.fn(() => new Promise<never>((_resolve, fail) => { reject = fail; }));
+    const confirmOverwrite = vi.fn().mockResolvedValue(true);
+    const { browser, session } = createBrowser(createApi({ transferFiles }), { confirmOverwrite });
+    browser.cutFiles([alphaEntry]);
+    const pending = browser.pasteFiles('/target');
+    session.value = { key: 'other', hostId: 8, currentCwd: '/' };
+    reject(new ApiResponseError('目标已存在', 409, { code: 'file_exists' }));
+    await pending;
+    expect(confirmOverwrite).not.toHaveBeenCalled();
+    expect(browser.error.value).toBe('');
+    expect(browser.fileClipboard.value?.mode).toBe('cut');
+  });
+
   it('navigates typed absolute, relative, parent, and home paths through the listing API', async () => {
     const listFiles = vi.fn(async (_hostId: number, payload: { path: string }) => ({
       path: payload.path === '~' ? '/home/root' : payload.path,

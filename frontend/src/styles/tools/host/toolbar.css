@@ -9,9 +9,9 @@
 .host-toolbar > input {
   width: min(320px, 34vw);
   min-height: 36px;
-  border: 1px solid #d8e2ee;
+  border: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #fff;
+  background: var(--ui-card);
   padding: 0 14px;
 }
 
@@ -36,9 +36,9 @@
 .more-action-trigger {
   gap: 6px;
   min-width: 104px;
-  border: 1px solid #d8e2ee;
-  background: #fff;
-  color: #173252;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
 }
 
 .host-more-menu {
@@ -54,7 +54,7 @@
   overflow: hidden;
   border-radius: 6px;
   padding: 7px 0;
-  border: 1px solid #e2e7ef;
+  border: 1px solid var(--ui-border);
   background: var(--ui-card);
   box-shadow: 0 14px 32px rgba(31, 45, 71, 0.16);
 }
@@ -123,7 +123,7 @@
   height: 1px;
   margin: 7px 0;
   border: 0;
-  background: #eef2f7;
+  background: var(--ui-muted);
 }
 
 .terminal-action {
@@ -158,13 +158,13 @@
 .status-tabs button {
   min-width: 72px;
   border: 0;
-  color: #173252;
-  background: #fff;
+  color: var(--ui-foreground);
+  background: var(--ui-card);
 }
 
 .status-tabs button.active {
   color: var(--ui-primary);
-  background: #eef5ff;
+  background: var(--ui-muted);
 }
 
 .icon-only {
@@ -172,7 +172,7 @@
   min-width: 34px;
   border: 0;
   background: transparent;
-  color: #173252;
+  color: var(--ui-foreground);
   padding: 0;
   font-size: 18px;
 }
@@ -188,8 +188,8 @@
   top: calc(100% + 9px);
   right: 0;
   width: 176px;
-  border: 1px solid #e2e7ef;
-  background: #fff;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
   box-shadow: 0 14px 32px rgba(31, 45, 71, 0.16);
 }
 
@@ -200,7 +200,7 @@
   gap: 10px;
   min-height: 48px;
   padding: 0 14px;
-  border-bottom: 1px solid #eef2f7;
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .host-column-all,
@@ -209,7 +209,7 @@
   align-items: center;
   gap: 8px;
   margin: 0;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 13px;
   font-weight: 800;
   cursor: pointer;

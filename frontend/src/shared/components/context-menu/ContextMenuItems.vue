@@ -10,7 +10,7 @@ import {
 import ContextMenuEntryLabel from './ContextMenuEntryLabel.vue';
 import type { ContextMenuEntry } from './types';
 
-defineProps<{ items: ContextMenuEntry[] }>();
+defineProps<{ items: ContextMenuEntry[]; appearance?: 'files' }>();
 const emit = defineEmits<{ select: [item: ContextMenuEntry] }>();
 </script>
 
@@ -24,6 +24,7 @@ const emit = defineEmits<{ select: [item: ContextMenuEntry] }>();
       <ContextMenuPortal>
         <ContextMenuSubContent
           class="shadcn-context-menu-content"
+          :class="{ 'terminal-files-menu': appearance === 'files' }"
           :side-offset="4"
           :align-offset="-4"
           :collision-padding="8"
@@ -31,13 +32,14 @@ const emit = defineEmits<{ select: [item: ContextMenuEntry] }>();
           @click.stop
           @contextmenu.prevent.stop
         >
-          <ContextMenuItems :items="item.children" @select="emit('select', $event)" />
+          <ContextMenuItems :items="item.children" :appearance="appearance" @select="emit('select', $event)" />
         </ContextMenuSubContent>
       </ContextMenuPortal>
     </ContextMenuSub>
     <ContextMenuItem
       v-else
       class="shadcn-context-menu-item"
+      :class="{ 'shadcn-context-menu-toolbar-item': item.toolbar }"
       :data-variant="item.danger ? 'destructive' : undefined"
       :disabled="!item.enabled"
       :text-value="item.label"

@@ -21,6 +21,7 @@ from ..services import (
     get_remote_file_properties,
     list_remote_directory,
     rename_remote_file,
+    transfer_remote_files,
     stream_remote_file_content,
     update_remote_file_content,
     update_remote_file_properties,
@@ -29,6 +30,7 @@ from ..services import (
 )
 from .common import terminal_permission_required
 from ..services.errors import TerminalFileChangedError
+from ..services.file_operations import FileOperationError
 
 
 def with_terminal_host(view_func):
@@ -344,6 +346,33 @@ def terminal_file_rename(request, host):
 @with_terminal_host
 def terminal_file_delete(request, host):
     return Response(delete_remote_file(host, str(request.data.get("path", ""))))
+
+@api_view(["POST"])
+@terminal_permission_required
+@with_terminal_host
+def terminal_file_transfer(request, host):
+    paths = request.data.get("paths", [])
+    if not isinstance(paths, list) or not 1 <= len(paths) <= 200 or any(not isinstance(path, str) or not path.strip() for path in paths):
+        return Response({"code": "invalid_path", "error": "请选择 1 至 200 个有效文件路径"}, status=400)
+    operation = str(request.data.get("operation", ""))
+    target_directory = request.data.get("targetDirectory", ".")
+    if not isinstance(target_directory, str) or not target_directory.strip():
+        return Response({"code": "invalid_directory", "error": "请输入目标目录"}, status=400)
+    overwrite = request.data.get("overwrite", False)
+    if not isinstance(overwrite, bool) or operation not in {"copy", "move"}:
+        return Response({"code": "invalid_operation", "error": "操作或覆盖参数不合法"}, status=400)
+    audit_operation = operation
+    try:
+        payload = transfer_remote_files(host, paths, target_directory, operation, overwrite)
+        for item in payload.get("items", []):
+            record_file_audit(operation=audit_operation, host=host, user=request.user, path=item["path"], target_path=item["targetPath"], protocol="sftp")
+        return Response(payload)
+    except Exception as error:
+        for path in paths:
+            record_file_audit(operation=audit_operation, host=host, user=request.user, path=path, target_path=target_directory, protocol="sftp", status="failed", error_message=str(error))
+        if isinstance(error, FileOperationError):
+            return Response({"code": error.code, "error": str(error)}, status=error.status)
+        return Response({"code": "file_operation_failed", "error": "文件操作失败，请检查远端连接及权限"}, status=400)
 
 
 @api_view(["POST"])

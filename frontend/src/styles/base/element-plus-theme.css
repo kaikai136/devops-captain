@@ -22,27 +22,27 @@
 
   /* Semantic colors */
   --el-color-success: #13b66b;
-  --el-color-success-light-3: color-mix(in srgb, var(--el-color-success) 70%, #ffffff);
-  --el-color-success-light-5: color-mix(in srgb, var(--el-color-success) 50%, #ffffff);
-  --el-color-success-light-7: color-mix(in srgb, var(--el-color-success) 30%, #ffffff);
-  --el-color-success-light-8: color-mix(in srgb, var(--el-color-success) 20%, #ffffff);
-  --el-color-success-light-9: color-mix(in srgb, var(--el-color-success) 10%, #ffffff);
+  --el-color-success-light-3: color-mix(in srgb, var(--el-color-success) 70%, var(--ui-card));
+  --el-color-success-light-5: color-mix(in srgb, var(--el-color-success) 50%, var(--ui-card));
+  --el-color-success-light-7: color-mix(in srgb, var(--el-color-success) 30%, var(--ui-card));
+  --el-color-success-light-8: color-mix(in srgb, var(--el-color-success) 20%, var(--ui-card));
+  --el-color-success-light-9: color-mix(in srgb, var(--el-color-success) 10%, var(--ui-card));
   --el-color-success-dark-2: color-mix(in srgb, var(--el-color-success) 80%, #000000);
 
   --el-color-warning: #f59e0b;
-  --el-color-warning-light-3: color-mix(in srgb, var(--el-color-warning) 70%, #ffffff);
-  --el-color-warning-light-5: color-mix(in srgb, var(--el-color-warning) 50%, #ffffff);
-  --el-color-warning-light-7: color-mix(in srgb, var(--el-color-warning) 30%, #ffffff);
-  --el-color-warning-light-8: color-mix(in srgb, var(--el-color-warning) 20%, #ffffff);
-  --el-color-warning-light-9: color-mix(in srgb, var(--el-color-warning) 10%, #ffffff);
+  --el-color-warning-light-3: color-mix(in srgb, var(--el-color-warning) 70%, var(--ui-card));
+  --el-color-warning-light-5: color-mix(in srgb, var(--el-color-warning) 50%, var(--ui-card));
+  --el-color-warning-light-7: color-mix(in srgb, var(--el-color-warning) 30%, var(--ui-card));
+  --el-color-warning-light-8: color-mix(in srgb, var(--el-color-warning) 20%, var(--ui-card));
+  --el-color-warning-light-9: color-mix(in srgb, var(--el-color-warning) 10%, var(--ui-card));
   --el-color-warning-dark-2: color-mix(in srgb, var(--el-color-warning) 80%, #000000);
 
   --el-color-danger: #f56c6c;
-  --el-color-danger-light-3: color-mix(in srgb, var(--el-color-danger) 70%, #ffffff);
-  --el-color-danger-light-5: color-mix(in srgb, var(--el-color-danger) 50%, #ffffff);
-  --el-color-danger-light-7: color-mix(in srgb, var(--el-color-danger) 30%, #ffffff);
-  --el-color-danger-light-8: color-mix(in srgb, var(--el-color-danger) 20%, #ffffff);
-  --el-color-danger-light-9: color-mix(in srgb, var(--el-color-danger) 10%, #ffffff);
+  --el-color-danger-light-3: color-mix(in srgb, var(--el-color-danger) 70%, var(--ui-card));
+  --el-color-danger-light-5: color-mix(in srgb, var(--el-color-danger) 50%, var(--ui-card));
+  --el-color-danger-light-7: color-mix(in srgb, var(--el-color-danger) 30%, var(--ui-card));
+  --el-color-danger-light-8: color-mix(in srgb, var(--el-color-danger) 20%, var(--ui-card));
+  --el-color-danger-light-9: color-mix(in srgb, var(--el-color-danger) 10%, var(--ui-card));
   --el-color-danger-dark-2: color-mix(in srgb, var(--el-color-danger) 80%, #000000);
   --el-color-error: var(--el-color-danger);
   --el-color-error-light-3: var(--el-color-danger-light-3);
@@ -53,11 +53,11 @@
   --el-color-error-dark-2: var(--el-color-danger-dark-2);
 
   --el-color-info: #909399;
-  --el-color-info-light-3: color-mix(in srgb, var(--el-color-info) 70%, #ffffff);
-  --el-color-info-light-5: color-mix(in srgb, var(--el-color-info) 50%, #ffffff);
-  --el-color-info-light-7: color-mix(in srgb, var(--el-color-info) 30%, #ffffff);
-  --el-color-info-light-8: color-mix(in srgb, var(--el-color-info) 20%, #ffffff);
-  --el-color-info-light-9: color-mix(in srgb, var(--el-color-info) 10%, #ffffff);
+  --el-color-info-light-3: color-mix(in srgb, var(--el-color-info) 70%, var(--ui-card));
+  --el-color-info-light-5: color-mix(in srgb, var(--el-color-info) 50%, var(--ui-card));
+  --el-color-info-light-7: color-mix(in srgb, var(--el-color-info) 30%, var(--ui-card));
+  --el-color-info-light-8: color-mix(in srgb, var(--el-color-info) 20%, var(--ui-card));
+  --el-color-info-light-9: color-mix(in srgb, var(--el-color-info) 10%, var(--ui-card));
   --el-color-info-dark-2: color-mix(in srgb, var(--el-color-info) 80%, #000000);
 
   /* Text */
@@ -157,4 +157,22 @@ html.dark,
   --el-box-shadow-light: 0 8px 20px rgba(0, 0, 0, 0.34);
   --el-box-shadow-lighter: 0 4px 12px rgba(0, 0, 0, 0.28);
   --el-box-shadow-dark: 0 18px 42px rgba(0, 0, 0, 0.5);
+}
+
+.app-shell.workspace-dark {
+  --el-bg-color: var(--workspace-surface);
+  --el-bg-color-page: var(--workspace-bg);
+  --el-bg-color-overlay: var(--workspace-panel-solid);
+  --el-fill-color-blank: var(--workspace-surface);
+  --el-fill-color: var(--workspace-surface-muted);
+  --el-fill-color-light: color-mix(in srgb, var(--workspace-surface-muted) 86%, var(--workspace-surface));
+  --el-fill-color-lighter: color-mix(in srgb, var(--workspace-surface-muted) 66%, var(--workspace-surface));
+  --el-fill-color-extra-light: color-mix(in srgb, var(--workspace-surface-muted) 48%, var(--workspace-surface));
+  --el-table-bg-color: var(--workspace-surface);
+  --el-table-tr-bg-color: var(--workspace-surface);
+  --el-table-header-bg-color: var(--workspace-surface-muted);
+  --el-table-row-hover-bg-color: color-mix(in srgb, var(--ui-primary) 14%, var(--workspace-surface));
+  --el-table-current-row-bg-color: color-mix(in srgb, var(--ui-primary) 18%, var(--workspace-surface));
+  --el-table-border-color: var(--workspace-border);
+  --el-table-text-color: var(--workspace-text);
 }

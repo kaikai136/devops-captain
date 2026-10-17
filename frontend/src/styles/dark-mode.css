@@ -1,3 +1,4 @@
+html.dark,
 .app-shell.workspace-dark {
   --dark-page-bg:
     radial-gradient(circle at 12% 0%, color-mix(in srgb, var(--ui-chart-1) 8%, transparent), transparent 28%),
@@ -14,6 +15,136 @@
   --dark-danger-bg: rgba(127, 29, 29, 0.22);
   --dark-warning-bg: rgba(120, 81, 25, 0.22);
   --dark-success-bg: rgba(20, 83, 75, 0.28);
+}
+
+.workspace-dark :where(.el-table, .el-table__inner-wrapper, .el-table__header-wrapper, .el-table__body-wrapper, .el-table tr, .el-table th.el-table__cell, .el-table td.el-table__cell, .el-card, .el-card__body, .el-input__wrapper, .el-select__wrapper, .el-textarea__inner, .el-upload-dragger) {
+  background-color: var(--workspace-surface);
+  color: var(--workspace-text);
+  border-color: var(--workspace-border);
+}
+
+.workspace-dark :where(.el-table th.el-table__cell, .el-table__header-wrapper) {
+  background-color: var(--workspace-surface-muted);
+  color: var(--workspace-text-soft);
+}
+
+.workspace-dark :where(.el-table tr:hover > td.el-table__cell, .el-table__body tr.hover-row > td.el-table__cell) {
+  background-color: var(--el-table-row-hover-bg-color);
+}
+
+.workspace-dark :where(.el-input__wrapper, .el-select__wrapper, .el-textarea__inner) {
+  background-color: var(--dark-field-bg);
+  box-shadow: 0 0 0 1px var(--dark-field-border) inset;
+}
+
+.workspace-dark :where(
+  .host-table,
+  .host-table-row,
+  .host-table-row.head,
+  .host-sticky-cell,
+  .app-data-grid,
+  .app-native-data-table,
+  .app-native-data-table th,
+  .app-native-data-table td,
+  .host-groups-panel,
+  .host-table-panel
+) {
+  border-color: var(--workspace-border);
+  background: var(--workspace-surface);
+  color: var(--workspace-text);
+}
+
+.workspace-dark :where(.host-table-row.head, .app-native-data-table thead th) {
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-text-soft);
+}
+
+.workspace-dark :where(
+  .host-group-cell,
+  .host-machine-cell,
+  .host-system-cell,
+  .host-user-cell,
+  .host-port-cell,
+  .host-date-cell,
+  .host-creator-cell,
+  .host-ip-stack,
+  .host-config,
+  .host-spec-cell,
+  .host-spec-cell strong
+) {
+  color: var(--workspace-text-soft);
+}
+
+.workspace-dark :where(.host-remark-cell, .host-sort-button em, .host-config-empty) {
+  color: var(--workspace-muted);
+}
+
+.workspace-dark :where(.host-platform-type, .verify-badge, .ip-tag.public, .ip-tag.private) {
+  border-color: var(--workspace-border);
+  background: var(--workspace-surface-muted);
+  color: var(--workspace-text-soft);
+}
+
+.workspace-dark :where(.verify-badge.verified) {
+  border-color: color-mix(in srgb, #34d399 48%, var(--workspace-border));
+  background: color-mix(in srgb, #34d399 18%, var(--workspace-surface));
+  color: #86efac;
+}
+
+.workspace-dark :where(.verify-badge.failed) {
+  border-color: color-mix(in srgb, #f87171 48%, var(--workspace-border));
+  background: color-mix(in srgb, #f87171 16%, var(--workspace-surface));
+  color: #fca5a5;
+}
+
+html.dark .host-platform-type.linux {
+  background: color-mix(in srgb, var(--el-color-success) 15%, var(--ui-card));
+  color: var(--el-color-success);
+}
+
+html.dark .verify-badge {
+  border-color: color-mix(in srgb, var(--el-color-warning) 48%, var(--ui-border));
+  background: color-mix(in srgb, var(--el-color-warning) 16%, var(--ui-card));
+  color: var(--el-color-warning);
+}
+
+html.dark .verify-badge.verified {
+  border-color: color-mix(in srgb, var(--el-color-success) 48%, var(--ui-border));
+  background: color-mix(in srgb, var(--el-color-success) 16%, var(--ui-card));
+  color: var(--el-color-success);
+}
+
+html.dark .verify-badge.failed {
+  border-color: color-mix(in srgb, var(--el-color-danger) 48%, var(--ui-border));
+  background: color-mix(in srgb, var(--el-color-danger) 16%, var(--ui-card));
+  color: var(--el-color-danger);
+}
+
+html.dark .ip-tag.public {
+  background: var(--el-color-warning-light-9);
+  color: var(--el-color-warning);
+}
+
+html.dark .ip-tag.private {
+  background: var(--ui-primary-soft);
+  color: var(--ui-primary);
+}
+
+html.dark .workspace-nav-popper .el-menu--popup {
+  border-color: var(--ui-border);
+  background: var(--ui-popover);
+}
+
+html.dark :is(.el-input.invalid .el-input__wrapper, .el-select.invalid .el-select__wrapper, .el-input-number.invalid .el-input-number__wrapper, .el-textarea.invalid .el-textarea__inner) {
+  background: var(--el-color-danger-light-9);
+}
+
+html.dark .top-toast {
+  --toast-bg: var(--ui-popover);
+  --toast-border: var(--ui-border);
+  --toast-icon-bg: var(--ui-primary-soft);
+  --toast-title: var(--ui-foreground);
+  color: var(--ui-foreground);
 }
 
 .workspace-dark .workspace {
@@ -136,13 +267,13 @@
   color: #64748b;
 }
 
-.workspace-dark :where(button:not(.primary):not(.danger):not(.workspace-menu-button):not(.workspace-icon-button):not(.workspace-avatar-button):not(.workspace-menu-action):not(.nav-dashboard-button):not(.nav-dashboard-compact):not(.nav-group-button):not(.nav-item):not(.nav-group-compact):not(.nav-flyout-item):not(.host-name-link):not(.terminal-tree-row):not(.terminal-tab)) {
+.workspace-dark :where(button:not(.el-button):not(.primary):not(.danger):not(.workspace-menu-button):not(.workspace-icon-button):not(.workspace-avatar-button):not(.workspace-menu-action):not(.nav-dashboard-button):not(.nav-dashboard-compact):not(.nav-group-button):not(.nav-item):not(.nav-group-compact):not(.nav-flyout-item):not(.host-name-link):not(.terminal-tree-row):not(.terminal-tab)) {
   border-color: var(--workspace-border);
   background: var(--workspace-surface-muted);
   color: var(--workspace-text-soft);
 }
 
-.workspace-dark :where(button:not(.primary):not(.danger):not(:disabled)):hover {
+.workspace-dark :where(button:not(.el-button):not(.primary):not(.danger):not(:disabled)):hover {
   border-color: color-mix(in srgb, var(--ui-primary) 48%, transparent);
   background: #1d2f4d;
   color: #dbeafe;

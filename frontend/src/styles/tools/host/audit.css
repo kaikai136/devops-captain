@@ -69,11 +69,11 @@
 .host-session-audit-toolbar > input {
   width: min(360px, 34vw);
   min-height: 36px;
-  border: 1px solid #d8e2ee;
+  border: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #fff;
+  background: var(--ui-card);
   padding: 0 14px;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 14px;
   font-weight: 800;
 }
@@ -88,10 +88,10 @@
   width: auto;
   min-width: 132px;
   min-height: 36px;
-  border: 1px solid #d8e2ee;
+  border: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #fff;
-  color: #173252;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   padding: 0 10px;
   font-size: 13px;
   font-weight: 800;
@@ -107,22 +107,22 @@
 }
 
 .host-session-audit-toolbar-actions button:not(.primary):not(.icon-only) {
-  border: 1px solid #d8e2ee;
-  background: #fff;
-  color: #173252;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
 }
 
 .host-session-recording-modal header span {
   display: block;
-  color: #8b95a1;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 600;
 }
 
 .host-session-audit-message {
   margin: 0 20px 12px;
-  border: 1px solid #ffd4d4;
-  background: #fff5f5;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-muted);
   color: #d92d20;
   padding: 10px 12px;
   font-size: 13px;
@@ -150,7 +150,7 @@
   align-items: center;
   gap: 12px;
   min-height: 72px;
-  border-bottom: 1px solid #edf1f6;
+  border-bottom: 1px solid var(--ui-border);
   padding: 0 16px;
 }
 
@@ -159,8 +159,8 @@
   z-index: 5;
   top: 0;
   min-height: 56px;
-  background: #f8fafc;
-  color: #173252;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
   font-weight: 900;
 }
 
@@ -173,7 +173,7 @@
 .host-session-audit-row > span,
 .host-session-audit-row code {
   overflow: hidden;
-  color: #173252;
+  color: var(--ui-foreground);
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 15px;
@@ -190,7 +190,7 @@
   align-items: center;
   gap: 8px;
   justify-self: start;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 800;
 }
@@ -204,7 +204,7 @@
 }
 
 .host-session-risk.medium {
-  color: #173252;
+  color: var(--ui-foreground);
 }
 
 .host-session-risk.medium::before {
@@ -212,7 +212,7 @@
 }
 
 .host-session-risk.high {
-  color: #173252;
+  color: var(--ui-foreground);
 }
 
 .host-session-risk.high::before {
@@ -248,15 +248,15 @@
   display: grid;
   grid-template-columns: minmax(260px, 0.8fr) minmax(420px, 1.2fr);
   gap: var(--workspace-page-gap);
-  border-bottom: 1px solid #edf1f6;
-  background: #fbfdff;
+  border-bottom: 1px solid var(--ui-border);
+  background: var(--ui-card);
   padding: var(--workspace-panel-padding);
 }
 
 .host-session-audit-detail strong {
   display: block;
   margin-bottom: 8px;
-  color: #303133;
+  color: var(--ui-foreground);
   font-size: 13px;
 }
 
@@ -264,10 +264,10 @@
   max-height: 220px;
   margin: 0;
   overflow: auto;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #ffffff;
-  color: #303133;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   padding: 12px;
   font-size: 12px;
   line-height: 1.55;
@@ -279,7 +279,7 @@
   display: grid;
   min-height: 120px;
   place-items: center;
-  color: #8b95a1;
+  color: var(--ui-muted-foreground);
   font-size: 13px;
   font-weight: 900;
 }
@@ -302,9 +302,9 @@
   width: min(980px, calc(100vw - 32px));
   max-height: calc(100vh - 48px);
   gap: 14px;
-  border: 1px solid #d8e5f4;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
   padding: var(--workspace-panel-padding);
   box-shadow: 0 24px 60px rgba(36, 55, 84, 0.26);
 }
@@ -318,7 +318,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #0b2446;
+  color: var(--ui-foreground);
   font-size: 16px;
 }
 
@@ -330,7 +330,7 @@
   place-items: center;
   border: 0;
   background: transparent;
-  color: #173252;
+  color: var(--ui-foreground);
   padding: 0;
 }
 
@@ -338,7 +338,7 @@
   height: clamp(480px, 70vh, 760px);
   min-height: 0;
   overflow: hidden;
-  border: 1px solid #d8e2ee;
+  border: 1px solid var(--ui-border);
   background: #121314;
 }
 
@@ -367,7 +367,7 @@
   flex: 0 0 auto;
   margin: 0;
   overflow: hidden;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 14px;
   font-weight: 800;
   line-height: 1.4;

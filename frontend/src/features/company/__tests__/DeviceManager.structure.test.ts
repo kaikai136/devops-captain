@@ -183,7 +183,7 @@ describe('DeviceManager page structure', () => {
     expect(source).toContain('耗材 {{ consumableCount }}');
     expect(source).not.toContain('共{{ totalPages }}页 {{ filteredDevices.length }}条，已选 {{ selectedDeviceCount }} 条');
     expect(styles).toMatch(/\.device-pagination-left,\s*\.device-category-summary\s*\{[^}]*display:\s*flex;/s);
-    expect(styles).toMatch(/\.device-pagination\s*\{[^}]*background:\s*#fbfdff;/s);
+    expect(styles).toMatch(/\.device-pagination\s*\{[^}]*background:\s*var\(--ui-card\);/s);
     expect(styles).toMatch(/\.device-pagination \.app-pagination\s*\{[^}]*min-width:\s*0;/s);
     expect(styles).toMatch(/\.device-category-summary\s*\{[^}]*justify-content:\s*flex-end;/s);
     expect(styles).toMatch(/\.device-summary-pill\s*\{[^}]*white-space:\s*nowrap;/s);

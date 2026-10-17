@@ -8,10 +8,10 @@
   overflow-x: hidden;
   overflow-y: auto;
   padding: 4px;
-  border: 1px solid #e4e4e7;
+  border: 1px solid var(--ui-border, #cbd5e1);
   border-radius: 8px;
-  background: #fff;
-  color: #18181b;
+  background: var(--ui-card, #fff);
+  color: var(--ui-foreground, #18181b);
   box-shadow: 0 4px 6px -1px rgb(0 0 0 / 10%), 0 2px 4px -2px rgb(0 0 0 / 10%);
   font-family: inherit;
   font-size: 14px;
@@ -38,7 +38,7 @@
 
 .shadcn-context-menu-item[data-highlighted],
 .shadcn-context-menu-item[data-state='open'] {
-  background: #f4f4f5;
+  background: var(--ui-muted, #f1f5f9);
 }
 
 .shadcn-context-menu-item[data-disabled] {
@@ -51,12 +51,12 @@
 }
 
 .shadcn-context-menu-item[data-variant='destructive'][data-highlighted] {
-  background: #fef2f2;
+  background: color-mix(in srgb, #ef4444 10%, var(--ui-card, #fff));
 }
 
 .shadcn-context-menu-item > .app-icon {
   flex-shrink: 0;
-  color: #71717a;
+  color: var(--ui-muted-foreground, #64748b);
 }
 
 .shadcn-context-menu-item[data-variant='destructive'] > .app-icon {
@@ -80,8 +80,67 @@
 .shadcn-context-menu-separator {
   height: 1px;
   margin: 4px -4px;
-  background: #e4e4e7;
+  background: var(--ui-border, #cbd5e1);
 }
+
+.shadcn-context-menu-toolbar {
+  display: flex;
+  align-items: stretch;
+  justify-content: space-around;
+  min-height: 54px;
+}
+
+.shadcn-context-menu-toolbar .shadcn-context-menu-toolbar-item {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  padding: 5px 3px;
+  border-radius: 4px;
+  cursor: default;
+  font-size: 10px;
+  line-height: 14px;
+}
+
+.shadcn-context-menu-toolbar .shadcn-context-menu-toolbar-item + .shadcn-context-menu-toolbar-item::before {
+  position: absolute;
+  top: 15px;
+  left: 0;
+  height: 20px;
+  border-left: 1px solid var(--ui-border, #cbd5e1);
+  content: '';
+}
+
+.shadcn-context-menu-toolbar-item .app-icon { width: 16px; height: 16px; }
+.shadcn-context-menu-toolbar-item[data-disabled] { opacity: .4; pointer-events: none; }
+.shadcn-context-menu-toolbar-item[data-variant='destructive'] { color: #dc2626; }
+.shadcn-context-menu-toolbar-item:hover { background: var(--ui-muted, #f1f5f9); }
+.shadcn-context-menu-toolbar-item .shadcn-context-menu-label { flex: initial; }
+
+.terminal-files-menu {
+  width: 256px;
+  min-width: 0;
+  border-radius: 5px;
+  background: var(--ui-muted, #f1f5f9);
+  font-size: 12px;
+}
+
+.terminal-files-menu .shadcn-context-menu-item:not(.shadcn-context-menu-toolbar-item) {
+  min-height: 28px;
+  padding: 4px 8px;
+  gap: 16px;
+}
+
+.terminal-files-menu .shadcn-context-menu-item[data-highlighted],
+.terminal-files-menu .shadcn-context-menu-item[data-state='open'] {
+  background: color-mix(in srgb, var(--ui-border, #cbd5e1) 40%, var(--ui-card, #fff));
+}
+
+.terminal-files-menu .shadcn-context-menu-item[data-variant='destructive'] > .app-icon { color: inherit; }
 
 .shadcn-context-menu-heading {
   padding: 5px 8px 3px;

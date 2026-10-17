@@ -183,7 +183,7 @@ watch(hostTransferDialog, (mode) => {
 watch(
   [isAuthenticated, isWorkspaceDark],
   ([authenticated, dark]) => {
-    if (authenticated) document.documentElement.classList.toggle('dark', dark);
+    document.documentElement.classList.toggle('dark', authenticated && dark);
   },
   { immediate: true },
 );

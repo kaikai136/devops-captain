@@ -190,8 +190,18 @@
   flex: 0 1 auto;
 }
 
+html.workspace-theme-transition::view-transition-old(root),
+html.workspace-theme-transition::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+html.workspace-theme-transition::view-transition-new(root) {
+  z-index: 1;
+}
+
 .workspace-theme-toggle {
-  color: #1f2937;
+  color: var(--ui-foreground);
 }
 
 .workspace-dark .workspace-theme-toggle {
@@ -204,7 +214,7 @@
 
 .workspace-dashboard-refresh:hover:not(:disabled) {
   border-color: color-mix(in srgb, var(--ui-primary) 42%, transparent);
-  background: #ecfeff;
+  background: var(--ui-muted);
 }
 
 .workspace-dashboard-refresh:disabled {
@@ -366,8 +376,8 @@
 }
 
 .workspace-user-dropdown .workspace-menu-logout:hover {
-  border-color: #fecaca;
-  background: #fff1f2;
+  border-color: var(--ui-border);
+  background: var(--ui-muted);
   color: #be123c;
 }
 
@@ -409,9 +419,9 @@
   align-items: center;
   min-height: 24px;
   padding: 2px 12px;
-  border: 1px solid #bceac8;
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  background: #effbf2;
+  background: var(--ui-muted);
   color: #047331;
   vertical-align: middle;
 }
@@ -457,7 +467,7 @@
 .header-action.el-button:hover,
 .header-action.el-button:focus-visible {
   border-color: #72bcff;
-  background: #eaf7ff;
+  background: var(--ui-muted);
   color: var(--workspace-text-soft);
 }
 
@@ -470,7 +480,7 @@
 
 .header-action:hover {
   border-color: #72bcff;
-  background: #eaf7ff;
+  background: var(--ui-muted);
 }
 
 .header-stats article {
@@ -521,7 +531,7 @@ label span {
   color: #64748b;
 }
 
-.workspace-dark button:not(.primary):not(.danger):not(.modal-close):not(.workspace-menu-button):not(.workspace-icon-button):not(.workspace-avatar-button):not(.workspace-menu-action):not(.nav-dashboard-button):not(.nav-dashboard-compact):not(.nav-group-button):not(.nav-item):not(.nav-group-compact):not(.nav-flyout-item):not(.host-name-link):not(.terminal-tree-row):not(.terminal-tab) {
+.workspace-dark button:not(.el-button):not(.primary):not(.danger):not(.modal-close):not(.workspace-menu-button):not(.workspace-icon-button):not(.workspace-avatar-button):not(.workspace-menu-action):not(.nav-dashboard-button):not(.nav-dashboard-compact):not(.nav-group-button):not(.nav-item):not(.nav-group-compact):not(.nav-flyout-item):not(.host-name-link):not(.terminal-tree-row):not(.terminal-tab) {
   border-color: var(--workspace-border);
   background: var(--workspace-surface-muted);
   color: var(--workspace-text-soft);
@@ -571,7 +581,7 @@ label span {
   border-color: var(--workspace-border-soft);
 }
 
-.workspace-dark .modal-actions button:not(.primary) {
+.workspace-dark .modal-actions button:not(.el-button):not(.primary) {
   border-color: var(--workspace-border);
   background: var(--workspace-surface-muted);
   color: var(--workspace-text-soft);

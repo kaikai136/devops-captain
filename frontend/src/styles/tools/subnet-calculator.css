@@ -40,7 +40,7 @@
 
 .subnet-panel-head p {
   margin: 0;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 700;
 }
@@ -57,7 +57,7 @@
 .subnet-presets button {
   min-height: 32px;
   border-color: #b8d8ff;
-  background: #f5fbff;
+  background: var(--ui-muted);
   color: var(--ui-primary);
   border-radius: 8px;
   padding: 0 12px;
@@ -91,14 +91,14 @@
   min-width: 0;
   min-height: 72px;
   padding: 14px 16px;
-  border: 1px solid #d8e5f4;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .subnet-summary-grid span {
   display: block;
-  color: #536b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 800;
 }
@@ -118,13 +118,13 @@
   gap: 12px 12px;
   align-content: start;
   padding: 16px;
-  border: 1px solid #d8e5f4;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .binary-grid > span {
-  color: #536b8a;
+  color: var(--ui-muted-foreground);
   font-weight: 900;
 }
 
@@ -156,15 +156,15 @@
 
 .subnet-mode-tabs button {
   min-height: 44px;
-  border-color: #cfe0f6;
-  background: #f8fbff;
-  color: #607087;
+  border-color: var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-muted-foreground);
   font-size: 16px;
 }
 
 .subnet-mode-tabs button.active {
   border-color: #8bb7ff;
-  background: #eef5ff;
+  background: var(--ui-muted);
   color: var(--ui-primary);
 }
 
@@ -188,14 +188,14 @@
 .subnet-split-summary article {
   min-width: 0;
   padding: 12px 14px;
-  border: 1px solid #d8e5f4;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .subnet-split-summary span {
   display: block;
-  color: #536b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 800;
 }
@@ -209,7 +209,7 @@
 
 .subnet-table {
   overflow: auto;
-  border: 1px solid #d8e5f4;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
 }
 
@@ -224,22 +224,22 @@
 }
 
 .subnet-table-head {
-  background: #f1f6fc;
-  color: #263f5c;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
   font-weight: 900;
 }
 
 .subnet-table-row {
   min-height: 44px;
-  border-top: 1px solid #e4edf7;
-  background: #fff;
-  color: #0b2850;
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   font-size: 13px;
 }
 
 .subnet-generated {
   margin: 0;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 700;
 }

@@ -79,6 +79,8 @@ class TerminalFileAudit(models.Model):
     OPERATION_MKDIR = "mkdir"
     OPERATION_REMOVE = "remove"
     OPERATION_RENAME = "rename"
+    OPERATION_COPY = "copy"
+    OPERATION_MOVE = "move"
     OPERATION_STAT = "stat"
     OPERATION_CHOICES = [
         (OPERATION_LIST, "List"),
@@ -87,6 +89,8 @@ class TerminalFileAudit(models.Model):
         (OPERATION_MKDIR, "Mkdir"),
         (OPERATION_REMOVE, "Remove"),
         (OPERATION_RENAME, "Rename"),
+        (OPERATION_COPY, "Copy"),
+        (OPERATION_MOVE, "Move"),
         (OPERATION_STAT, "Stat"),
     ]
     STATUS_SUCCESS = "success"

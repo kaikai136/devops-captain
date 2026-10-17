@@ -12,4 +12,5 @@ export interface ContextMenuEntry {
   shortcut?: string;
   children?: ContextMenuEntry[];
   action: () => void | Promise<void>;
+  toolbar?: boolean;
 }

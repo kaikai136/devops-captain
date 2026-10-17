@@ -1,4 +1,4 @@
-import { computed, ref, watch } from 'vue';
+import { computed, nextTick, ref, watch } from 'vue';
 
 import type { SidebarIconName } from '@shared/components/SidebarIcon.vue';
 import { dashboardNavItem, navGroups } from '@app/navigation';
@@ -17,6 +17,7 @@ export function useShellState() {
   const hoveredNavGroup = ref<string | null>(null);
   const workspaceTheme = ref<WorkspaceTheme>(readWorkspaceTheme());
   let navFlyoutTimer: number | undefined;
+  let themeTransitionActive = false;
 
   const activeNavGroup = computed(() => navGroups.find((group) => group.items.some((item) => item.key === activeTool.value)) ?? navGroups[0]);
   const activeNavItem = computed(() => activeNavGroup.value.items.find((item) => item.key === activeTool.value) ?? activeNavGroup.value.items[0]);
@@ -41,10 +42,43 @@ export function useShellState() {
     sidebarCollapsed.value = !sidebarCollapsed.value;
   }
 
-  function toggleWorkspaceTheme() {
-    workspaceTheme.value = isWorkspaceDark.value ? 'light' : 'dark';
-    if (typeof window !== 'undefined') {
-      window.localStorage.setItem(WORKSPACE_THEME_STORAGE_KEY, workspaceTheme.value);
+  async function toggleWorkspaceTheme(event?: MouseEvent) {
+    if (themeTransitionActive) return;
+    let updated = false;
+    const updateTheme = () => {
+      if (updated) return;
+      updated = true;
+      workspaceTheme.value = isWorkspaceDark.value ? 'light' : 'dark';
+      if (typeof window !== 'undefined') window.localStorage.setItem(WORKSPACE_THEME_STORAGE_KEY, workspaceTheme.value);
+    };
+    const browserDocument = typeof document === 'undefined' ? null : document as Document & {
+      startViewTransition?: (update: () => Promise<void>) => { ready: Promise<void>; finished: Promise<void> };
+    };
+    if (!browserDocument?.startViewTransition || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      updateTheme();
+      return;
+    }
+    const button = event?.currentTarget as HTMLElement | null;
+    const bounds = button?.getBoundingClientRect();
+    const horizontal = event && event.detail > 0 ? event.clientX : bounds ? bounds.left + bounds.width / 2 : window.innerWidth / 2;
+    const vertical = event && event.detail > 0 ? event.clientY : bounds ? bounds.top + bounds.height / 2 : window.innerHeight / 2;
+    const radius = Math.hypot(Math.max(horizontal, window.innerWidth - horizontal), Math.max(vertical, window.innerHeight - vertical));
+    themeTransitionActive = true;
+    browserDocument.documentElement.classList.add('workspace-theme-transition');
+    try {
+      const transition = browserDocument.startViewTransition(async () => { updateTheme(); await nextTick(); });
+      void transition.finished.catch(() => {});
+      await transition.ready;
+      await browserDocument.documentElement.animate(
+        { clipPath: [`circle(0px at ${horizontal}px ${vertical}px)`, `circle(${radius}px at ${horizontal}px ${vertical}px)`] },
+        { duration: 680, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', pseudoElement: '::view-transition-new(root)' },
+      ).finished;
+      await transition.finished;
+    } catch {
+      updateTheme();
+    } finally {
+      browserDocument.documentElement.classList.remove('workspace-theme-transition');
+      themeTransitionActive = false;
     }
   }
 

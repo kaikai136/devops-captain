@@ -2,14 +2,14 @@
   --popup-width-form: 680px;
   --popup-width-wide: min(920px, calc(100vw - 32px));
   --popup-radius: 12px;
-  --popup-border: #cbd9ea;
-  --popup-text: #102a4d;
-  --popup-muted: #7185a0;
-  --popup-primary: #216dff;
-  --popup-primary-hover: #155de0;
-  --popup-surface: #ffffff;
-  --popup-subtle: #f6f9fd;
-  --popup-danger: #d94b5b;
+  --popup-border: var(--ui-border);
+  --popup-text: var(--ui-foreground);
+  --popup-muted: var(--ui-muted-foreground);
+  --popup-primary: var(--ui-primary);
+  --popup-primary-hover: var(--ui-primary-hover);
+  --popup-surface: var(--ui-popover);
+  --popup-subtle: var(--ui-muted);
+  --popup-danger: var(--el-color-danger);
 }
 
 .el-overlay {

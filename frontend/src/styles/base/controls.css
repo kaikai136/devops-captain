@@ -26,10 +26,10 @@ input:not(.el-input__inner):not(.el-select__input):not(.el-range-input),
 select,
 textarea:not(.el-textarea__inner) {
   width: 100%;
-  border: 1px solid #cbdcf1;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #fff;
-  color: #071f43;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   outline: none;
   font-weight: 800;
 }
@@ -54,10 +54,10 @@ textarea:not(.el-textarea__inner):focus {
 }
 
 button:not(.el-button) {
-  border: 1px solid #cbdcf1;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #f5f9ff;
-  color: #09244f;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
   font-weight: 900;
   min-height: 40px;
   padding: 0 16px;
@@ -113,15 +113,15 @@ button:disabled {
   display: grid;
   place-items: center;
   min-height: 120px;
-  border: 1px dashed #cbdcf1;
+  border: 1px dashed var(--ui-border);
   border-radius: 8px;
   background: rgba(245, 249, 255, 0.72);
-  color: #6b7f99;
+  color: var(--ui-muted-foreground);
   font-size: 14px;
   font-weight: 900;
 }
 
 .permission-placeholder {
-  color: #8b95a1;
+  color: var(--ui-muted-foreground);
   font-weight: 900;
 }

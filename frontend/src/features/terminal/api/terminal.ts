@@ -85,6 +85,10 @@ export function renameTerminalFileEntry(hostId: number, payload: unknown) {
   return apiPost<TerminalFileProperties>(`${terminalBaseUrl}/hosts/${hostId}/files/rename/`, payload);
 }
 
+export function transferTerminalFiles(hostId: number, payload: { paths: string[]; targetDirectory: string; operation: 'copy' | 'move'; overwrite?: boolean }) {
+  return apiPost<{ items: Array<{ path: string; targetPath: string }>; warnings?: string[] }>(`${terminalBaseUrl}/hosts/${hostId}/files/transfer/`, payload);
+}
+
 export function getTerminalFileProperties(hostId: number, path: string) {
   return apiPost<TerminalFileProperties>(`${terminalBaseUrl}/hosts/${hostId}/files/properties/`, { path });
 }

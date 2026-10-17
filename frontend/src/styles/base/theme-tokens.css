@@ -71,4 +71,17 @@ html.dark {
   --ui-chart-3: var(--ui-chart-3-dark);
   --ui-chart-4: var(--ui-chart-4-dark);
   --ui-chart-5: var(--ui-chart-5-dark);
+  --workspace-bg: var(--ui-background);
+  --workspace-surface: var(--ui-card);
+  --workspace-surface-muted: var(--ui-muted);
+  --workspace-panel-solid: var(--ui-popover);
+  --workspace-panel: var(--ui-card);
+  --workspace-border: var(--ui-border);
+  --workspace-border-soft: var(--ui-border);
+  --workspace-text: var(--ui-foreground);
+  --workspace-text-soft: var(--ui-foreground);
+  --workspace-muted: var(--ui-muted-foreground);
+  --workspace-subtle: var(--ui-muted-foreground);
+  --workspace-hover: var(--ui-accent);
+  --workspace-icon: var(--ui-foreground);
 }

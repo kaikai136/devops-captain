@@ -78,7 +78,7 @@
   place-items: center;
   border: 0;
   background: transparent;
-  color: #606266;
+  color: var(--ui-muted-foreground);
   cursor: pointer;
   padding: 0;
 }
@@ -93,12 +93,12 @@
   right: 0;
   z-index: 4;
   min-width: 144px;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--ui-card);
   padding: 10px 12px;
   box-shadow: 0 12px 30px rgba(15, 23, 42, 0.12);
-  color: #606266;
+  color: var(--ui-muted-foreground);
   font-size: 14px;
   font-weight: 700;
 }
@@ -119,8 +119,8 @@
   grid-template-columns: 54px minmax(160px, 1fr) minmax(150px, 0.9fr) minmax(96px, 0.62fr) minmax(120px, 0.72fr) minmax(130px, 0.74fr) 250px;
   align-items: center;
   min-height: 42px;
-  border-bottom: 1px solid #e4e7ed;
-  color: #303133;
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 600;
   text-align: center;
@@ -129,7 +129,7 @@
 .role-table-row > * {
   min-width: 0;
   height: 100%;
-  border-right: 1px solid #e4e7ed;
+  border-right: 1px solid var(--ui-border);
   padding: 0 12px;
 }
 
@@ -143,8 +143,8 @@
 
 .role-table-row.head {
   min-height: 40px;
-  background: #f5f7fa;
-  color: #8a9099;
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
   font-weight: 800;
 }
 
@@ -153,9 +153,9 @@
 }
 
 .role-status {
-  border: 1px solid #cdebbb;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #f0f9eb;
+  background: var(--ui-muted);
   color: #67c23a;
   padding: 3px 10px;
   font-size: 13px;
@@ -170,9 +170,9 @@
   justify-content: center;
   min-width: 76px;
   min-height: 25px;
-  border: 1px solid #c7e2e0;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #f0fffd;
+  background: var(--ui-muted);
   color: #0f9f91;
   padding: 0 10px;
   font-size: 13px;
@@ -187,15 +187,15 @@ button.role-user-count {
 
 button.role-user-count:hover {
   border-color: var(--ui-primary);
-  background: #e6fffb;
+  background: var(--ui-muted);
 }
 
 .role-user-count.readonly {
-  color: #6b7785;
+  color: var(--ui-muted-foreground);
 }
 
 .role-action-placeholder {
-  color: #8b95a1;
+  color: var(--ui-muted-foreground);
   font-style: normal;
   font-weight: 900;
 }
@@ -205,7 +205,7 @@ button.role-user-count:hover {
   height: 25px;
   border: 1px solid #7bd9d1;
   border-radius: 3px;
-  background: #f0fffd;
+  background: var(--ui-muted);
   color: #0f9f91;
   cursor: pointer;
   padding: 0 10px;
@@ -250,9 +250,9 @@ button.role-user-count:hover {
   display: grid;
   min-height: 76px;
   place-items: center;
-  border-right: 1px solid #e4e7ed;
-  border-bottom: 1px solid #e4e7ed;
-  color: #909399;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-muted-foreground);
   font-size: 15px;
   font-weight: 700;
 }
@@ -261,7 +261,7 @@ button.role-user-count:hover {
   justify-content: flex-start;
   gap: 8px;
   margin-top: 18px;
-  color: #303133;
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 700;
 }
@@ -271,9 +271,9 @@ button.role-user-count:hover {
   width: 32px;
   height: 32px;
   place-items: center;
-  border: 1px solid #e4e7ed;
+  border: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #fff;
+  background: var(--ui-card);
   color: #c0c4cc;
   cursor: pointer;
   padding: 0;
@@ -284,7 +284,7 @@ button.role-user-count:hover {
 }
 
 .role-pagination button:disabled {
-  background: #f5f7fa;
+  background: var(--ui-muted);
   cursor: not-allowed;
 }
 
@@ -311,16 +311,16 @@ button.role-user-count:hover {
   width: min(560px, calc(100vw - 28px));
   max-height: calc(100vh - 120px);
   overflow: auto;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--ui-card);
   padding: 22px;
   box-shadow: 0 24px 60px rgba(15, 23, 42, 0.22);
 }
 
 .role-modal h2 {
   margin: 0;
-  color: #303133;
+  color: var(--ui-foreground);
   font-size: 18px;
   font-weight: 800;
 }
@@ -330,7 +330,7 @@ button.role-user-count:hover {
   grid-template-columns: 92px minmax(0, 1fr);
   align-items: center;
   gap: 12px;
-  color: #303133;
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 700;
 }
@@ -346,8 +346,8 @@ button.role-user-count:hover {
 }
 
 .role-form-row input[readonly] {
-  background: #f5f7fa;
-  color: #606266;
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
 }
 
 .role-wide-modal {
@@ -362,7 +362,7 @@ button.role-user-count:hover {
 
 .role-user-dialog-subtitle {
   margin: -4px 0 0;
-  color: #606266;
+  color: var(--ui-muted-foreground);
   font-size: 14px;
   font-weight: 700;
 }
@@ -371,9 +371,9 @@ button.role-user-count:hover {
   display: grid;
   min-height: 160px;
   place-items: center;
-  border: 1px solid #e4e7ed;
-  background: #f8fafc;
-  color: #606266;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
   font-size: 14px;
   font-weight: 800;
 }
@@ -382,8 +382,8 @@ button.role-user-count:hover {
   display: grid;
   max-height: min(440px, calc(100vh - 300px));
   overflow: auto;
-  border-top: 1px solid #e4e7ed;
-  border-left: 1px solid #e4e7ed;
+  border-top: 1px solid var(--ui-border);
+  border-left: 1px solid var(--ui-border);
 }
 
 .role-user-option {
@@ -391,9 +391,9 @@ button.role-user-count:hover {
   grid-template-columns: 34px minmax(0, 1fr) 72px;
   align-items: center;
   min-height: 70px;
-  border-right: 1px solid #e4e7ed;
-  border-bottom: 1px solid #e4e7ed;
-  color: #303133;
+  border-right: 1px solid var(--ui-border);
+  border-bottom: 1px solid var(--ui-border);
+  color: var(--ui-foreground);
   cursor: pointer;
   padding: 0 14px;
 }
@@ -430,7 +430,7 @@ button.role-user-count:hover {
 }
 
 .role-user-option em {
-  color: #6b7785;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-style: normal;
   font-weight: 700;
@@ -444,9 +444,9 @@ button.role-user-count:hover {
 
 .role-user-option b {
   justify-self: end;
-  border: 1px solid #cdebbb;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #f0f9eb;
+  background: var(--ui-muted);
   color: #67c23a;
   padding: 3px 9px;
   font-size: 12px;
@@ -584,8 +584,8 @@ button.role-user-count:hover {
   gap: 8px;
   min-height: 44px;
   border: 1px solid #91caff;
-  background: #eef6ff;
-  color: #345275;
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
   padding: 0 14px;
   font-size: 16px;
   font-weight: 800;
@@ -723,7 +723,7 @@ button.role-user-count:hover {
   min-width: 120px;
   max-width: 220px;
   min-height: 28px;
-  color: #345275;
+  color: var(--ui-muted-foreground);
   font-size: 14px;
   font-weight: 800;
 }
@@ -752,7 +752,7 @@ button.role-user-count:hover {
 
 .role-user-selected {
   margin-right: auto;
-  color: #606266;
+  color: var(--ui-muted-foreground);
   font-size: 13px;
   font-weight: 800;
 }
@@ -760,10 +760,10 @@ button.role-user-count:hover {
 .role-form-actions button {
   min-width: 70px;
   height: 32px;
-  border: 1px solid #dcdfe6;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #fff;
-  color: #303133;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   cursor: pointer;
   padding: 0 14px;
   font-size: 15px;
@@ -789,7 +789,7 @@ button.role-user-count:hover {
 
 .role-confirm-modal p {
   margin: 0;
-  color: #606266;
+  color: var(--ui-muted-foreground);
   font-size: 15px;
   font-weight: 700;
 }

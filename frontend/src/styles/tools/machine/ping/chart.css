@@ -3,7 +3,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 12px;
-  color: #536b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 900;
 }
@@ -38,9 +38,9 @@
 
 .ping-chart {
   min-height: 220px;
-  border: 1px solid #d9e6f5;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #fff;
+  background: var(--ui-card);
   overflow: hidden;
 }
 

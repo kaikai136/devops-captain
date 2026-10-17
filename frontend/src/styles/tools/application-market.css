@@ -9,7 +9,7 @@
   min-height: 0;
   margin: var(--workspace-page-gutter);
   overflow: auto;
-  color: #182233;
+  color: var(--ui-foreground);
 }
 
 .market-page-title,
@@ -21,7 +21,7 @@
 .market-detail-modal,
 .market-preview-modal {
   border: 1px solid rgba(23, 37, 84, 0.1);
-  background: rgba(255, 255, 255, 0.94);
+  background: color-mix(in srgb, var(--ui-card) 94%, transparent);
   box-shadow: 0 12px 28px rgba(21, 32, 54, 0.08);
 }
 
@@ -49,7 +49,7 @@
 .market-detail-modal p,
 .market-preview-modal p {
   margin: 5px 0 0;
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 13px;
 }
 
@@ -59,8 +59,8 @@
   min-height: 36px;
   border: 1px solid rgba(23, 37, 84, 0.14);
   border-radius: 7px;
-  background: #fff;
-  color: #1f2937;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   font: inherit;
 }
 
@@ -88,7 +88,7 @@
 .application-market-page button.danger {
   border-color: rgba(220, 38, 38, 0.28);
   color: #b42318;
-  background: #fff5f5;
+  background: var(--ui-muted);
 }
 
 .targetSelector,
@@ -96,7 +96,7 @@
 .market-config-form label {
   display: grid;
   gap: 6px;
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
 }
 
@@ -120,7 +120,7 @@
   border-radius: 8px;
   background:
     radial-gradient(circle at 86% 0%, rgba(91, 110, 225, 0.11), transparent 34%),
-    linear-gradient(110deg, rgba(91, 110, 225, 0.06) 0%, rgba(255, 255, 255, 0.96) 58%);
+    linear-gradient(110deg, rgba(91, 110, 225, 0.06) 0%, color-mix(in srgb, var(--ui-card) 96%, transparent) 58%);
 }
 
 .market-hero::before {
@@ -172,7 +172,7 @@
 .market-result,
 .market-muted,
 .market-empty {
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
 }
 
@@ -199,7 +199,7 @@
   min-width: 0;
   padding: 9px 10px;
   border-radius: 7px;
-  background: #f8fafc;
+  background: var(--ui-muted);
 }
 
 .capabilityStrip strong {
@@ -260,7 +260,7 @@
 
 .app-job-banner__body small {
   overflow: hidden;
-  color: #667085;
+  color: var(--ui-muted-foreground);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -296,8 +296,8 @@
   padding: 0 12px;
   border: 1px solid rgba(23, 37, 84, 0.12);
   border-radius: 7px;
-  color: #667085;
-  background: #f8fafc;
+  color: var(--ui-muted-foreground);
+  background: var(--ui-muted);
 }
 
 .market-search:focus-within {
@@ -319,13 +319,13 @@
   gap: 4px;
   padding: 4px;
   border-radius: 7px;
-  background: #f1f5f9;
+  background: var(--ui-muted);
 }
 
 .market-segment button,
 .market-categories button {
   border: 0;
-  color: #475467;
+  color: var(--ui-muted-foreground);
   background: transparent;
 }
 
@@ -340,7 +340,7 @@
 .market-segment button.is-active,
 .market-categories button.is-active {
   color: var(--market-accent);
-  background: #fff;
+  background: var(--ui-card);
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
 }
 
@@ -360,7 +360,7 @@
   padding: 0 12px;
   border: 1px solid rgba(23, 37, 84, 0.1);
   border-radius: 999px;
-  background: #fff;
+  background: var(--ui-card);
   font-size: 13px;
 }
 
@@ -368,8 +368,8 @@
   min-width: 20px;
   padding: 1px 6px;
   border-radius: 999px;
-  color: #667085;
-  background: #f1f5f9;
+  color: var(--ui-muted-foreground);
+  background: var(--ui-muted);
   font-size: 11px;
 }
 
@@ -385,7 +385,7 @@
   flex-direction: column;
   border: 1px solid rgba(23, 37, 84, 0.1);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
   box-shadow: 0 10px 22px rgba(21, 32, 54, 0.07);
   transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
 }
@@ -421,7 +421,7 @@
   overflow: hidden;
   border: 1px solid rgba(23, 37, 84, 0.1);
   border-radius: 8px;
-  background: #eef4ff;
+  background: var(--ui-muted);
   color: var(--market-accent);
   font-weight: 800;
   box-shadow: 0 5px 14px rgba(16, 24, 40, 0.08);
@@ -473,8 +473,8 @@
   gap: 3px;
   padding: 3px 7px;
   border-radius: 999px;
-  color: #667085;
-  background: #f1f5f9;
+  color: var(--ui-muted-foreground);
+  background: var(--ui-muted);
   font-size: 10px;
   font-style: normal;
 }
@@ -487,7 +487,7 @@
 .app-card__description {
   display: -webkit-box;
   overflow: hidden;
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   line-height: 1.6;
   -webkit-box-orient: vertical;
@@ -547,7 +547,7 @@
 
 .install-more-card p {
   margin: 4px 0 0;
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 13px;
 }
 
@@ -607,7 +607,7 @@
 }
 
 .app-detail-head small {
-  color: #667085;
+  color: var(--ui-muted-foreground);
 }
 
 .market-detail-body {
@@ -622,7 +622,7 @@
   overflow: hidden;
   border: 1px solid rgba(23, 37, 84, 0.1);
   border-radius: 8px;
-  background: #f8fafc;
+  background: var(--ui-muted);
 }
 
 .app-control-panel__status {
@@ -642,7 +642,7 @@
 
 .app-control-panel__status span,
 .app-control-panel__status small {
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 11px;
 }
 
@@ -670,14 +670,14 @@
 
 .app-install-state p {
   margin: 4px 0 0;
-  color: #475467;
+  color: var(--ui-muted-foreground);
 }
 
 .market-detail-section {
   padding: 12px;
   border: 1px solid rgba(23, 37, 84, 0.08);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .market-detail-section h4 {
@@ -698,8 +698,8 @@
   overflow-wrap: anywhere;
   padding: 6px 8px;
   border-radius: 7px;
-  background: #f1f5f9;
-  color: #334155;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
   font-size: 12px;
 }
 
@@ -713,7 +713,7 @@
   display: inline-flex !important;
   align-items: center;
   gap: 8px;
-  color: #334155 !important;
+  color: var(--ui-foreground);
 }
 
 .market-checkbox input {
@@ -733,7 +733,7 @@
   padding: 10px;
   border: 1px solid rgba(23, 37, 84, 0.08);
   border-radius: 7px;
-  background: #f8fafc;
+  background: var(--ui-muted);
 }
 
 .market-task-row > div {
@@ -746,7 +746,7 @@
 }
 
 .market-task-row span {
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
 }
 
@@ -776,11 +776,11 @@
   min-height: 86px;
   padding: 10px;
   border-radius: 7px;
-  background: #f8fafc;
+  background: var(--ui-muted);
 }
 
 .market-preview-grid span {
-  color: #667085;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
 }
 
@@ -793,7 +793,7 @@
   margin: 0 14px 14px;
   padding: 10px;
   border-radius: 7px;
-  background: #fff7ed;
+  background: var(--ui-muted);
   color: #9a3412;
 }
 

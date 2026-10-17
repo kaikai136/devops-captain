@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import AppIcon from '@shared/components/AppIcon.vue';
 import AppContextMenu from '@shared/components/context-menu/AppContextMenu.vue';
 import type { ContextMenuEntry as FileContextMenuItem } from '@shared/components/context-menu/types';
@@ -19,6 +20,7 @@ import {
 } from '../../composables/useSftpBrowser';
 import { TERMINAL_FILE_ROW_HEIGHT } from '../../utils/virtualList';
 import { terminalFileImageMime } from '../../utils/fileTypes';
+import { terminalPathName } from '../../utils/paths';
 import FileCreateDialog from './FileCreateDialog.vue';
 import FileDownloadDialog from './FileDownloadDialog.vue';
 import FilePropertiesDialog from './FilePropertiesDialog.vue';
@@ -71,6 +73,7 @@ interface FileTableExpose {
 interface FileUploadExpose {
   openFile: () => void;
   openFolder: () => void;
+  openFolderContents: () => void;
 }
 
 const TRANSFER_PANEL_DEFAULT_HEIGHT = 170;
@@ -105,7 +108,27 @@ const session = computed<SftpSession | null>(() => {
   if (!props.active || !props.sessionKey || props.hostId === null) return null;
   return { key: props.sessionKey, hostId: props.hostId, currentCwd: props.currentCwd };
 });
-const browser = useSftpBrowser({ session, onUnauthorized: props.handleUnauthorized });
+const browser = useSftpBrowser({
+  session,
+  onUnauthorized: props.handleUnauthorized,
+  confirmOverwrite: async (message) => {
+    const originalKey = props.sessionKey;
+    const originalHost = props.hostId;
+    try {
+      await ElMessageBox.confirm(message, '目标已存在', {
+        confirmButtonText: '覆盖并合并', cancelButtonText: '取消', type: 'warning', closeOnClickModal: false,
+      });
+      return props.active && props.sessionKey === originalKey && props.hostId === originalHost;
+    } catch { return false; }
+  },
+});
+function availableFileMenuItems(items: FileContextMenuItem[]): FileContextMenuItem[] {
+  return items.map((item) => ({
+    ...item,
+    enabled: item.enabled && !browser.isTransferringFiles.value,
+    children: item.children ? availableFileMenuItems(item.children) : undefined,
+  }));
+}
 const panelStyle = computed<Record<string, string>>(() => ({ '--terminal-transfer-height': `${transferPanelHeight.value}px` }));
 const marqueeStyle = computed<Record<string, string>>(() => {
   const state = marquee.value;
@@ -129,7 +152,12 @@ const fileContextMenuItems = computed<FileContextMenuItem[]>(() => {
   const directoryPath = entry ? getEntryDirectoryPath(entry, browser.path.value) : '';
   const targetPathsText = targetEntries.map((item) => getEntryResolvedPath(item, browser.path.value)).join('\n');
   const targetNamesText = targetEntries.map((item) => item.name).join('\n');
-  return [
+  return availableFileMenuItems([
+    { id: 'cut', label: '剪切', icon: 'scissors', toolbar: true, enabled: targetEntries.length > 0, action: () => browser.cutFiles(targetEntries) },
+    { id: 'copy', label: '复制', icon: 'copy', toolbar: true, enabled: targetEntries.length > 0, action: () => browser.copyFiles(targetEntries) },
+    { id: 'paste', label: '粘贴', icon: 'clipboard', toolbar: true, enabled: browser.canPasteFiles.value, action: pasteClipboardFiles },
+    { id: 'rename', label: '重命名', icon: 'edit', toolbar: true, enabled: isSingle && !isParent, action: () => { if (entry) browser.startRename(entry); } },
+    { id: 'delete', label: '删除', icon: 'trash', toolbar: true, enabled: targetEntries.length > 0, danger: true, action: () => browser.openDeleteDialog(targetEntries) },
     {
       id: 'open', label: '打开', icon: isDirectory ? 'folder' : 'file',
       enabled: Boolean(entry) && (isDirectory ? (isSingle || isParent) : isSingle),
@@ -141,38 +169,56 @@ const fileContextMenuItems = computed<FileContextMenuItem[]>(() => {
     },
     { id: 'preview', label: '预览', icon: 'eye', enabled: Boolean(entry) && !isParent && isSingle && !isDirectory, action: () => { if (entry) emit('openFile', { ...entry, path: resolvedPath }, 'preview'); } },
     { id: 'edit', label: '使用内置编辑器打开', icon: 'edit', enabled: Boolean(entry) && !isParent && isSingle && !isDirectory && !terminalFileImageMime(name).startsWith('image/'), action: () => { if (entry) emit('openFile', { ...entry, path: resolvedPath }, 'edit'); } },
-    { id: 'refresh', label: '刷新', icon: 'refresh', enabled: true, action: () => browser.loadDirectory(browser.path.value, { force: true }) },
-    { id: 'upload', label: '上传到当前文件夹...', icon: 'upload', enabled: hasEntry && !isParent, action: openUpload },
-    { id: 'download', label: isMultiple ? '下载所选到目录...' : '下载到目录...', icon: 'download', enabled: targetEntries.length > 0, action: () => browser.downloadFiles(targetEntries) },
-    { id: 'rename', label: '重命名...', icon: 'edit', enabled: hasEntry && !isParent && isSingle, separatorBefore: true, action: () => { if (entry) browser.startRename(entry); } },
-    { id: 'move', label: '移动到...', icon: 'moveRight', enabled: false, action: () => undefined },
-    { id: 'delete', label: isMultiple ? '删除所选' : '删除', icon: 'trash', enabled: targetEntries.length > 0, danger: true, action: () => browser.openDeleteDialog(targetEntries) },
-    { id: 'favorite', label: '添加到收藏夹', icon: 'bookmark', enabled: false, separatorBefore: true, action: () => undefined },
-    { id: 'copy-path', label: isMultiple ? '复制所选路径' : '复制路径', icon: 'copy', enabled: targetEntries.length > 0 || hasEntry, separatorBefore: true, action: () => copyText(targetEntries.length > 0 ? targetPathsText : resolvedPath) },
-    { id: 'copy-name', label: isMultiple ? '复制所选名称' : '复制名称', icon: 'copy', enabled: targetEntries.length > 0, action: () => copyText(isMultiple ? targetNamesText : name) },
-    { id: 'copy-directory', label: '复制目录路径', icon: 'folder', enabled: hasEntry && !isParent, action: () => copyText(directoryPath) },
-    { id: 'send-path', label: isMultiple ? '将所选路径发送到终端' : '将路径发送到终端', icon: 'cornerDownLeft', enabled: props.terminalAvailable && (targetEntries.length > 0 || hasEntry), separatorBefore: true, action: () => emit('writeTerminal', targetEntries.length > 0 ? targetPathsText : resolvedPath) },
-    { id: 'send-name', label: isMultiple ? '将所选名称发送到终端' : '将名称发送到终端', icon: 'chevronRight', enabled: props.terminalAvailable && targetEntries.length > 0, action: () => emit('writeTerminal', isMultiple ? targetNamesText : name) },
-    { id: 'send-directory', label: '将目录路径发送到终端', icon: 'chevronsRight', enabled: props.terminalAvailable && hasEntry && !isParent, action: () => emit('writeTerminal', directoryPath) },
+    { id: 'refresh', label: '刷新', icon: 'refresh', enabled: true, separatorBefore: true, action: () => browser.loadDirectory(browser.path.value, { force: true }) },
+    {
+      id: 'upload', label: '上传到当前文件夹...', icon: 'upload', enabled: props.active,
+      children: [
+        { id: 'upload-file', label: '上传文件', icon: 'file', enabled: props.active, action: openUpload },
+        { id: 'upload-folder', label: '上传文件夹', icon: 'folderPlus', enabled: props.active, action: openFolderUpload },
+        { id: 'upload-folder-contents', label: '上传文件夹内容', icon: 'folder', enabled: props.active, action: openFolderContentsUpload },
+      ], action: () => undefined,
+    },
+    { id: 'download', label: '下载...', icon: 'download', enabled: targetEntries.length > 0, action: () => browser.downloadFiles(targetEntries) },
+    { id: 'move', label: '移动到...', icon: 'moveRight', enabled: targetEntries.length > 0, separatorBefore: true, action: () => moveSelectedToDirectory(targetEntries) },
+    { id: 'copy-info', label: '复制信息', icon: 'copy', enabled: true, separatorBefore: true, children: [
+      { id: 'copy-path', label: '复制路径', icon: 'copy', enabled: targetEntries.length > 0 || hasEntry, action: () => copyText(targetEntries.length > 0 ? targetPathsText : resolvedPath) },
+      { id: 'copy-name', label: '复制名称', icon: 'copy', enabled: targetEntries.length > 0, action: () => copyText(isMultiple ? targetNamesText : name) },
+      { id: 'copy-directory', label: '复制目录路径', icon: 'folder', enabled: hasEntry && !isParent, action: () => copyText(directoryPath) },
+    ], action: () => undefined },
+    { id: 'terminal', label: '终端', icon: 'terminal', enabled: props.terminalAvailable, separatorBefore: true, children: [
+      { id: 'send-path', label: '将路径发送到终端', icon: 'cornerDownLeft', enabled: props.terminalAvailable && (targetEntries.length > 0 || hasEntry), action: () => emit('writeTerminal', targetEntries.length > 0 ? targetPathsText : resolvedPath) },
+      { id: 'send-name', label: '将名称发送到终端', icon: 'chevronRight', enabled: props.terminalAvailable && targetEntries.length > 0, action: () => emit('writeTerminal', isMultiple ? targetNamesText : name) },
+      { id: 'send-directory', label: '将目录路径发送到终端', icon: 'chevronsRight', enabled: props.terminalAvailable && hasEntry && !isParent, action: () => emit('writeTerminal', directoryPath) },
+    ], action: () => undefined },
     { id: 'properties', label: '属性...', icon: 'info', enabled: hasEntry && !isParent && isSingle, separatorBefore: true, action: async () => { if (entry) await browser.openProperties(entry); } },
-  ];
+  ]);
 });
-const directoryContextMenuItems = computed<FileContextMenuItem[]>(() => [
-  { id: 'refresh', label: '刷新', icon: 'refresh', enabled: props.active, action: () => browser.loadDirectory(browser.path.value, { force: true }) },
+const directoryContextMenuItems = computed<FileContextMenuItem[]>(() => availableFileMenuItems([
+  { id: 'paste', label: '粘贴', icon: 'clipboard', enabled: browser.canPasteFiles.value, action: pasteClipboardFiles },
+  { id: 'refresh', label: '刷新', icon: 'refresh', enabled: props.active, separatorBefore: true, action: () => browser.loadDirectory(browser.path.value, { force: true }) },
   {
     id: 'upload', label: '上传到当前文件夹...', icon: 'upload', enabled: props.active, action: () => undefined,
     children: [
       { id: 'upload-file', label: '上传文件', icon: 'file', enabled: props.active, action: openUpload },
       { id: 'upload-folder', label: '上传文件夹', icon: 'folder', enabled: props.active, action: openFolderUpload },
+      { id: 'upload-folder-contents', label: '上传文件夹内容', icon: 'folder', enabled: props.active, action: openFolderContentsUpload },
     ],
   },
   { id: 'create-file', label: '新建文件', icon: 'file', enabled: props.active, separatorBefore: true, action: () => browser.openCreateDialog('file') },
   { id: 'create-directory', label: '新建文件夹', icon: 'folderPlus', enabled: props.active, action: () => browser.openCreateDialog('directory') },
   { id: 'create-symlink', label: '新建符号链接', icon: 'link', enabled: props.active, action: () => browser.openCreateDialog('symlink') },
-  { id: 'copy-directory', label: '复制目录路径', icon: 'copy', enabled: props.active, separatorBefore: true, action: () => copyText(browser.path.value) },
-  { id: 'send-directory', label: '将目录路径发送到终端', icon: 'cornerDownLeft', enabled: props.active && props.terminalAvailable, action: () => emit('writeTerminal', browser.path.value) },
+  { id: 'copy-info', label: '复制信息', icon: 'copy', enabled: props.active, separatorBefore: true, children: [
+    { id: 'copy-path', label: '复制路径', icon: 'copy', enabled: props.active, action: () => copyText(browser.path.value) },
+    { id: 'copy-name', label: '复制名称', icon: 'copy', enabled: props.active, action: () => copyText(terminalPathName(browser.path.value)) },
+    { id: 'copy-directory', label: '复制目录路径', icon: 'folder', enabled: props.active, action: () => copyText(browser.path.value) },
+  ], action: () => undefined },
+  { id: 'terminal', label: '终端', icon: 'terminal', enabled: props.active && props.terminalAvailable, separatorBefore: true, children: [
+    { id: 'send-path', label: '将路径发送到终端', icon: 'cornerDownLeft', enabled: props.active && props.terminalAvailable, action: () => emit('writeTerminal', browser.path.value) },
+    { id: 'send-name', label: '将名称发送到终端', icon: 'chevronRight', enabled: props.active && props.terminalAvailable, action: () => emit('writeTerminal', terminalPathName(browser.path.value)) },
+    { id: 'send-directory', label: '将目录路径发送到终端', icon: 'chevronsRight', enabled: props.active && props.terminalAvailable, action: () => emit('writeTerminal', browser.path.value) },
+  ], action: () => undefined },
   { id: 'properties', label: '属性', icon: 'info', enabled: props.active, separatorBefore: true, action: () => browser.openCurrentDirectoryProperties() },
-]);
+]));
 const deleteEntries = computed(() => browser.deleteDialog.value.entries.length
   ? browser.deleteDialog.value.entries
   : browser.deleteDialog.value.entry ? [browser.deleteDialog.value.entry] : []);
@@ -253,15 +299,44 @@ function closeContextMenus() {
   closeDirectoryContextMenu();
 }
 async function runContextMenuItem(item: FileContextMenuItem) {
-  if (!item.enabled || item.children?.length) return;
+  if (!props.active || browser.isTransferringFiles.value || !item.enabled || item.children?.length) return;
   closeContextMenus();
-  await item.action();
+  try { await item.action(); }
+  catch (error) { ElMessage.error(error instanceof Error ? error.message : '操作失败'); }
 }
 async function copyText(value: string) {
-  if (value) await navigator.clipboard?.writeText(value);
+  if (!value) return;
+  if (!navigator.clipboard?.writeText) throw new Error('当前浏览器无法访问剪贴板，请通过 HTTPS 或 localhost 打开');
+  await navigator.clipboard.writeText(value);
+}
+async function moveSelectedToDirectory(entries: TerminalFileEntry[]) {
+  const originalSession = session.value;
+  const originalPath = browser.path.value;
+  if (!originalSession) return;
+  const paths = entries.filter((entry) => !isParentEntry(entry)).map((entry) => getEntryResolvedPath(entry, originalPath));
+  let targetDirectory: string;
+  try {
+    const result = await ElMessageBox.prompt('请输入目标文件夹路径（支持绝对路径或当前目录的相对路径）', '移动到', {
+      inputValue: originalPath, inputPlaceholder: '/目标目录', inputPattern: /\S/, inputErrorMessage: '请输入目标目录',
+      confirmButtonText: '移动', cancelButtonText: '取消', closeOnClickModal: false,
+    });
+    targetDirectory = result.value;
+  } catch { return; }
+  if (session.value?.key !== originalSession.key || session.value?.hostId !== originalSession.hostId) return;
+  try {
+    const result = await browser.transferFilesTo(targetDirectory.trim().startsWith('/') || targetDirectory.trim().startsWith('~')
+      ? targetDirectory.trim() : `${originalPath}/${targetDirectory.trim()}`, 'move', paths);
+    if (result?.warnings?.length) ElMessage.warning(result.warnings.join('；'));
+  } catch (error) {
+    browser.error.value = error instanceof Error ? error.message : '移动失败';
+  }
+}
+async function pasteClipboardFiles() {
+  const result = await browser.pasteFiles(browser.path.value);
+  if (result?.warnings?.length) ElMessage.warning(result.warnings.join('；'));
 }
 function openUpload() {
-  if (!props.active || isParentEntry(browser.selectedEntry.value)) return;
+  if (!props.active) return;
   closeContextMenus();
   uploadDialog.value?.openFile();
 }
@@ -269,6 +344,11 @@ function openFolderUpload() {
   if (!props.active) return;
   closeContextMenus();
   uploadDialog.value?.openFolder();
+}
+function openFolderContentsUpload() {
+  if (!props.active) return;
+  closeContextMenus();
+  uploadDialog.value?.openFolderContents();
 }
 function changeCreateDialog(patch: Partial<SftpCreateDialogState>) {
   browser.createDialog.value = { ...browser.createDialog.value, ...patch };
@@ -501,6 +581,7 @@ onBeforeUnmount(() => {
     <AppContextMenu
       :open="fileContextMenu.visible || directoryContextMenu.visible"
       :items="fileContextMenu.visible ? fileContextMenuItems : directoryContextMenuItems"
+      appearance="files"
       :disabled="!active"
       @update:open="!$event && closeContextMenus()"
       @select="runContextMenuItem"
@@ -543,6 +624,7 @@ onBeforeUnmount(() => {
     </AppContextMenu>
     <footer class="terminal-file-status">
       <span>{{ browser.selectionStatusText.value }}</span>
+      <span v-if="browser.isTransferringFiles.value" role="status">文件操作中...</span>
       <span class="terminal-file-protocol" :class="browser.status.value">{{ browser.statusText.value }}</span>
       <label class="terminal-file-download-protocol" :title="`下载方式：${browser.downloadProtocol.value === 'auto' ? '自动' : browser.downloadProtocol.value.toUpperCase()}`">
         <span>下载</span>

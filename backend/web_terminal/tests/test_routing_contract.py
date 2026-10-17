@@ -84,6 +84,18 @@ EXPECTED_HTTP_ROUTES = [
         "view",
     ),
     (
+        "web-terminal/hosts/<int:host_id>/files/content/",
+        None,
+        "terminal_file_content",
+        "view",
+    ),
+    (
+        "web-terminal/hosts/<int:host_id>/files/content/update/",
+        None,
+        "terminal_file_content_update",
+        "view",
+    ),
+    (
         "web-terminal/hosts/<int:host_id>/files/upload/",
         None,
         "terminal_file_upload",
@@ -117,6 +129,12 @@ EXPECTED_HTTP_ROUTES = [
         "web-terminal/hosts/<int:host_id>/files/delete/",
         None,
         "terminal_file_delete",
+        "view",
+    ),
+    (
+        "web-terminal/hosts/<int:host_id>/files/transfer/",
+        None,
+        "terminal_file_transfer",
         "view",
     ),
     (

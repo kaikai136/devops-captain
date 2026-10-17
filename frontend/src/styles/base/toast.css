@@ -13,7 +13,7 @@
   border: 1px solid var(--toast-border);
   border-left: 5px solid var(--toast-accent);
   border-radius: 18px;
-  background: linear-gradient(135deg, var(--toast-bg) 0%, rgba(255, 255, 255, 0.94) 100%);
+  background: linear-gradient(135deg, var(--toast-bg) 0%, color-mix(in srgb, var(--ui-card) 94%, transparent) 100%);
   box-shadow: 0 20px 46px rgba(27, 52, 86, 0.16);
   backdrop-filter: blur(12px);
   animation: toast-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -82,7 +82,7 @@
 
 .top-toast p {
   margin: 6px 0 0;
-  color: #506986;
+  color: var(--ui-muted-foreground);
   font-size: 13px;
   line-height: 1.45;
   word-break: break-word;
@@ -97,7 +97,7 @@
   border: 0;
   border-radius: 50%;
   background: rgba(223, 235, 249, 0.78);
-  color: #4c6786;
+  color: var(--ui-muted-foreground);
   padding: 0;
   font-size: 20px;
   line-height: 1;
@@ -106,7 +106,7 @@
 
 .top-toast button:hover {
   background: rgba(204, 221, 241, 0.92);
-  color: #173252;
+  color: var(--ui-foreground);
   transform: rotate(90deg);
 }
 

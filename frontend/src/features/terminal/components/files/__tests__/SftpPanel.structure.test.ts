@@ -5,6 +5,25 @@ const panel = readFileSync(new URL('../SftpPanel.vue', import.meta.url), 'utf8')
 const workspace = readFileSync(new URL('../TerminalFileWorkspace.vue', import.meta.url), 'utf8');
 
 describe('file context actions', () => {
+  it('matches the reference menu groups and supplies working toolbar operations without AI', () => {
+    const fileMenu = panel.slice(panel.indexOf('const fileContextMenuItems'), panel.indexOf('const directoryContextMenuItems'));
+    for (const id of ['cut', 'copy', 'paste', 'rename', 'delete']) {
+      expect(fileMenu).toMatch(new RegExp(`id: '${id}'.*toolbar: true`));
+    }
+    for (const id of ['upload-file', 'upload-folder', 'upload-folder-contents', 'copy-path', 'copy-name', 'copy-directory', 'send-path', 'send-name', 'send-directory']) {
+      expect(fileMenu).toContain(`id: '${id}'`);
+    }
+    expect(fileMenu).toContain("id: 'copy-info'");
+    expect(fileMenu).toContain("id: 'terminal'");
+    expect(panel).toContain('appearance="files"');
+    expect(panel).toContain('ElMessageBox.prompt');
+    expect(panel).toContain('ElMessageBox.confirm');
+    expect(fileMenu).not.toContain("id: 'favorite'");
+    expect(fileMenu).not.toMatch(/AI|智能/);
+    const upload = readFileSync(new URL('../FileUploadDialog.vue', import.meta.url), 'utf8');
+    expect(upload).toContain('folderUploadItems(files, false)');
+    expect(upload).toContain('folderUploadItems(files, true)');
+  });
   it('exposes open, preview, and CodeMirror editor actions', () => {
     expect(panel).toContain("id: 'open'");
     expect(panel).toContain("id: 'preview'");

@@ -10,7 +10,7 @@
 .subnet-presets button {
   min-height: 32px;
   border-color: #ffb7b7;
-  background: #fff6f6;
+  background: var(--ui-muted);
   color: #ff4141;
   border-radius: 9px;
   padding: 0 12px;
@@ -27,9 +27,9 @@
   grid-column: 1 / -1;
   margin: 0;
   padding: 18px;
-  border: 1px dashed #cbdcf1;
+  border: 1px dashed var(--ui-border);
   border-radius: 8px;
-  color: #6d7f95;
+  color: var(--ui-muted-foreground);
   text-align: center;
   font-weight: 900;
 }
@@ -48,11 +48,11 @@
   gap: 12px;
   padding: 12px 14px;
   border-radius: 8px;
-  background: #f3f6fa;
+  background: var(--ui-muted);
 }
 
 .result-grid span {
-  color: #425c7d;
+  color: var(--ui-muted-foreground);
 }
 
 .result-grid strong {
@@ -65,7 +65,7 @@
   padding: 10px 12px;
   border: 1px solid #ffd7a8;
   border-radius: 8px;
-  background: #fff8ee;
+  background: var(--ui-muted);
   color: #9a5400;
   font-size: 13px;
   font-weight: 800;
@@ -88,5 +88,5 @@
   grid-template-columns: 80px 1fr 120px 120px;
   padding: 10px 12px;
   border-radius: 8px;
-  background: #f3f6fa;
+  background: var(--ui-muted);
 }

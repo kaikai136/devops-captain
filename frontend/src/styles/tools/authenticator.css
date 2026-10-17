@@ -19,9 +19,9 @@
   gap: 12px;
   min-height: 92px;
   padding: 16px 14px;
-  border: 1px solid #cfe0f6;
+  border: 1px solid var(--ui-border);
   border-radius: 14px;
-  background: #f9fcff;
+  background: var(--ui-card);
 }
 
 .scan-card p,
@@ -29,7 +29,7 @@
 .auth-card p,
 .copy-hint {
   margin: 3px 0 0;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 700;
 }
@@ -46,7 +46,7 @@
   min-height: 36px;
   border-color: #bfd8f7;
   border-radius: 10px;
-  background: #f6fbff;
+  background: var(--ui-muted);
   padding: 0;
   color: #41658b;
 }
@@ -54,7 +54,7 @@
 .scan-actions button:hover,
 .qr-button:hover {
   border-color: #8abfff;
-  background: #eef7ff;
+  background: var(--ui-muted);
   color: var(--ui-primary);
 }
 
@@ -88,7 +88,7 @@
 }
 
 .title-actions strong {
-  color: #38536f;
+  color: var(--ui-muted-foreground);
 }
 
 .title-actions button,
@@ -117,9 +117,9 @@
 .auth-card {
   min-height: 180px;
   padding: 14px;
-  border: 1px solid #cfe0f6;
+  border: 1px solid var(--ui-border);
   border-radius: 12px;
-  background: #fff;
+  background: var(--ui-card);
   box-shadow: 0 12px 24px rgba(48, 84, 128, 0.07);
 }
 
@@ -131,7 +131,7 @@
 
 .auth-card h3 {
   margin: 0;
-  color: #1b2d43;
+  color: var(--ui-foreground);
   font-size: 16px;
 }
 
@@ -179,7 +179,7 @@
 }
 
 .countdown.expiring {
-  background: conic-gradient(#ff3f55 var(--progress), #ffe0e5 0);
+  background: conic-gradient(#ff3f55 var(--progress), var(--ui-muted) 0);
   animation: code-pulse 0.65s ease-in-out infinite;
 }
 
@@ -189,8 +189,8 @@
   width: 42px;
   height: 42px;
   border-radius: 50%;
-  background: #fff;
-  color: #09244f;
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 950;
 }
@@ -202,7 +202,7 @@
 }
 
 .copy-hint {
-  color: #315170;
+  color: var(--ui-muted-foreground);
 }
 
 .tag-line {
@@ -216,8 +216,8 @@
   min-height: 24px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid #dce8f7;
-  background: #f2f7ff;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-muted);
   color: #315b88;
   font-size: 12px;
   font-weight: 900;
@@ -229,18 +229,18 @@
   margin-left: auto;
   width: 36px;
   min-height: 34px;
-  border: 1px solid #c7dcf5;
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: #f8fbff;
+  background: var(--ui-card);
   padding: 0;
-  color: #476889;
+  color: var(--ui-muted-foreground);
   transition: border-color 0.18s ease, background 0.18s ease, color 0.18s ease;
 }
 
 .qr-button:hover,
 .qr-button:focus-visible {
   border-color: #7daeff;
-  background: #edf5ff;
+  background: var(--ui-muted);
   color: #125fe8;
 }
 

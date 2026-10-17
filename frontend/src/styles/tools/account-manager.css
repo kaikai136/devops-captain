@@ -11,7 +11,7 @@
   display: grid;
   margin: 0;
   padding: var(--workspace-page-gutter);
-  background: #eef1f5;
+  background: var(--ui-muted);
 }
 
 .account-page:not(.fullscreen) {
@@ -62,9 +62,9 @@
 .account-toolbar-search {
   width: min(360px, 38vw);
   min-height: 38px;
-  border: 1px solid #d8e2ee;
+  border: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #fff;
+  background: var(--ui-card);
   padding: 0 14px;
 }
 
@@ -82,7 +82,7 @@
 .account-stats-line {
   gap: 10px;
   margin: 0 20px 12px;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 800;
 }
@@ -94,7 +94,7 @@
 
 .account-stats-line span {
   border-radius: 999px;
-  background: #f2f7ff;
+  background: var(--ui-muted);
   padding: 5px 10px;
 }
 
@@ -115,7 +115,7 @@
   align-items: center;
   gap: 16px;
   min-height: 72px;
-  border-bottom: 1px solid #edf1f6;
+  border-bottom: 1px solid var(--ui-border);
   padding: 0 18px;
 }
 
@@ -125,8 +125,8 @@
 
 .account-table-row.head {
   min-height: 56px;
-  background: #f8fafc;
-  color: #173252;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
   font-weight: 900;
 }
 
@@ -142,7 +142,7 @@
 .account-contact strong {
   max-width: 100%;
   overflow: hidden;
-  color: #173252;
+  color: var(--ui-foreground);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -150,7 +150,7 @@
 .account-name span,
 .account-contact span,
 .account-date {
-  color: #6a7f9a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 800;
 }
@@ -158,9 +158,9 @@
 .account-role,
 .account-status {
   justify-self: start;
-  border: 1px solid #d7e3f2;
-  background: #f7faff;
-  color: #526b8a;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
   padding: 5px 10px;
   font-size: 12px;
   font-weight: 900;
@@ -168,25 +168,25 @@
 
 .account-role.staff {
   border-color: #a8d8ff;
-  background: #edf8ff;
+  background: var(--ui-muted);
   color: #0b70b7;
 }
 
 .account-role.superuser {
   border-color: #f4b7c3;
-  background: #fff2f5;
+  background: var(--ui-muted);
   color: #d8274c;
 }
 
 .account-status {
   border-color: #ffbf64;
-  background: #fff8ef;
+  background: var(--ui-muted);
   color: #f08a00;
 }
 
 .account-status.active {
   border-color: #8ddd85;
-  background: #f1fff0;
+  background: var(--ui-muted);
   color: #12a22a;
 }
 
@@ -243,7 +243,7 @@
 
 .account-popup-dialog .el-input__wrapper,
 .account-popup-dialog .el-textarea__inner {
-  background: var(--el-bg-color, #fff);
+  background: var(--el-bg-color, var(--ui-card));
   box-shadow: 0 0 0 1px var(--el-border-color, #d6e3f4) inset;
 }
 
@@ -303,23 +303,23 @@
   gap: 14px;
   width: min(460px, calc(100vw - 28px));
   padding: 22px;
-  border: 1px solid #d8e5f4;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
   box-shadow: 0 24px 60px rgba(36, 55, 84, 0.26);
 }
 
 .account-form-modal h2,
 .account-confirm-modal h2 {
   margin: 0;
-  color: #0b2446;
+  color: var(--ui-foreground);
   font-size: 18px;
 }
 
 .account-form-modal label {
   display: grid;
   gap: 7px;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 900;
 }
@@ -327,11 +327,11 @@
 .account-form-modal input,
 .account-form-modal textarea {
   min-height: 38px;
-  border: 1px solid #d8e2ee;
+  border: 1px solid var(--ui-border);
   border-radius: 0;
-  background: #fff;
+  background: var(--ui-card);
   padding: 0 12px;
-  color: #173252;
+  color: var(--ui-foreground);
   font: inherit;
 }
 
@@ -350,14 +350,14 @@
   grid-template-columns: 92px minmax(0, 1fr);
   align-items: center;
   gap: 10px;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 14px;
   font-weight: 800;
 }
 
 .account-horizontal-field > span {
   justify-self: end;
-  color: #173252;
+  color: var(--ui-foreground);
   white-space: nowrap;
 }
 
@@ -379,9 +379,9 @@
   place-items: center;
   min-width: 96px;
   min-height: 36px;
-  border: 1px solid #d8e2ee;
-  background: #fff;
-  color: #173252;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-foreground);
   cursor: pointer;
   font-weight: 800;
 }
@@ -393,7 +393,7 @@
 .account-key-upload em {
   min-width: 0;
   overflow: hidden;
-  color: #8a9ab0;
+  color: var(--ui-muted-foreground);
   font-style: normal;
   font-size: 12px;
   font-weight: 800;
@@ -418,7 +418,7 @@
   align-items: center;
   justify-content: start;
   min-height: 38px;
-  border: 1px solid #d8e2ee;
+  border: 1px solid var(--ui-border);
   padding: 0 12px;
 }
 
@@ -428,6 +428,6 @@
 
 .account-confirm-modal p {
   margin: 0;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-weight: 800;
 }

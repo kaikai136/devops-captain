@@ -7,7 +7,7 @@
 .host-table {
   width: 100%;
   min-width: var(--host-table-min-width, 1300px);
-  border-top: 1px solid #edf1f6;
+  border-top: 1px solid var(--ui-border);
 }
 
 .host-table-row {
@@ -16,7 +16,7 @@
   align-items: center;
   gap: 6px;
   min-height: 72px;
-  border-bottom: 1px solid #edf1f6;
+  border-bottom: 1px solid var(--ui-border);
   padding: 0 10px;
 }
 
@@ -48,7 +48,7 @@
   display: flex;
   min-height: 100%;
   align-items: center;
-  background: #fff;
+  background: var(--ui-card);
 }
 
 .host-status-cell {
@@ -64,14 +64,14 @@
   z-index: 5;
   top: 0;
   min-height: 56px;
-  background: #f8fafc;
-  color: #173252;
+  background: var(--ui-muted);
+  color: var(--ui-foreground);
   font-weight: 900;
 }
 
 .host-table-row.head .host-sticky-cell {
   z-index: 3;
-  background: #f8fafc;
+  background: var(--ui-muted);
 }
 
 .host-table-head-cell {
@@ -140,7 +140,7 @@
 }
 
 .host-sort-button em {
-  color: #6a7f9a;
+  color: var(--ui-muted-foreground);
   font-style: normal;
   font-size: 12px;
 }
@@ -181,7 +181,7 @@
 .host-creator-cell {
   min-width: 0;
   overflow: hidden;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 800;
   text-overflow: ellipsis;
@@ -193,13 +193,13 @@
 }
 
 .host-remark-cell {
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 13px;
 }
 
 .host-date-cell,
 .host-creator-cell {
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 900;
 }
@@ -209,8 +209,8 @@
   min-width: 52px;
   padding: 4px 9px;
   border-radius: 5px;
-  background: #e8eef7;
-  color: #53647a;
+  background: var(--ui-muted);
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 900;
   text-align: center;
@@ -223,19 +223,19 @@
 }
 
 .host-platform-type.linux {
-  background: #e8f7ef;
+  background: var(--ui-muted);
   color: #157047;
 }
 
 .host-platform-type.windows {
-  background: #e8f0ff;
+  background: var(--ui-muted);
   color: var(--ui-primary);
 }
 
 .host-ip-stack {
   display: grid;
   gap: 5px;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 15px;
   font-weight: 800;
 }
@@ -269,7 +269,7 @@
 
 .host-config {
   gap: 8px;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 15px;
 }
 
@@ -277,7 +277,7 @@
   display: grid;
   gap: 8px;
   min-width: 0;
-  color: #173252;
+  color: var(--ui-foreground);
   font-size: 14px;
   font-weight: 800;
   line-height: 1.3;
@@ -292,14 +292,14 @@
 
 .host-spec-cell strong {
   flex: 0 0 auto;
-  color: #173252;
+  color: var(--ui-foreground);
   font-weight: 900;
 }
 
 .host-spec-cell em {
   min-width: 0;
   overflow: hidden;
-  color: #173252;
+  color: var(--ui-foreground);
   font-style: normal;
   font-weight: 700;
   text-overflow: ellipsis;
@@ -325,7 +325,7 @@
   justify-self: start;
   border: 1px solid #ffbf64;
   color: #f08a00;
-  background: #fff8ef;
+  background: var(--ui-muted);
   padding: 4px 9px;
   font-size: 12px;
   font-weight: 800;
@@ -334,17 +334,17 @@
 .verify-badge.verified {
   border-color: #8ddd85;
   color: #12a22a;
-  background: #f1fff0;
+  background: var(--ui-muted);
 }
 
 .verify-badge.failed {
   border-color: #ff9a87;
   color: #e5483d;
-  background: #fff3f0;
+  background: var(--ui-muted);
 }
 
 .host-config-empty {
-  color: #8a9ab0;
+  color: var(--ui-muted-foreground);
   font-weight: 800;
 }
 
@@ -376,7 +376,7 @@
 }
 
 .host-actions button:disabled {
-  color: #8a9ab0;
+  color: var(--ui-muted-foreground);
   cursor: wait;
 }
 
@@ -399,7 +399,7 @@
 }
 
 .host-action-placeholder {
-  color: #8b95a1;
+  color: var(--ui-muted-foreground);
   font-weight: 900;
 }
 
@@ -416,9 +416,9 @@
   gap: 10px;
   box-sizing: border-box;
   padding: 14px 18px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--ui-border);
   border-radius: 8px;
-  background: #fff;
+  background: var(--ui-card);
   box-shadow: 0 8px 24px rgba(15, 35, 62, 0.12);
   transform: translateX(-50%);
 }
@@ -431,14 +431,14 @@
 
 .host-bulk-action-info {
   gap: 8px;
-  color: #111827;
+  color: var(--ui-foreground);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .host-bulk-action-info strong {
-  color: #111827;
+  color: var(--ui-foreground);
   font-size: 16px;
   font-weight: 900;
 }
@@ -451,7 +451,7 @@
 }
 
 .host-bulk-action-count {
-  color: #6b7280;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 700;
 }
@@ -553,8 +553,8 @@
   gap: 14px;
   min-height: 44px;
   padding-top: 12px;
-  border-top: 1px solid #edf1f6;
-  color: #526b8a;
+  border-top: 1px solid var(--ui-border);
+  color: var(--ui-muted-foreground);
   font-size: 13px;
   font-weight: 800;
 }
@@ -569,14 +569,14 @@
 .host-stats-line {
   justify-content: flex-end;
   margin-left: auto;
-  color: #526b8a;
+  color: var(--ui-muted-foreground);
   font-size: 12px;
   font-weight: 800;
 }
 
 .host-stats-line span {
   border-radius: 999px;
-  background: #f2f7ff;
+  background: var(--ui-muted);
   padding: 5px 10px;
   white-space: nowrap;
 }

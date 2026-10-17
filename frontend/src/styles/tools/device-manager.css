@@ -3,7 +3,7 @@
   min-width: 0;
   min-height: 0;
   overflow: auto;
-  color: #1f2937;
+  color: var(--ui-foreground);
 }
 
 .device-list-panel {
@@ -94,7 +94,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: #64748b;
+  color: var(--ui-muted-foreground);
 }
 
 .device-load-error {
@@ -171,9 +171,9 @@
   gap: 16px;
   min-height: 58px;
   padding: 10px 16px 12px;
-  border-top: 1px solid #e2e8f0;
-  background: #fbfdff;
-  color: #526b8a;
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-card);
+  color: var(--ui-muted-foreground);
   font-size: 13px;
   font-weight: 700;
 }
@@ -208,9 +208,9 @@
   display: inline-flex;
   align-items: center;
   min-height: 24px;
-  border: 1px solid #cddbf0;
+  border: 1px solid var(--ui-border);
   border-radius: 4px;
-  background: #fff;
+  background: var(--ui-card);
   padding: 0 8px;
   color: #225181;
   font-size: 12px;
