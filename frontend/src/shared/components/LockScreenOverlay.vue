@@ -1,18 +1,8 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, ref, toRef, watch } from 'vue';
 import type { InputInstance } from 'element-plus';
-
-import { errorMessage } from '@shared/utils/errors';
-import AppIcon from './AppIcon.vue';
-import UserAvatar from './UserAvatar.vue';
-
-interface WaterfallColumn {
-  id: number;
-  left: number;
-  width: number;
-  delay: number;
-  duration: number;
-}
+import { ArrowRight, LoaderCircle, LockKeyhole, Plug, UserRound, Wifi } from '@lucide/vue';
+import { useLockScreen, useLockScreenStatus } from '../composables/useLockScreen';
 
 const props = defineProps<{
   locked: boolean;
@@ -25,228 +15,100 @@ const props = defineProps<{
   logout: () => Promise<void>;
 }>();
 
-const visible = ref(false);
-const covering = ref(false);
-const contentVisible = ref(false);
-const exiting = ref(false);
-const shaking = ref(false);
-const password = ref('');
-const message = ref('');
-const progress = ref(0);
-const isDragging = ref(false);
-const isSubmitting = ref(false);
-const columns = ref<WaterfallColumn[]>([]);
-const sliderTrack = ref<HTMLElement | null>(null);
+const locked = toRef(props, 'locked');
+const { showLogin, password, message, busy, openLogin, back, submit } = useLockScreen(locked, value => props.unlockSession(value), () => props.logout());
+const { time, date, online, level, batteryStatus, remaining } = useLockScreenStatus(locked);
+const overlay = ref<HTMLElement | null>(null);
 const passwordInput = ref<InputInstance | null>(null);
-let revealTimer: number | undefined;
-let hideTimer: number | undefined;
+let previousFocus: HTMLElement | null = null;
 
-const sliderStyle = computed(() => ({ '--unlock-progress': `${progress.value * 100}%` }));
-const canSubmit = computed(() => Boolean(password.value.trim()) && !isSubmitting.value);
-
-watch(
-  () => props.locked,
-  (locked) => {
-    window.clearTimeout(revealTimer);
-    window.clearTimeout(hideTimer);
-    if (locked) {
-      showOverlay();
-      return;
-    }
-    hideOverlay();
-  },
-  { immediate: true },
-);
-
+function focusCurrentPage() {
+  if (showLogin.value) passwordInput.value?.focus();
+  else overlay.value?.focus();
+}
+function keepFocus(event: FocusEvent) {
+  if (props.locked && event.target instanceof Node && !overlay.value?.contains(event.target)) focusCurrentPage();
+}
+watch(locked, async active => {
+  if (active) {
+    previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    document.addEventListener('focusin', keepFocus);
+    await nextTick();
+    if (props.locked) focusCurrentPage();
+  } else {
+    document.removeEventListener('focusin', keepFocus);
+    previousFocus?.focus();
+    previousFocus = null;
+  }
+}, { immediate: true });
+watch(showLogin, async () => { await nextTick(); if (props.locked) focusCurrentPage(); });
 onBeforeUnmount(() => {
-  removeDragListeners();
-  window.clearTimeout(revealTimer);
-  window.clearTimeout(hideTimer);
+  document.removeEventListener('focusin', keepFocus);
+  previousFocus?.focus();
 });
 
-function showOverlay() {
-  generateColumns();
-  visible.value = true;
-  exiting.value = false;
-  contentVisible.value = false;
-  password.value = '';
-  message.value = '';
-  progress.value = 0;
-  nextTick(() => {
-    covering.value = true;
-    revealTimer = window.setTimeout(() => {
-      contentVisible.value = true;
-      nextTick(() => passwordInput.value?.focus());
-    }, 900);
-  });
-}
-
-function hideOverlay() {
-  if (!visible.value) return;
-  contentVisible.value = false;
-  covering.value = false;
-  exiting.value = true;
-  removeDragListeners();
-  hideTimer = window.setTimeout(() => {
-    visible.value = false;
-    exiting.value = false;
-    progress.value = 0;
-    password.value = '';
-    message.value = '';
-  }, 520);
-}
-
-function generateColumns() {
-  const width = typeof window === 'undefined' ? 1440 : window.innerWidth;
-  const targetWidth = width < 720 ? 42 : 58;
-  const count = Math.max(12, Math.ceil(width / targetWidth));
-  columns.value = Array.from({ length: count }, (_, index) => ({
-    id: index,
-    left: (index / count) * 100,
-    width: 100 / count + 0.4,
-    delay: index * 28 + (index % 4) * 24,
-    duration: 520 + (index % 5) * 46,
-  }));
-}
-
-function beginDrag(event: PointerEvent) {
-  if (isSubmitting.value) return;
-  message.value = '';
-  isDragging.value = true;
-  updateProgress(event);
-  window.addEventListener('pointermove', updateProgress);
-  window.addEventListener('pointerup', finishDrag);
-  window.addEventListener('pointercancel', cancelDrag);
-}
-
-function updateProgress(event: PointerEvent) {
-  const track = sliderTrack.value;
-  if (!track) return;
-  const rect = track.getBoundingClientRect();
-  const next = (event.clientX - rect.left) / rect.width;
-  progress.value = Math.min(1, Math.max(0, next));
-}
-
-async function finishDrag() {
-  removeDragListeners();
-  isDragging.value = false;
-  if (progress.value < 0.9) {
-    progress.value = 0;
-    return;
+function handleKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Tab') return;
+  const controls = Array.from(overlay.value?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), [tabindex="0"]') ?? []);
+  if (!controls.length) { event.preventDefault(); overlay.value?.focus(); return; }
+  const first = controls[0];
+  const last = controls[controls.length - 1];
+  if (event.shiftKey && (document.activeElement === first || document.activeElement === overlay.value)) {
+    event.preventDefault(); last.focus();
+  } else if (!event.shiftKey && (document.activeElement === last || document.activeElement === overlay.value)) {
+    event.preventDefault(); first.focus();
   }
-  progress.value = 1;
-  await submitUnlock();
-}
-
-function cancelDrag() {
-  removeDragListeners();
-  isDragging.value = false;
-  progress.value = 0;
-}
-
-function removeDragListeners() {
-  window.removeEventListener('pointermove', updateProgress);
-  window.removeEventListener('pointerup', finishDrag);
-  window.removeEventListener('pointercancel', cancelDrag);
-}
-
-async function submitUnlock() {
-  if (!canSubmit.value) {
-    failUnlock('请输入锁屏密码');
-    return;
-  }
-  isSubmitting.value = true;
-  message.value = '';
-  try {
-    await props.unlockSession(password.value);
-  } catch (error) {
-    failUnlock(errorMessage(error));
-  } finally {
-    isSubmitting.value = false;
-  }
-}
-
-function failUnlock(text: string) {
-  message.value = text;
-  progress.value = 0;
-  shaking.value = true;
-  nextTick(() => passwordInput.value?.focus());
-  window.setTimeout(() => {
-    shaking.value = false;
-  }, 360);
-}
-
-function submitFromKeyboard() {
-  failUnlock(password.value.trim() ? '请滑动解锁' : '请输入锁屏密码');
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <section
-      v-if="visible"
-      class="lock-screen-overlay"
-      :class="{ covering, exiting, 'content-visible': contentVisible, shaking }"
-      aria-modal="true"
-      role="dialog"
-      aria-label="锁定屏幕"
-    >
-      <div class="lock-screen-waterfall" aria-hidden="true">
-        <i
-          v-for="column in columns"
-          :key="column.id"
-          :style="{
-            left: `${column.left}%`,
-            width: `${column.width}%`,
-            transitionDelay: `${column.delay}ms`,
-            transitionDuration: `${column.duration}ms`,
-          }"
-        ></i>
-      </div>
-
-      <div class="lock-screen-blur" aria-hidden="true"></div>
-
-      <form class="lock-screen-panel" @submit.prevent="submitFromKeyboard">
-        <UserAvatar
-          class="lock-screen-avatar"
-          :src="avatarUrl"
-          :username="username"
-          :display-name="displayName"
-          :first-name="firstName"
-          size="xl"
-        />
-        <h2>{{ displayName }}</h2>
-        <p>{{ account }}</p>
-
-        <div
-          ref="sliderTrack"
-          class="lock-screen-slider"
-          :class="{ dragging: isDragging, complete: progress >= 0.9 }"
-          :style="sliderStyle"
-          @pointerdown.prevent="beginDrag"
-        >
-          <span class="lock-screen-slider-fill"></span>
-          <el-button class="lock-screen-slider-handle" native-type="button" tabindex="-1" aria-hidden="true">
-            <AppIcon name="moveRight" :size="21" />
-          </el-button>
-          <strong>{{ isSubmitting ? '正在解锁' : '滑动解锁' }}</strong>
-        </div>
-
-        <el-input
-          ref="passwordInput"
-          v-model="password"
-          type="password"
-          autocomplete="current-password"
-          placeholder="请输入锁屏密码..."
-          :disabled="isSubmitting"
-        />
-        <span v-if="message" class="lock-screen-message">{{ message }}</span>
-
-        <el-button class="lock-screen-hidden-submit" native-type="submit">解锁</el-button>
-        <el-button class="lock-screen-logout" :disabled="isSubmitting" @click="logout">
-          忘记密码？返回登录
-        </el-button>
-      </form>
-    </section>
+    <Transition name="lock-screen-slide">
+      <section
+        v-if="locked" ref="overlay" class="lock-screen-overlay" :class="{ 'on-lock-login': showLogin }"
+        role="dialog" aria-modal="true" aria-label="锁定屏幕" tabindex="-1"
+        @keydown.stop="handleKeydown" @keyup.stop="!showLogin && openLogin()" @mousedown.stop @click.stop @contextmenu.prevent
+      >
+        <template v-if="!showLogin">
+          <div class="lock-screen-lock-box">
+            <el-button text class="lock-screen-lock-icon" title="解锁屏幕" aria-label="解锁屏幕" @click="openLogin">
+              <LockKeyhole :size="34" :stroke-width="1.5" />
+            </el-button>
+          </div>
+          <div class="lock-screen-charge" aria-label="电池状态">
+            <div class="lock-screen-charge-number">{{ level }}</div>
+            <div class="lock-screen-charge-contrast" aria-hidden="true">
+              <div class="lock-screen-charge-circle"></div>
+              <ul class="lock-screen-charge-bubbles">
+                <li v-for="index in 15" :key="index" :style="{ '--bubble-size': `${15 + index % 6 * 3}px`, '--bubble-left': `${10 + index * 17 % 80}%`, '--bubble-delay': `${-index * 0.37}s`, '--bubble-duration': `${2 + index % 4 * 0.4}s` }"></li>
+              </ul>
+            </div>
+            <div class="lock-screen-charging"><div>{{ batteryStatus }}</div><div v-if="remaining">{{ remaining }}</div></div>
+          </div>
+          <div class="lock-screen-local-time"><div class="time">{{ time }}</div><div class="date">{{ date }}</div></div>
+          <div class="lock-screen-computer-status">
+            <span :class="{ offline: !online }" :title="online ? '网络已连接' : '网络已断开'" role="img" :aria-label="online ? '网络已连接' : '网络已断开'"><Wifi :size="24" /></span>
+            <span :title="batteryStatus" role="img" :aria-label="batteryStatus"><Plug :size="24" /></span>
+          </div>
+        </template>
+        <form v-else class="lock-screen-login-box" :aria-busy="busy" @submit.prevent="submit()">
+          <el-avatar :size="128" shape="square" class="lock-screen-login-avatar"><UserRound :size="90" :stroke-width="1.2" /></el-avatar>
+          <div class="lock-screen-username">{{ username || account || displayName }}</div>
+          <el-input ref="passwordInput" v-model="password" type="password" autofocus autocomplete="current-password" placeholder="请输入登录密码" aria-label="请输入登录密码" :disabled="busy">
+            <template #suffix>
+              <el-button text class="lock-screen-submit-icon" aria-label="进入系统" :disabled="busy" @click="submit()">
+                <LoaderCircle v-if="busy" class="lock-screen-spinner" :size="18" /><ArrowRight v-else :size="18" />
+              </el-button>
+            </template>
+          </el-input>
+          <div v-if="message" class="lock-screen-message" role="alert">{{ message }}</div>
+          <div class="lock-screen-login-actions">
+            <el-button text :disabled="busy" @click="back">返回</el-button>
+            <el-button text :disabled="busy" @click="submit(true)">重新登录</el-button>
+            <el-button text :disabled="busy" native-type="submit">进入系统</el-button>
+          </div>
+        </form>
+      </section>
+    </Transition>
   </Teleport>
 </template>
