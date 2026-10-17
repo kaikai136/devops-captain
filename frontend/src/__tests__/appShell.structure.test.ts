@@ -11,6 +11,22 @@ function readProjectFile(relativePath: string) {
 }
 
 describe('app shell upgrade contract', () => {
+  it('places the lock action after messages and before the avatar, outside the account menu', () => {
+    const app = readSource('App.vue');
+    const messageIndex = app.indexOf('workspace-message-button');
+    const lockIndex = app.indexOf('workspace-lock-button');
+    const avatarIndex = app.indexOf('workspace-user-dropdown-shell');
+    expect(messageIndex).toBeGreaterThan(-1);
+    expect(lockIndex).toBeGreaterThan(messageIndex);
+    expect(avatarIndex).toBeGreaterThan(lockIndex);
+    const lockButton = app.slice(lockIndex, app.indexOf('</el-button>', lockIndex));
+    expect(lockButton).toContain('aria-label="锁定屏幕"');
+    expect(lockButton).toContain('@click="lockCurrentSession"');
+    expect(lockButton).toContain('<AppIcon name="lock"');
+    expect(app).not.toContain('command="lock"');
+    expect(app).not.toContain("command === 'lock'");
+  });
+
   it('wires Element Plus as the only UI component library', () => {
     const main = readSource('main.ts');
     const packageJson = readProjectFile('package.json');

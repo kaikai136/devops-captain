@@ -241,13 +241,9 @@ function handleSidebarSelect(index: string) {
   selectNavItem(index as ToolKey);
 }
 
-function handleUserCommand(command: 'profile' | 'lock' | 'logout') {
+function handleUserCommand(command: 'profile' | 'logout') {
   if (command === 'profile') {
     if (canAccessPage('profile')) setActiveTool('profile');
-    return;
-  }
-  if (command === 'lock') {
-    void lockCurrentSession();
     return;
   }
   void logout();
@@ -404,6 +400,12 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
           >
             <AppIcon v-if="!isDashboardRefreshing" name="refresh" :size="18" />
           </el-button>
+          <el-button class="workspace-icon-button workspace-message-button" circle title="消息" aria-label="消息" @click="showToast('消息', '暂无新消息。')">
+            <AppIcon name="bell" :size="18" />
+          </el-button>
+          <el-button class="workspace-icon-button workspace-lock-button" circle title="锁定屏幕" aria-label="锁定屏幕" @click="lockCurrentSession">
+            <AppIcon name="lock" :size="18" />
+          </el-button>
           <el-dropdown class="workspace-user-dropdown-shell" trigger="click" @command="handleUserCommand">
             <el-button class="workspace-avatar-button" text aria-haspopup="menu" aria-label="账户菜单">
               <UserAvatar
@@ -435,10 +437,6 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
                   <el-dropdown-item command="profile" :disabled="!canAccessPage('profile')">
                     <AppIcon name="user" :size="16" />
                     <span>个人中心</span>
-                  </el-dropdown-item>
-                  <el-dropdown-item command="lock">
-                    <AppIcon name="lock" :size="16" />
-                    <span>锁定屏幕</span>
                   </el-dropdown-item>
                   <el-dropdown-item command="logout" divided class="workspace-menu-logout">
                     <AppIcon name="logout" :size="16" />
