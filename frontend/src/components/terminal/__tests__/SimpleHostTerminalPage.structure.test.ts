@@ -65,4 +65,14 @@ describe('SimpleHostTerminalPage structure', () => {
     expect(script).toMatch(/fitAddon\?\.fit\(\);\s*sendActiveSshResize\(\)/);
     expect(script).toContain("sshSocket.send(JSON.stringify({ type: 'resize', cols: xterm.cols, rows: xterm.rows }))");
   });
+
+  it('preserves the backend-validated container on initial connection and reconnect', () => {
+    const { descriptor } = parseSfc(source());
+    const script = descriptor.scriptSetup?.content ?? '';
+    expect(script).toContain('appendContainerToSocketUrl(url, hostId, window.location.search)');
+    expect(script).toContain('new WebSocket(buildWebSocketUrl(selectedHost.id))');
+    expect(script).toContain('new WebSocket(buildWebSocketUrl(host.value.id))');
+    expect(script).not.toContain('docker exec');
+    expect(descriptor.template?.content).toContain("containerId ? '容器终端' : '终端'");
+  });
 });

@@ -11,14 +11,16 @@ function readProjectFile(relativePath: string) {
 }
 
 describe('app shell upgrade contract', () => {
-  it('places the lock action after messages and before the avatar, outside the account menu', () => {
+  it('keeps task messages before the lock and avatar without duplicate refresh or message icons', () => {
     const app = readSource('App.vue');
-    const messageIndex = app.indexOf('workspace-message-button');
+    const messageIndex = app.indexOf('<DatabaseTransferCenter');
     const lockIndex = app.indexOf('workspace-lock-button');
     const avatarIndex = app.indexOf('workspace-user-dropdown-shell');
     expect(messageIndex).toBeGreaterThan(-1);
     expect(lockIndex).toBeGreaterThan(messageIndex);
     expect(avatarIndex).toBeGreaterThan(lockIndex);
+    expect(app).not.toContain('workspace-dashboard-refresh');
+    expect(app).not.toContain('workspace-message-button');
     const lockButton = app.slice(lockIndex, app.indexOf('</el-button>', lockIndex));
     expect(lockButton).toContain('aria-label="锁定屏幕"');
     expect(lockButton).toContain('@click="lockCurrentSession"');

@@ -44,6 +44,9 @@ ENDPOINTS = [
         ("put", "delete"),
     ),
     ("monitoring", "terminal_monitor", "/api/web-terminal/hosts/1/monitor/", ("post",)),
+    ("containers", "terminal_containers", "/api/web-terminal/hosts/1/containers/", ("post",)),
+    ("containers", "terminal_container_action", "/api/web-terminal/hosts/1/containers/action/", ("post",)),
+    ("containers", "terminal_container_logs", "/api/web-terminal/hosts/1/containers/logs/", ("post",)),
     ("files", "terminal_file_list", "/api/web-terminal/hosts/1/files/list/", ("post",)),
     (
         "files",

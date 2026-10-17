@@ -133,6 +133,9 @@ export interface TerminalFileProperties {
 
 export interface TerminalMonitorResponse {
   system: {
+    cpuModel?: string;
+    cpuCores?: number;
+    hostTime?: string;
     hostname: string;
     arch: string;
     os: string;
@@ -155,6 +158,8 @@ export interface TerminalMonitorResponse {
   };
   network: Array<{
     name: string;
+    rxBytes?: number;
+    txBytes?: number;
     rxBytesPerSecond: number;
     txBytesPerSecond: number;
   }>;
@@ -167,4 +172,13 @@ export interface TerminalMonitorResponse {
     availableBytes: number;
     usagePercent: number;
   }>;
+  swap?: { totalBytes: number; usedBytes: number; usagePercent: number; available: boolean };
+  management?: {
+    sshPort: number | null;
+    dnsServers: string[];
+    tcpCongestionControl: string;
+    ipv4Enabled: boolean;
+    ipv6Enabled: boolean;
+    bbrEnabled: boolean | null;
+  };
 }

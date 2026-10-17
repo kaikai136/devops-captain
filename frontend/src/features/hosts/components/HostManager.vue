@@ -8,7 +8,7 @@ import {
   DialogRoot,
   DialogTitle,
 } from 'reka-ui';
-import { computed, onBeforeUnmount, ref, watch } from 'vue';
+import { computed, defineAsyncComponent, onBeforeUnmount, ref, watch } from 'vue';
 
 import { useAppContext } from '@app/context';
 import { useColumnVisibility } from '@shared/composables/useColumnVisibility';
@@ -29,6 +29,10 @@ import HostMoveDialog from './HostMoveDialog.vue';
 import HostTable from './HostTable.vue';
 import type { HostMoveForm, ManagedHostForm } from '../composables/useHostEditor';
 import HostToolbar, { type HostColumnKey } from './HostToolbar.vue';
+import type { ManagedHost } from '../types';
+import '../../../styles/tools/host/detail.css';
+
+const HostDetail = defineAsyncComponent(() => import('./HostDetail.vue'));
 
 interface HostQuickCommandDialogState {
   visible: boolean;
@@ -150,6 +154,33 @@ const {
 } = useAppContext();
 
 const hostColumnSettingsOpen = ref(false);
+const detailHosts = ref<ManagedHost[]>([]);
+const detailHostId = ref<number | null>(null);
+const selectedDetail = computed(() => detailHosts.value.find((host) => host.id === detailHostId.value) ?? null);
+
+function openHostDetail(host: ManagedHost) {
+  if (!canUsePageAction('hosts', 'terminal')) return;
+  closeHostMenus();
+  if (!detailHosts.value.some((item) => item.id === host.id)) detailHosts.value.push(host);
+  detailHostId.value = host.id;
+}
+
+function closeHostDetail(hostId: number) {
+  detailHosts.value = detailHosts.value.filter((host) => host.id !== hostId);
+  if (detailHostId.value === hostId) detailHostId.value = null;
+}
+
+watch(() => canUsePageAction('hosts', 'terminal'), (allowed) => {
+  if (!allowed) { detailHostId.value = null; detailHosts.value = []; }
+});
+
+watch(managedHosts, (hosts) => {
+  detailHosts.value = detailHosts.value.flatMap((host) => {
+    const updated = hosts.find((item) => item.id === host.id);
+    return updated ? [updated] : [];
+  });
+  if (!selectedDetail.value) detailHostId.value = null;
+});
 const hostMoreActionsOpen = ref(false);
 const fullscreen = ref(false);
 const hostPage = ref(1);
@@ -658,10 +689,19 @@ function hostPlatformType(value: string | null | undefined) {
 </script>
 
 <template>
-  <section v-if="activeTool === 'hosts'" class="host-manager-page" :class="{ fullscreen }" @click="closeHostMenus">
+  <section v-if="activeTool === 'hosts'" class="host-manager-page host-manager-with-tabs" :class="{ fullscreen }" @click="closeHostMenus">
+    <nav v-if="canUseHostList" class="host-workspace-tabs" aria-label="主机工作区标签">
+      <el-button :type="detailHostId === null ? 'primary' : 'default'" :plain="detailHostId !== null" @click="detailHostId = null">主机列表</el-button>
+      <div v-for="host in detailHosts" :key="host.id" class="host-workspace-tab">
+        <el-button :type="detailHostId === host.id ? 'primary' : 'default'" :plain="detailHostId !== host.id" @click="detailHostId = host.id">{{ host.name }} · {{ host.privateIp }}</el-button>
+        <el-button text :aria-label="`关闭 ${host.name} 详情`" @click.stop="closeHostDetail(host.id)"><AppIcon name="x" :size="14" /></el-button>
+      </div>
+    </nav>
+    <HostDetail v-if="selectedDetail && canUsePageAction('hosts', 'terminal')" :key="selectedDetail.id" :host="selectedDetail" @terminal="openSimpleHostTerminal" />
     <template v-if="canUseHostAnyAction">
     <HostGroupTree
       v-if="canUseHostList"
+      v-show="!selectedDetail"
       :groups="hostGroups"
       :root="hostGroupRoot"
       :rows="hostGroupRows"
@@ -698,7 +738,7 @@ function hostPlatformType(value: string | null | undefined) {
       @delete-group="deleteHostGroup"
     />
 
-    <article v-if="canUseHostList" class="panel host-table-panel">
+    <article v-if="canUseHostList" v-show="!selectedDetail" class="panel host-table-panel">
       <HostToolbar
         v-model:search="hostSearch"
         :status-filter="hostStatusFilter"
@@ -774,6 +814,7 @@ function hostPlatformType(value: string | null | undefined) {
         @sort="setHostSort"
         @resize-column-start="startHostColumnResize"
         @open-terminal="openWebTerminal"
+        @open-detail="openHostDetail"
         @open-simple-terminal="openSimpleHostTerminal"
         @edit="editManagedHost"
         @verify="verifyManagedHost"

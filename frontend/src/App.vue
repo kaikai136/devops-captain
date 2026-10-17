@@ -388,21 +388,6 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
             <AppIcon :name="isWorkspaceDark ? 'sun' : 'moon'" :size="18" />
           </el-button>
           <DatabaseTransferCenter v-if="isAuthenticated && canUsePageAction('databaseManagement', 'import_export')" v-model:open="databaseTransferCenterOpen" />
-          <el-button
-            v-if="activeTool === 'dashboard'"
-            class="workspace-icon-button workspace-dashboard-refresh"
-            circle
-            :loading="isDashboardRefreshing"
-            :disabled="isDashboardRefreshing"
-            :title="isDashboardRefreshing ? '刷新中' : '刷新仪表盘'"
-            :aria-label="isDashboardRefreshing ? '刷新中' : '刷新仪表盘'"
-            @click="refreshDashboard"
-          >
-            <AppIcon v-if="!isDashboardRefreshing" name="refresh" :size="18" />
-          </el-button>
-          <el-button class="workspace-icon-button workspace-message-button" circle title="消息" aria-label="消息" @click="showToast('消息', '暂无新消息。')">
-            <AppIcon name="bell" :size="18" />
-          </el-button>
           <el-button class="workspace-icon-button workspace-lock-button" circle title="锁定屏幕" aria-label="锁定屏幕" @click="lockCurrentSession">
             <AppIcon name="lock" :size="18" />
           </el-button>

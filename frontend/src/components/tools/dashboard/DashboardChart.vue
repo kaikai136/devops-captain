@@ -42,7 +42,6 @@ watch(
   (option) => {
     setOption(option);
   },
-  { deep: true },
 );
 
 watch(isWorkspaceDark, async () => {
@@ -71,9 +70,8 @@ function setOption(option: Record<string, unknown>) {
   if (!chart.value) return;
   chart.value.setOption(option as EChartsCoreOption, {
     notMerge: true,
-    lazyUpdate: false,
+    lazyUpdate: true,
   });
-  resizeChart();
 }
 
 function bindResize() {

@@ -14,6 +14,8 @@ def terminal_monitor(request, host_id: int):
     host, error = get_object_or_error(ManagedHost, id=host_id, error_message="主机不存在")
     if error:
         return error
+    if host.os == "windows":
+        return bad_request("Windows 主机暂不支持资源监控")
 
     try:
         return Response(get_remote_resource_monitor(host))

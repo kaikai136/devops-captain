@@ -208,34 +208,6 @@ html.workspace-theme-transition::view-transition-new(root) {
   color: #facc15;
 }
 
-.workspace-dashboard-refresh {
-  color: var(--ui-primary);
-}
-
-.workspace-dashboard-refresh:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--ui-primary) 42%, transparent);
-  background: var(--ui-muted);
-}
-
-.workspace-dashboard-refresh:disabled {
-  cursor: wait;
-  opacity: 0.68;
-}
-
-.workspace-dashboard-refresh:disabled .app-icon {
-  animation: workspace-dashboard-spin 0.9s linear infinite;
-}
-
-.workspace-dark .workspace-dashboard-refresh {
-  color: var(--ui-primary);
-}
-
-@keyframes workspace-dashboard-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
 .workspace-user-menu {
   position: relative;
   display: inline-flex;

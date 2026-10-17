@@ -59,6 +59,9 @@ EXPECTED_HTTP_ROUTES = [
         "terminal_monitor",
         "view",
     ),
+    ("web-terminal/hosts/<int:host_id>/containers/", None, "terminal_containers", "view"),
+    ("web-terminal/hosts/<int:host_id>/containers/action/", None, "terminal_container_action", "view"),
+    ("web-terminal/hosts/<int:host_id>/containers/logs/", None, "terminal_container_logs", "view"),
     (
         "web-terminal/hosts/<int:host_id>/files/list/",
         None,

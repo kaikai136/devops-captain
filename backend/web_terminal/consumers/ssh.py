@@ -4,6 +4,7 @@ import json
 import logging
 import threading
 import time
+from urllib.parse import parse_qs
 
 from channels.generic.websocket import WebsocketConsumer
 from django.utils import timezone
@@ -15,6 +16,7 @@ from system_management.services import get_terminal_settings
 from system_management.settings_defaults import DEFAULT_TERMINAL_SETTINGS
 
 from ..models import TerminalCommandAudit, TerminalSession
+from ..services.containers import container_terminal_command
 from ..services import (
     DEFAULT_TERMINAL_COLS,
     DEFAULT_TERMINAL_ROWS,
@@ -95,6 +97,8 @@ class TerminalConsumer(WebsocketConsumer):
         host_id = self.scope["url_route"]["kwargs"]["host_id"]
         try:
             host = ManagedHost.objects.get(id=host_id)
+            container = parse_qs(self.scope.get("query_string", b"").decode("utf-8", errors="replace")).get("container", [""])[0]
+            container_command = container_terminal_command(host, container) if container else ""
             self.connection = open_live_terminal(
                 host,
                 cols=int(self.terminal_settings["defaultCols"]),
@@ -109,10 +113,17 @@ class TerminalConsumer(WebsocketConsumer):
             self._send_error(str(error))
             self.close()
             return
+        except ValueError as error:
+            self._send_error(str(error))
+            self.close()
+            return
 
         self._create_audit_session(host)
         self._send_initial_output()
         self._install_cwd_hook()
+        if container_command:
+            self._record_input(container_command)
+            self.connection.send_data(container_command)
         ready_payload = {
             "type": "ready",
             "terminalSettings": {

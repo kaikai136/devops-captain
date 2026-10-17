@@ -97,8 +97,8 @@ export function updateTerminalFileProperties(hostId: number, payload: unknown) {
   return apiPost<TerminalFileProperties>(`${terminalBaseUrl}/hosts/${hostId}/files/properties/update/`, payload);
 }
 
-export function getTerminalMonitor(hostId: number) {
-  return apiPost<TerminalMonitorResponse>(`${terminalBaseUrl}/hosts/${hostId}/monitor/`, {});
+export function getTerminalMonitor(hostId: number, options: RequestInit = {}) {
+  return apiPost<TerminalMonitorResponse>(`${terminalBaseUrl}/hosts/${hostId}/monitor/`, {}, options);
 }
 
 export function buildTerminalFileDownloadRawUrl(hostId: number, path: string, protocol: TerminalDownloadProtocol) {

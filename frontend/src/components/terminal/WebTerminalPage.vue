@@ -2,6 +2,7 @@
 import { computed, defineAsyncComponent, markRaw, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import type { InputInstance } from 'element-plus';
 import Guacamole from 'guacamole-common-js';
+import { appendContainerToSocketUrl } from '../../features/hosts/api/monitoring';
 import { FitAddon } from '@xterm/addon-fit';
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { Terminal } from '@xterm/xterm';
@@ -3133,7 +3134,8 @@ function setTerminalContainer(tabId: string, element: unknown) {
 }
 
 function buildWebSocketUrl(hostId: number) {
-  return buildTerminalWebSocketUrl(window.location.protocol, window.location.host, hostId);
+  const url = buildTerminalWebSocketUrl(window.location.protocol, window.location.host, hostId);
+  return appendContainerToSocketUrl(url, hostId, window.location.search);
 }
 
 function buildRdpWebSocketUrl(tab: TerminalTab) {

@@ -18,6 +18,8 @@ printf 'SECTION:system\n'
 printf 'hostname=%s\n' "$(hostname 2>/dev/null || printf '-')"
 printf 'arch=%s\n' "$(uname -m 2>/dev/null || printf '-')"
 printf 'kernel=%s\n' "$(uname -sr 2>/dev/null || printf '-')"
+printf 'cpuModel=%s\n' "$(awk -F: '/^model name/{sub(/^ +/, "", $2); print $2; exit}' /proc/cpuinfo 2>/dev/null || printf '-')"
+printf 'hostTime=%s\n' "$(date -Is 2>/dev/null || printf '-')"
 if [ -r /etc/os-release ]; then
   . /etc/os-release
   printf 'os=%s\n' "${PRETTY_NAME:-${NAME:-Linux}}"
@@ -38,6 +40,11 @@ printf 'SECTION:net2\n'
 cat /proc/net/dev
 printf 'SECTION:mem\n'
 cat /proc/meminfo
+printf 'SECTION:details\n'
+printf 'dns=%s\n' "$(awk '/^nameserver/{printf "%s ", $2}' /etc/resolv.conf 2>/dev/null || true)"
+printf 'tcpCongestion=%s\n' "$(cat /proc/sys/net/ipv4/tcp_congestion_control 2>/dev/null || printf '-')"
+printf 'ipv6=%s\n' "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null || printf '-')"
+printf 'ipv4=%s\n' "$(test -r /proc/net/route && printf 1 || printf 0)"
 printf 'SECTION:df\n'
 df -PT -B1 2>/dev/null
 """
@@ -45,7 +52,10 @@ df -PT -B1 2>/dev/null
 def get_remote_resource_monitor(host: ManagedHost) -> dict:
     try:
         output = run_one_shot_ssh_command(host, REMOTE_MONITOR_COMMAND)
-        return parse_remote_resource_monitor_output(output)
+        payload = parse_remote_resource_monitor_output(output)
+        if "management" in payload:
+            payload["management"]["sshPort"] = host.port
+        return payload
     except TerminalConnectionError as error:
         message = str(error)
         if "No such file" in message or "can't open" in message or "test:" in message or "远端命令退出码" in message:
@@ -64,7 +74,7 @@ def parse_remote_resource_monitor_output(output: str) -> dict:
     network1 = parse_monitor_network(sections["net1"])
     network2 = parse_monitor_network(sections["net2"])
 
-    return {
+    payload = {
         "system": {
             "hostname": system.get("hostname", "-") or "-",
             "arch": system.get("arch", "-") or "-",
@@ -81,6 +91,34 @@ def parse_remote_resource_monitor_output(output: str) -> dict:
         "network": parse_monitor_network_rates(network1, network2, REMOTE_MONITOR_SAMPLE_INTERVAL_SECONDS),
         "disks": parse_monitor_disks(sections["df"]),
     }
+    if "details" in sections:
+        details = parse_monitor_key_values(sections["details"])
+        payload["system"].update({
+            "cpuModel": system.get("cpuModel", "-") or "-",
+            "cpuCores": payload["cpu"]["cores"],
+            "hostTime": system.get("hostTime", "-") or "-",
+        })
+        memory_values = parse_monitor_key_values(sections["mem"].replace(":", "="))
+        swap_total = max(0, parse_monitor_int((memory_values.get("SwapTotal") or "0").split()[0])) * 1024
+        swap_free = max(0, parse_monitor_int((memory_values.get("SwapFree") or "0").split()[0])) * 1024
+        swap_used = max(0, min(swap_total, swap_total - swap_free))
+        payload["swap"] = {
+            "totalBytes": swap_total, "usedBytes": swap_used,
+            "usagePercent": round(swap_used / swap_total * 100, 1) if swap_total else 0.0,
+            "available": swap_total > 0,
+        }
+        congestion = details.get("tcpCongestion", "-") or "-"
+        payload["management"] = {
+            "sshPort": None,
+            "dnsServers": details.get("dns", "").split(),
+            "tcpCongestionControl": congestion,
+            "ipv4Enabled": details.get("ipv4") == "1",
+            "ipv6Enabled": details.get("ipv6") == "0",
+            "bbrEnabled": congestion == "bbr" if congestion != "-" else None,
+        }
+        for interface in payload["network"]:
+            interface.update(network2[interface["name"]])
+    return payload
 
 def split_monitor_sections(output: str) -> dict[str, str]:
     sections: dict[str, list[str]] = {}

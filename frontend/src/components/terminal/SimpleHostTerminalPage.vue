@@ -11,6 +11,7 @@ import AppIcon from '@shared/components/AppIcon.vue';
 import AppContextMenu from '@shared/components/context-menu/AppContextMenu.vue';
 import type { ContextMenuEntry as SimpleTerminalContextMenuItem } from '@shared/components/context-menu/types';
 import { listTerminalTree } from '@features/terminal/api/terminal';
+import { appendContainerToSocketUrl } from '@features/hosts/api/monitoring';
 import type { TerminalHost, TerminalTabKind } from '@features/terminal/types';
 import {
   buildRdpConnectionQuery,
@@ -82,6 +83,10 @@ interface SimplePastePromptState {
 const TERMINAL_SETTINGS_SETTING_KEY = 'terminal_settings';
 
 const host = ref<TerminalHost | null>(null);
+const containerId = computed(() => {
+  const query = new URLSearchParams(window.location.search);
+  return Number(query.get('host')) === host.value?.id ? query.get('container') || '' : '';
+});
 const protocol = ref<TerminalTabKind>('ssh');
 const status = ref<Status>('idle');
 const statusText = ref('准备连接');
@@ -263,6 +268,11 @@ async function connect() {
   connectSsh(selectedHost);
 }
 
+function buildWebSocketUrl(hostId: number) {
+  const url = buildTerminalWebSocketUrl(window.location.protocol, window.location.host, hostId);
+  return appendContainerToSocketUrl(url, hostId, window.location.search);
+}
+
 function connectSsh(selectedHost: TerminalHost) {
   terminalFontSize.value = readTerminalFontSize();
   const terminal = markRaw(new Terminal(createTerminalScreenOptions(readTerminalFontSize(), terminalSettings.value.scrollbackLines)));
@@ -306,7 +316,7 @@ function connectSsh(selectedHost: TerminalHost) {
   observeResize(terminalRef.value);
   fitActiveSession();
 
-  const socket = new WebSocket(buildTerminalWebSocketUrl(window.location.protocol, window.location.host, selectedHost.id));
+  const socket = new WebSocket(buildWebSocketUrl(selectedHost.id));
   sshSocket = socket;
   socket.addEventListener('open', () => {
     if (sshSocket !== socket) return;
@@ -518,7 +528,7 @@ function reconnectSshSession() {
   xterm?.writeln('\r\n\x1b[32m[正在重新连接...]\x1b[0m');
   stopHeartbeat();
   if (sshSocket && sshSocket.readyState !== WebSocket.CLOSED) sshSocket.close();
-  const socket = new WebSocket(buildTerminalWebSocketUrl(window.location.protocol, window.location.host, host.value.id));
+  const socket = new WebSocket(buildWebSocketUrl(host.value.id));
   sshSocket = socket;
   socket.addEventListener('open', () => {
     if (sshSocket !== socket) return;
@@ -1013,8 +1023,8 @@ function rdpErrorMessage(error?: unknown) {
   <main class="simple-host-terminal-page">
     <header class="simple-host-terminal-header">
       <div>
-        <strong>终端 - {{ host?.name || '主机' }}</strong>
-        <span>主机 ID: {{ host?.id || '-' }}</span>
+        <strong>{{ containerId ? '容器终端' : '终端' }} - {{ host?.name || '主机' }}</strong>
+        <span>主机 ID: {{ host?.id || '-' }}<template v-if="containerId"> · 容器: {{ containerId.slice(0, 12) }}</template></span>
       </div>
       <nav aria-label="终端操作">
         <span class="simple-host-terminal-status" :class="status">

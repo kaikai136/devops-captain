@@ -42,6 +42,7 @@ const emit = defineEmits<{
   sort: [key: HostSortKey];
   'resize-column-start': [key: HostColumnKey, event: MouseEvent];
   'open-terminal': [host: ManagedHost];
+  'open-detail': [host: ManagedHost];
   'open-simple-terminal': [host: ManagedHost];
   edit: [host: ManagedHost];
   verify: [host: ManagedHost];
@@ -152,8 +153,10 @@ function formatHostSystem(host: ManagedHost) {
         <el-button v-if="props.isColumnVisible('name') && props.canOpenTerminal" text class="host-name-link" @click="emit('open-terminal', host)">{{ host.name }}</el-button>
         <span v-else-if="props.isColumnVisible('name')" class="host-name-text">{{ host.name }}</span>
         <div v-if="props.isColumnVisible('ip')" class="host-ip-stack">
-          <span v-if="host.publicIp"><i class="ip-tag public">公</i>{{ host.publicIp }}</span>
-          <span>{{ host.privateIp }}</span>
+          <el-button v-if="host.publicIp && props.canOpenTerminal" text class="host-ip-link" :aria-label="`查看主机 ${host.name} 公网 IP ${host.publicIp} 的监控`" @click.stop="emit('open-detail', host)"><i class="ip-tag public">公</i>{{ host.publicIp }}</el-button>
+          <span v-else-if="host.publicIp"><i class="ip-tag public">公</i>{{ host.publicIp }}</span>
+          <el-button v-if="props.canOpenTerminal" text class="host-ip-link" :aria-label="`查看主机 ${host.name} IP ${host.privateIp} 的监控`" @click.stop="emit('open-detail', host)">{{ host.privateIp }}</el-button>
+          <span v-else>{{ host.privateIp }}</span>
         </div>
         <span v-if="props.isColumnVisible('machine')" class="host-machine-cell" :title="host.machineName">{{ host.verified ? host.machineName : '' }}</span>
         <div v-if="props.isColumnVisible('spec')" class="host-spec-cell">
