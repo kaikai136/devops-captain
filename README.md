@@ -391,3 +391,14 @@ cp -a data data.backup
 - Web RDP 功能依赖 `guacamole/guacd:1.5.5` 容器，请确认 guacd 服务正常启动。
 - SSH 终端依赖目标主机网络可达，并需要正确的登录账号、密码或密钥配置。
 - 升级前建议备份整个 `data/` 目录；如果使用远程 MySQL，还要单独备份远程数据库。
+
+
+## Star History
+
+<a href="https://www.star-history.com/?repos=kaikai136%2Fdevops-captain&type=date&legend=top-left">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=kaikai136/devops-captain&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=kaikai136/devops-captain&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=kaikai136/devops-captain&type=date&legend=top-left" />
+ </picture>
+</a>
