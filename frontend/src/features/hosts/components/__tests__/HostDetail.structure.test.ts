@@ -10,6 +10,20 @@ const table = readFileSync(new URL('../HostTable.vue', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../../../../styles/tools/host/detail.css', import.meta.url), 'utf8');
 
 describe('host detail UI contract', () => {
+  it('switches resource views inside a fixed viewport through accessible icon buttons', () => {
+    expect(source).toContain('@click="toggleMetric(gauge.icon)"');
+    expect(source).toContain(':aria-pressed="detailMetrics.has(gauge.icon)"');
+    expect(source).not.toContain('aria-expanded');
+    expect(source).toContain('<template v-if="!detailMetrics.has(gauge.icon)"');
+    expect(source).toContain('</div></div><p>{{ gauge.footer }}</p>');
+    expect(css).toContain('.host-metric-viewport { height: 150px; min-height: 150px;');
+    expect(css).toContain('height: 100%; min-width: 0; overflow-y: auto;');
+    expect(css).not.toContain('max-height: 260px');
+    expect(source).toContain('snapshot?.cpu.perCore ?? []');
+    expect(source).toContain('host-cpu-loads');
+    expect(source).toContain('memoryDetails');
+    expect(css).toContain('.host-metric-toggle:focus-visible');
+  });
   it('compiles Element Plus cards, tables, logs and existing chart component', () => {
     const { descriptor, errors } = parse(source);
     expect(errors).toEqual([]);

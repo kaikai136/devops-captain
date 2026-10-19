@@ -175,3 +175,20 @@
 @media (prefers-reduced-motion: reduce) {
   .host-detail *, .host-container-log-dialog * { animation-duration: 0s !important; transition-duration: 0s !important; }
 }
+.host-metric-toggle { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 5px; color: inherit; background: transparent; cursor: pointer; }
+.host-metric-toggle:hover, .host-metric-toggle[aria-pressed="true"] { color: var(--ui-primary); background: var(--ui-muted); }
+.host-metric-toggle:focus-visible { outline: 2px solid var(--ui-primary); outline-offset: 2px; }
+.host-metric-viewport { height: 150px; min-height: 150px; min-width: 0; overflow: hidden; }
+.host-metric-details { box-sizing: border-box; height: 100%; min-width: 0; overflow-y: auto; overflow-x: hidden; padding: 6px 2px; font-size: 11px; text-align: left; }
+.host-cpu-loads { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.host-cpu-loads > div { padding: 7px 3px; border: 1px solid var(--ui-border); border-radius: 5px; background: var(--ui-muted); text-align: center; }
+.host-cpu-loads b, .host-cpu-loads small { display: block; }
+.host-cpu-loads small { margin-top: 3px; color: var(--ui-muted-foreground); }
+.host-metric-detail-heading { margin: 12px 0 8px; overflow-wrap: anywhere; color: var(--ui-muted-foreground); }
+.host-cpu-core { display: grid; grid-template-columns: 38px minmax(0, 1fr) 44px; align-items: center; gap: 7px; margin: 10px 0; font-variant-numeric: tabular-nums; }
+.host-cpu-core > span:last-child { text-align: right; }
+.host-metric-facts { margin: 0; }
+.host-metric-facts > div { display: flex; justify-content: space-between; gap: 10px; margin: 10px 0; }
+.host-metric-facts dt, .host-metric-empty { color: var(--ui-muted-foreground); }
+.host-metric-facts dd { margin: 0; text-align: right; }
+.host-metric-disks small { display: block; margin: 7px 0 12px; color: var(--ui-muted-foreground); }

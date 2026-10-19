@@ -84,6 +84,7 @@ def parse_remote_resource_monitor_output(output: str) -> dict:
         },
         "cpu": {
             "usagePercent": calculate_monitor_cpu_usage(cpu1, cpu2),
+            "perCore": parse_monitor_cpu_cores(sections["cpu1"], sections["cpu2"]),
             "cores": detect_monitor_cpu_cores(sections["cpu2"]),
             **parse_monitor_load(sections["load"]),
         },
@@ -142,6 +143,24 @@ def parse_monitor_key_values(output: str) -> dict[str, str]:
         key, value = line.split("=", 1)
         values[key.strip()] = value.strip()
     return values
+
+def parse_monitor_cpu_cores(previous: str, current: str) -> list[dict]:
+    def samples(output: str) -> dict:
+        result = {}
+        for line in output.splitlines():
+            parts = line.split()
+            if len(parts) >= 5 and parts[0].startswith("cpu") and parts[0][3:].isdigit():
+                result[parts[0]] = [parse_monitor_int(value) for value in parts[1:]]
+        return result
+
+    before = samples(previous)
+    after = samples(current)
+    return [
+        {"name": name, "usagePercent": calculate_monitor_cpu_usage(before[name], after[name])}
+        for name in sorted(after, key=lambda name: int(name[3:]))
+        if name in before
+    ]
+
 
 def parse_monitor_cpu_line(output: str) -> list[int]:
     line = next((item for item in output.splitlines() if item.startswith("cpu ")), "")

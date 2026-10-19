@@ -27,6 +27,25 @@ onMounted(() => {
   motionQuery?.addEventListener('change', onMotion);
 });
 const disk = computed(() => systemDisk(snapshot.value));
+const detailMetrics = ref(new Set<string>());
+function toggleMetric(metric: string) {
+  const next = new Set(detailMetrics.value);
+  if (next.has(metric)) next.delete(metric);
+  else next.add(metric);
+  detailMetrics.value = next;
+}
+const cpuLoads = computed(() => [
+  { label: '1 分钟', value: snapshot.value?.cpu.load1 },
+  { label: '5 分钟', value: snapshot.value?.cpu.load5 },
+  { label: '15 分钟', value: snapshot.value?.cpu.load15 },
+]);
+const memoryDetails = computed(() => [
+  ['总内存', bytes(snapshot.value?.memory.totalBytes)],
+  ['已使用', bytes(snapshot.value?.memory.usedBytes)],
+  ['可用', bytes(snapshot.value?.memory.availableBytes)],
+  ['缓存', bytes(snapshot.value?.memory.cacheBytes)],
+  ['Swap', snapshot.value?.swap ? `${bytes(snapshot.value.swap.usedBytes)} / ${bytes(snapshot.value.swap.totalBytes)}` : '--'],
+]);
 const latestNetwork = computed(() => history.value[history.value.length - 1]);
 const gauges = computed(() => [
   { title: 'CPU 使用率', icon: 'cpu' as const, color: '#5b8ff9', value: snapshot.value?.cpu.usagePercent ?? null, footer: snapshot.value ? `${snapshot.value.cpu.cores} 核心 · ${snapshot.value.system.arch}` : '等待采集' },
@@ -81,7 +100,16 @@ onBeforeUnmount(() => { motionQuery?.removeEventListener('change', onMotion); })
     <el-alert v-if="!supported" title="Windows 主机暂不支持资源与 Docker 监控，以下仅展示已保存的资产信息。" type="info" :closable="false" show-icon />
     <el-alert v-if="error" :title="`监控读取失败：${error}。保留最近一次数据，后续自动重试。`" type="error" :closable="false" show-icon />
     <div class="host-detail-metrics">
-      <el-card v-for="gauge in gaugeCards" :key="gauge.title" shadow="never" class="host-metric-card"><div class="host-card-label"><span>{{ gauge.title }}</span><AppIcon :name="gauge.icon" :size="17" /></div><DashboardChart v-if="active" class="host-gauge" :aria-label="gauge.title" :option="gauge.option" /><div v-else class="host-gauge-placeholder">{{ gauge.value == null ? '--' : `${gauge.value}%` }}</div><p>{{ gauge.footer }}</p></el-card>
+      <el-card v-for="gauge in gaugeCards" :key="gauge.title" shadow="never" class="host-metric-card"><div class="host-card-label"><span>{{ gauge.title }}</span><button type="button" class="host-metric-toggle" :aria-label="gauge.title + '切换视图'" :aria-pressed="detailMetrics.has(gauge.icon)" @click="toggleMetric(gauge.icon)"><AppIcon :name="gauge.icon" :size="17" /></button></div><div class="host-metric-viewport"><template v-if="!detailMetrics.has(gauge.icon)"><DashboardChart v-if="active" class="host-gauge" :aria-label="gauge.title" :option="gauge.option" /><div v-else class="host-gauge-placeholder">{{ gauge.value == null ? '--' : `${gauge.value}%` }}</div></template><div v-if="detailMetrics.has(gauge.icon)" class="host-metric-details">
+          <template v-if="gauge.icon === 'cpu'">
+            <div class="host-cpu-loads"><div v-for="load in cpuLoads" :key="load.label"><b>{{ load.value?.toFixed(2) ?? '--' }}</b><small>{{ load.label }}</small></div></div>
+            <div class="host-metric-detail-heading">{{ snapshot?.cpu.cores ?? '--' }} CPU</div>
+            <div v-for="core in snapshot?.cpu.perCore ?? []" :key="core.name" class="host-cpu-core"><span>{{ core.name }}</span><el-progress :percentage="core.usagePercent" :show-text="false" :stroke-width="6" /><span>{{ core.usagePercent.toFixed(1) }}%</span></div>
+            <span v-if="!snapshot?.cpu.perCore?.length" class="host-metric-empty">暂无逐核数据</span>
+          </template>
+          <dl v-else-if="gauge.icon === 'server'" class="host-metric-facts"><div v-for="item in memoryDetails" :key="item[0]"><dt>{{ item[0] }}</dt><dd>{{ item[1] }}</dd></div></dl>
+          <div v-else class="host-metric-disks"><div v-for="volume in snapshot?.disks ?? []" :key="volume.filesystem + volume.mountpoint"><div class="host-metric-detail-heading">{{ volume.mountpoint }} · {{ volume.filesystem }}</div><el-progress :percentage="volume.usagePercent" :stroke-width="6" /><small>{{ bytes(volume.usedBytes) }} / {{ bytes(volume.totalBytes) }} · 可用 {{ bytes(volume.availableBytes) }}</small></div><span v-if="!snapshot?.disks.length" class="host-metric-empty">暂无磁盘数据</span></div>
+        </div></div><p>{{ gauge.footer }}</p></el-card>
       <el-card shadow="never" class="host-metric-card host-load-card"><div class="host-card-label"><span>系统负载</span><AppIcon name="gauge" :size="17" /></div><strong>{{ snapshot?.cpu.load1.toFixed(2) ?? '--' }}</strong><small>1 分钟平均负载</small><div class="host-load-values"><span>5 分钟<b>{{ snapshot?.cpu.load5.toFixed(2) ?? '--' }}</b></span><span>15 分钟<b>{{ snapshot?.cpu.load15.toFixed(2) ?? '--' }}</b></span></div><p>{{ snapshot ? `${snapshot.cpu.cores} 核心 · 负载参考` : '等待采集' }}</p></el-card>
       <el-card shadow="never" class="host-metric-card host-network-card"><div class="host-card-label"><span>网络吞吐</span><AppIcon name="network" :size="17" /></div><div class="host-network-rate"><small>↓ 下行</small><strong>{{ bytes(latestNetwork?.rx) }}<em>/s</em></strong></div><div class="host-network-rate upload"><small>↑ 上行</small><strong>{{ bytes(latestNetwork?.tx) }}<em>/s</em></strong></div><p>全部非回环网络接口</p></el-card>
     </div>

@@ -122,6 +122,7 @@ export interface TerminalMonitorResponse {
     uptimeSeconds: number;
   };
   cpu: {
+    perCore?: Array<{ name: string; usagePercent: number }>;
     usagePercent: number;
     load1: number;
     load5: number;

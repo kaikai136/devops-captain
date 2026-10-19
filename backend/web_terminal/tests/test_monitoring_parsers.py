@@ -43,6 +43,7 @@ tmpfs tmpfs 1024 0 1024 0% /run
                 },
                 "cpu": {
                     "usagePercent": 30.0, "cores": 1, "load1": 0.1,
+                    "perCore": [{"name": "cpu0", "usagePercent": 30.0}],
                     "load5": 0.2, "load15": 0.3,
                 },
                 "memory": {
