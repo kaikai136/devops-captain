@@ -36,6 +36,20 @@ function setup(refreshIntervalSeconds = ref(10)) {
 }
 
 describe('host monitor', () => {
+  it('stops only the closed host scope while other open hosts keep polling', async () => {
+    const first = setup();
+    const second = setup();
+    await vi.advanceTimersByTimeAsync(10000);
+    expect(first.api.monitor).toHaveBeenCalledTimes(2);
+    expect(second.api.monitor).toHaveBeenCalledTimes(2);
+    first.scope.stop();
+    await vi.advanceTimersByTimeAsync(30000);
+    expect(first.api.monitor).toHaveBeenCalledTimes(2);
+    expect(second.api.monitor).toHaveBeenCalledTimes(5);
+    second.scope.stop();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it('formats bytes, root disk and uptime without fabricating missing values', () => {
     expect(formatMonitorBytes(undefined)).toBe('--');
     expect(formatMonitorBytes(1024)).toBe('1.0 KiB');
@@ -117,7 +131,7 @@ describe('host monitor', () => {
     expect(api.monitor).toHaveBeenCalledTimes(3);
   });
 
-  it('does not restart polling when the interval changes while locked or hidden', async () => {
+  it('does not restart polling when the interval changes while locked', async () => {
     const refreshIntervalSeconds = ref(10);
     const { state, api, enabled, scope } = setup(refreshIntervalSeconds);
     await vi.advanceTimersByTimeAsync(0);
@@ -143,25 +157,27 @@ describe('host monitor', () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
-  it('pauses while hidden or locked and cleans listeners and pending requests', async () => {
+  it('keeps polling while hidden, pauses while locked and stops on disposal', async () => {
     const { enabled, api, scope, state, document, listeners } = setup();
     await vi.advanceTimersByTimeAsync(0);
     document.visibilityState = 'hidden';
-    listeners.get('visibilitychange')!();
+    listeners.get('visibilitychange')?.();
     await nextTick();
     await vi.advanceTimersByTimeAsync(20000);
-    expect(api.monitor).toHaveBeenCalledTimes(1);
+    expect(api.monitor).toHaveBeenCalledTimes(3);
     document.visibilityState = 'visible';
-    listeners.get('visibilitychange')!();
+    listeners.get('visibilitychange')?.();
     await nextTick();
     await vi.advanceTimersByTimeAsync(0);
-    expect(api.monitor).toHaveBeenCalledTimes(2);
+    expect(api.monitor).toHaveBeenCalledTimes(3);
     enabled.value = false;
     await nextTick();
     expect(state.active.value).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
     scope.stop();
-    expect(document.removeEventListener).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(api.monitor).toHaveBeenCalledTimes(3);
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('does not overlap requests or commit stale responses from another host', async () => {

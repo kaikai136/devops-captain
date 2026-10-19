@@ -51,6 +51,10 @@ const allHostExportColumnsSelected = computed(() => selectedHostExportColumns.va
 const dashboardPageRef = ref<DashboardPageExpose | null>(null);
 const isDashboardRefreshing = ref(false);
 const databaseTransferCenterOpen = ref(false);
+const hostManagerOpened = ref(false);
+watch(() => appState.activeTool.value, (tool) => {
+  if (tool === 'hosts') hostManagerOpened.value = true;
+}, { immediate: true });
 
 const {
   activeTool,
@@ -436,12 +440,12 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
 
       <section class="workspace-body">
         <template v-if="!isLocked || hasWorkspaceDataLoaded">
+          <HostManager v-if="hostManagerOpened" v-show="activeTool === 'hosts'" />
           <Transition name="fade-transform" mode="out-in" appear>
             <div :key="activeTool" class="workspace-tool-view">
               <DashboardPage v-if="activeTool === 'dashboard'" ref="dashboardPageRef" />
               <IpScanner v-else-if="activeTool === 'ip'" />
               <DatabaseManagementPanel v-else-if="activeTool === 'databaseManagement'" />
-              <HostManager v-else-if="activeTool === 'hosts'" />
               <SessionAuditManager v-else-if="activeTool === 'sessionAudits'" />
               <BulkExecutionPanel v-else-if="activeTool === 'bulkExecution'" />
               <ApplicationMarketPanel v-else-if="activeTool === 'applicationMarket'" />

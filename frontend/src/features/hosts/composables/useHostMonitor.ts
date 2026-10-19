@@ -47,9 +47,8 @@ export function useHostMonitor(
   const error = ref('');
   const containerError = ref('');
   const updatedAt = ref<number | null>(null);
-  const visible = ref(typeof document === 'undefined' || document.visibilityState !== 'hidden');
   const supported = computed(() => !String(host.value.os || '').toLowerCase().includes('windows'));
-  const active = computed(() => enabled.value && visible.value && supported.value);
+  const active = computed(() => enabled.value && supported.value);
   let monitorTimer: ReturnType<typeof setTimeout> | null = null;
   let containerTimer: ReturnType<typeof setTimeout> | null = null;
   let monitorController: AbortController | null = null;
@@ -160,11 +159,8 @@ export function useHostMonitor(
     }
     if (active.value) { void refresh(); void refreshContainers(); }
   }, { immediate: true });
-  function onVisibility() { visible.value = document.visibilityState !== 'hidden'; }
-  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', onVisibility);
   onScopeDispose(() => {
     stop();
-    if (typeof document !== 'undefined') document.removeEventListener('visibilitychange', onVisibility);
   });
   async function reload() {
     stop();

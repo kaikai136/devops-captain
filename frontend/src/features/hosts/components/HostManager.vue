@@ -689,7 +689,7 @@ function hostPlatformType(value: string | null | undefined) {
 </script>
 
 <template>
-  <section v-if="activeTool === 'hosts'" class="host-manager-page host-manager-with-tabs" :class="{ fullscreen }" @click="closeHostMenus">
+  <section v-show="activeTool === 'hosts'" class="host-manager-page host-manager-with-tabs" :class="{ fullscreen }" @click="closeHostMenus">
     <nav v-if="canUseHostList" class="host-workspace-tabs" aria-label="主机工作区标签">
       <el-button :type="detailHostId === null ? 'primary' : 'default'" :plain="detailHostId !== null" @click="detailHostId = null">主机列表</el-button>
       <div v-for="host in detailHosts" :key="host.id" class="host-workspace-tab">
@@ -697,7 +697,9 @@ function hostPlatformType(value: string | null | undefined) {
         <el-button text :aria-label="`关闭 ${host.name} 详情`" @click.stop="closeHostDetail(host.id)"><AppIcon name="x" :size="14" /></el-button>
       </div>
     </nav>
-    <HostDetail v-if="selectedDetail && canUsePageAction('hosts', 'terminal')" :key="selectedDetail.id" :host="selectedDetail" @terminal="openSimpleHostTerminal" />
+    <template v-if="canUsePageAction('hosts', 'terminal')">
+      <HostDetail v-for="host in detailHosts" v-show="detailHostId === host.id" :key="host.id" :host="host" @terminal="openSimpleHostTerminal" />
+    </template>
     <template v-if="canUseHostAnyAction">
     <HostGroupTree
       v-if="canUseHostList"

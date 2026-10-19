@@ -31,7 +31,11 @@ describe('host detail UI contract', () => {
   it('keeps the list mounted and offers permission-gated public/private IP entrypoints', () => {
     expect(manager).toContain('v-show="!selectedDetail"');
     expect(manager).toContain('@open-detail="openHostDetail"');
-    expect(manager).toContain(':key="selectedDetail.id"');
+    expect(manager).toContain('v-for="host in detailHosts" v-show="detailHostId === host.id" :key="host.id"');
+    expect(manager).not.toContain('v-if="selectedDetail');
+    const app = readFileSync(new URL('../../../../App.vue', import.meta.url), 'utf8');
+    expect(app).toContain('<HostManager v-if="hostManagerOpened" v-show="activeTool === \'hosts\'" />');
+    expect(app).not.toContain('<HostManager v-else-if=');
     expect(manager).toContain('host-workspace-tabs');
     expect(table).toContain('host.publicIp && props.canOpenTerminal');
     expect(table).toContain('查看主机 ${host.name} IP ${host.privateIp} 的监控');
