@@ -10,7 +10,6 @@ urlpatterns = [
     path("web-terminal/sessions/<uuid:session_id>/rdp-recording/", views.terminal_rdp_recording),
     path("web-terminal/session-audits/", views.session_audits),
     path("web-terminal/file-audits/", views.terminal_file_audits),
-    path("web-terminal/ssh-gateway/connection-info/", views.ssh_gateway_connection_info),
     path("web-terminal/quick-commands/", views.terminal_quick_commands),
     path("web-terminal/quick-commands/reorder/", views.terminal_quick_commands_reorder),
     path("web-terminal/quick-commands/<int:command_id>/", views.terminal_quick_command_detail),

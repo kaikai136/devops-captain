@@ -52,27 +52,6 @@ export interface TerminalFileListResponse {
   };
 }
 
-export interface SshGatewayConnectionInfo {
-  enabled: boolean;
-  listen: {
-    host: string;
-    port: number;
-  };
-  public: {
-    host: string;
-    port: number;
-  };
-  hostKeyPath: string;
-  commands: {
-    sshMenu: string;
-    sshDirect: string;
-    sftpMenu: string;
-    sftpDirect: string;
-    scpUpload: string;
-    scpDownload: string;
-  };
-  host?: TerminalHost;
-}
 
 export interface TerminalFileAudit {
   id: number;

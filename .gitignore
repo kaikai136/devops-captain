@@ -28,6 +28,7 @@ pnpm-debug.log*
 *.log
 .codex-logs/
 /data/
+/deploy/data/
 /backend/data/
 /media/
 /rdp_recordings/

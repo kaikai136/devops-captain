@@ -1,149 +1,68 @@
 apiVersion: apps/v1
 kind: Deployment
-metadata:
-  name: devops-tools-app
-  namespace: default
-  labels:
-    app: devops-tools
-    component: app
+metadata: {name: devops-tools-app}
 spec:
-  # SQLite remains single-writer; Redis carries cross-process transfer events.
   replicas: 1
-  strategy:
-    type: Recreate
+  strategy: {type: Recreate}
   selector:
-    matchLabels:
-      app: devops-tools
-      component: app
+    matchLabels: {app: devops-tools}
   template:
     metadata:
-      labels:
-        app: devops-tools
-        component: app
+      labels: {app: devops-tools}
     spec:
-      # nodeSelector:
-      #   kubernetes.io/hostname: k8svip-161
-      # tolerations:
-      #   - key: node-role.kubernetes.io/control-plane
-      #     operator: Exists
-      #     effect: NoSchedule
-      #   - key: node-role.kubernetes.io/master
-      #     operator: Exists
-      #     effect: NoSchedule
-      imagePullSecrets:
-        - name: my-harbor
       initContainers:
         - name: migrate
-          image: harbor.xunsiya.com:7891/devops/devops-tools:latest
-          imagePullPolicy: IfNotPresent
-          command:
-            - /bin/sh
-            - -c
-            - |
-              set -e
-              mkdir -p /app/config /app/data /app/media /app/recordings
-              python manage.py migrate --noinput
-          volumeMounts:
-            - name: runtime
-              mountPath: /app
-            - name: app-config
-              mountPath: /app/config/app.conf
-              subPath: app.conf
-              readOnly: true
-          resources:
-            requests:
-              memory: "256Mi"
-              cpu: "100m"
-            limits:
-              memory: "1Gi"
-              cpu: "500m"
-      containers:
-        - name: app
-          image: harbor.xunsiya.com:7891/devops/devops-tools:latest
-          imagePullPolicy: IfNotPresent
+          image: devops-tools-backend:latest
+          args: ["true"]
           env:
-            - name: RUN_MIGRATE
-              value: "0"
-            - name: RUN_COLLECTSTATIC
-              value: "0"
-          ports:
-            - name: http
-              containerPort: 8001
-              protocol: TCP
+            - {name: APP_CONFIG_FILE, value: /etc/devops-tools/app.conf}
+            - {name: REDIS_CONFIG_FILE, value: /etc/devops-tools/redis.conf}
+            - {name: RUN_MIGRATE, value: "1"}
+            - {name: RUN_COLLECTSTATIC, value: "1"}
           volumeMounts:
-            - name: runtime
-              mountPath: /app
-            - name: app-config
-              mountPath: /app/config/app.conf
-              subPath: app.conf
-              readOnly: true
-            - name: redis-config
-              mountPath: /app/config/redis.conf
-              subPath: redis.conf
-              readOnly: true
-          resources:
-            requests:
-              memory: "512Mi"
-              cpu: "200m"
-            limits:
-              memory: "1Gi"
-              cpu: "500m"
-          startupProbe:
-            httpGet:
-              path: /api/health/
-              port: http
-            periodSeconds: 5
-            timeoutSeconds: 3
-            failureThreshold: 30
-          livenessProbe:
-            httpGet:
-              path: /api/health/
-              port: http
-            periodSeconds: 20
-            timeoutSeconds: 5
-            failureThreshold: 6
+            - {name: data, mountPath: /data}
+            - {name: config, mountPath: /etc/devops-tools, readOnly: true}
+      containers:
+        - name: backend
+          image: devops-tools-backend:latest
+          env:
+            - {name: APP_CONFIG_FILE, value: /etc/devops-tools/app.conf}
+            - {name: REDIS_CONFIG_FILE, value: /etc/devops-tools/redis.conf}
+            - {name: RUN_MIGRATE, value: "0"}
+            - {name: RUN_COLLECTSTATIC, value: "0"}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: config, mountPath: /etc/devops-tools, readOnly: true}
+          ports: [{containerPort: 8000}]
           readinessProbe:
-            httpGet:
-              path: /api/health/
-              port: http
-            periodSeconds: 10
-            timeoutSeconds: 3
-            failureThreshold: 3
-
+            httpGet: {path: /api/health/, port: 8000}
+          startupProbe:
+            httpGet: {path: /api/health/, port: 8000}
+            failureThreshold: 30
+            periodSeconds: 5
         - name: transfer-worker
-          image: harbor.xunsiya.com:7891/devops/devops-tools:latest
-          imagePullPolicy: IfNotPresent
-          command: ["python", "manage.py", "run_database_transfer_worker", "--poll-interval", "1"]
+          image: devops-tools-backend:latest
+          args: ["python", "manage.py", "run_database_transfer_worker", "--poll-interval", "1"]
+          env:
+            - {name: APP_CONFIG_FILE, value: /etc/devops-tools/app.conf}
+            - {name: REDIS_CONFIG_FILE, value: /etc/devops-tools/redis.conf}
+            - {name: RUN_MIGRATE, value: "0"}
+            - {name: RUN_COLLECTSTATIC, value: "0"}
           volumeMounts:
-            - name: runtime
-              mountPath: /app
-            - name: app-config
-              mountPath: /app/config/app.conf
-              subPath: app.conf
-              readOnly: true
-            - name: redis-config
-              mountPath: /app/config/redis.conf
-              subPath: redis.conf
-              readOnly: true
-
+            - {name: data, mountPath: /data}
+            - {name: config, mountPath: /etc/devops-tools, readOnly: true}
+        - name: frontend
+          image: devops-tools-frontend:latest
+          ports: [{containerPort: 80}]
+          volumeMounts:
+            - {name: data, mountPath: /srv/devops-static, subPath: static, readOnly: true}
+            - {name: config, mountPath: /etc/nginx/conf.d/default.conf, subPath: nginx.conf, readOnly: true}
+          readinessProbe:
+            httpGet: {path: /, port: 80}
+        - name: guacd
+          image: guacamole/guacd:1.5.5
       volumes:
-
-        # - name: runtime
-        #   hostPath:
-        #     path: /data/devops-tools
-        #     type: DirectoryOrCreate
-        - name: runtime
-          persistentVolumeClaim:
-            claimName: devops-tools-runtime-pvc
-        - name: app-config
-          configMap:
-            name: devops-tools-config
-            items:
-              - key: app.conf
-                path: app.conf
-        - name: redis-config
-          configMap:
-            name: devops-tools-config
-            items:
-              - key: redis.conf
-                path: redis.conf
+        - name: data
+          persistentVolumeClaim: {claimName: devops-tools-data}
+        - name: config
+          configMap: {name: devops-tools-config}

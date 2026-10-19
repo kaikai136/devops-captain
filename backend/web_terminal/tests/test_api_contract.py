@@ -28,8 +28,7 @@ ENDPOINTS = [
         ("get",),
     ),
     ("sessions", "session_audits", "/api/web-terminal/session-audits/", ("get",)),
-    ("gateway", "terminal_file_audits", "/api/web-terminal/file-audits/", ("get",)),
-    ("gateway", "ssh_gateway_connection_info", "/api/web-terminal/ssh-gateway/connection-info/", ("get",)),
+    ("file_audits", "terminal_file_audits", "/api/web-terminal/file-audits/", ("get",)),
     ("sessions", "terminal_quick_commands", "/api/web-terminal/quick-commands/", ("get", "post")),
     (
         "sessions",

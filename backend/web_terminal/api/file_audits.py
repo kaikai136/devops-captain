@@ -1,35 +1,11 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from accounts.permissions import require_feature_permission
 from operations.responses import bad_request, paginate_queryset
 
-from ..gateway.assets import GatewayAssetError, resolve_gateway_host
-from ..gateway.config import gateway_connection_info
 from ..models import TerminalFileAudit
 from ..serializers import TerminalFileAuditSerializer
-from ..services import host_payload
 from .common import session_audit_permission_required
-
-
-@api_view(["GET"])
-def ssh_gateway_connection_info(request):
-    permission_error = require_feature_permission(request, "hosts", "terminal", "没有 SSH 网关权限")
-    if permission_error:
-        return permission_error
-
-    host = None
-    raw_host_id = request.query_params.get("host")
-    if raw_host_id not in (None, "", "null"):
-        try:
-            host = resolve_gateway_host(request.user, int(raw_host_id))
-        except (TypeError, ValueError, GatewayAssetError) as error:
-            return bad_request(error)
-
-    payload = gateway_connection_info(request.user.username, host_id=host.id if host else None, request=request)
-    if host is not None:
-        payload["host"] = host_payload(host)
-    return Response(payload)
 
 
 @api_view(["GET"])

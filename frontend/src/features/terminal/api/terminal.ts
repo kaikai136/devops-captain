@@ -7,18 +7,12 @@ import type {
   TerminalGroup,
   TerminalMonitorResponse,
   TerminalQuickCommand,
-  SshGatewayConnectionInfo,
 } from '../types';
 
 const terminalBaseUrl = '/api/web-terminal';
 
 export function listTerminalTree() {
   return apiGet<TerminalGroup[]>(`${terminalBaseUrl}/tree/`);
-}
-
-export function getSshGatewayConnectionInfo(hostId?: number) {
-  const query = hostId ? `?${new URLSearchParams({ host: String(hostId) }).toString()}` : '';
-  return apiGet<SshGatewayConnectionInfo>(`${terminalBaseUrl}/ssh-gateway/connection-info/${query}`);
 }
 
 export function listTerminalFileAudits(params: Record<string, string | number | undefined> = {}) {

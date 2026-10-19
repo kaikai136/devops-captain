@@ -18,7 +18,7 @@ class TerminalConnectionCharacterizationTests(SimpleTestCase):
             "private_key": "",
             "public_ip": "203.0.113.10",
             "private_ip": "10.0.0.8",
-            "port": 2222,
+            "port": 22022,
         }
         values.update(overrides)
         return SimpleNamespace(**values)
@@ -47,7 +47,7 @@ class TerminalConnectionCharacterizationTests(SimpleTestCase):
         client.set_missing_host_key_policy.assert_called_once_with("auto-add-policy")
         client.connect.assert_called_once_with(
             hostname="203.0.113.10",
-            port=2222,
+            port=22022,
             username="root",
             password="secret",
             pkey=None,
@@ -80,7 +80,7 @@ class TerminalConnectionCharacterizationTests(SimpleTestCase):
         self.assertIs(result, client)
         client.connect.assert_called_once_with(
             hostname="203.0.113.10",
-            port=2222,
+            port=22022,
             username="root",
             password="secret",
             pkey=None,

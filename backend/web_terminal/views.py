@@ -25,7 +25,7 @@ from .api.files import (
 from .api.monitoring import terminal_monitor
 from .api.containers import terminal_containers, terminal_container_action, terminal_container_logs
 from .api.recordings import terminal_rdp_recording, terminal_session_recording
-from .api.gateway import ssh_gateway_connection_info, terminal_file_audits
+from .api.file_audits import terminal_file_audits
 from .api.sessions import (
     next_quick_command_sort_order,
     quick_command_queryset,
@@ -74,6 +74,5 @@ __all__ = [
     "terminal_rdp_recording",
     "terminal_session_recording",
     "terminal_sessions",
-    "ssh_gateway_connection_info",
     "terminal_tree",
 ]

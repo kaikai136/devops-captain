@@ -37,8 +37,8 @@ class ExtendedMonitorTests(SimpleTestCase):
         self.assertEqual(payload["management"]["dnsServers"], ["1.1.1.1", "8.8.8.8"])
         self.assertEqual(payload["network"][0]["rxBytes"], 4072)
         with patch("web_terminal.services.monitoring.run_one_shot_ssh_command", return_value=output):
-            result = get_remote_resource_monitor(SimpleNamespace(port=2222))
-        self.assertEqual(result["management"]["sshPort"], 2222)
+            result = get_remote_resource_monitor(SimpleNamespace(port=22022))
+        self.assertEqual(result["management"]["sshPort"], 22022)
 
     def test_missing_optional_fields_do_not_break_monitor(self):
         output = test_monitoring_parsers.MonitoringParserCharacterizationTests.monitor_output + "SECTION:details\n"

@@ -10,7 +10,7 @@ from rest_framework.response import Response
 from operations.responses import bad_request, get_object_or_error
 from host_management.models import ManagedHost
 
-from ..gateway.audit import record_file_audit
+from ..services.file_audit import record_file_audit
 from ..services import (
     TerminalConnectionError,
     create_remote_directory,

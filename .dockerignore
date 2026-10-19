@@ -18,6 +18,7 @@ frontend/dist/
 frontend/.vite/
 
 data/
+deploy/data/
 media/
 *.log
 

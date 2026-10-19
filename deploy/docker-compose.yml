@@ -1,85 +1,74 @@
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: devops-tools-redis
+  backend:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    image: devops-tools-backend:latest
     restart: unless-stopped
+    expose:
+      - "8000"
     volumes:
-      - redis-data:/data
-
-  migrate:
-    image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools:v2.1.2-local-cache-cwdhook
-    container_name: devops-tools-migrate
-    restart: "no"
-    init: true
-
-    working_dir: /opt/devops-tools
-
-    command:
-      - /bin/sh
-      - -c
-      - |
-        set -e
-        mkdir -p /app/config /app/data /app/media /app/recordings
-        python manage.py migrate --noinput
-
-    volumes:
-      - ./data:/app
-      - ./config/redis.conf:/app/config/redis.conf:ro
-
-
-  app:
-    image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools:v2.1.2-local-cache-cwdhook
-    container_name: devops-tools
-    restart: unless-stopped
-    init: true
-
+      - ./config/app.conf:/etc/devops-tools/app.conf:ro
+      - ./config/redis.conf:/etc/devops-tools/redis.conf:ro
+      - ./data:/data
+    environment:
+      APP_CONFIG_FILE: /etc/devops-tools/app.conf
+      REDIS_CONFIG_FILE: /etc/devops-tools/redis.conf
+      RUN_MIGRATE: "1"
+      RUN_COLLECTSTATIC: "1"
     depends_on:
-      migrate:
-        condition: service_completed_successfully
       redis:
         condition: service_started
-
-    environment:
-      RUN_MIGRATE: "0"
-      RUN_COLLECTSTATIC: "0"
-      DJANGO_CSRF_TRUSTED_ORIGINS: "http://172.16.0.99:8088"
-
-      SSH_GATEWAY_PUBLIC_HOST: "172.16.0.99"
-      SSH_GATEWAY_PUBLIC_PORT: "2222"
-
-    ports:
-      - "8088:8001"
-      - "2222:2222"
-
-    volumes:
-      - ./data:/app
-      - ./config/redis.conf:/app/config/redis.conf:ro
-
+      guacd:
+        condition: service_started
     healthcheck:
-      test:
-        - CMD-SHELL
-        - curl -fsS http://127.0.0.1:8001/api/health/ >/dev/null || exit 1
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health/"]
       interval: 30s
       timeout: 5s
       retries: 5
       start_period: 30s
 
-  transfer-worker:
-    image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools:v2.1.2-local-cache-cwdhook
-    container_name: devops-tools-transfer-worker
+  frontend:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+    image: devops-tools-frontend:latest
     restart: unless-stopped
-    init: true
     depends_on:
-      migrate:
-        condition: service_completed_successfully
-      redis:
-        condition: service_started
-    environment:
-      RUN_MIGRATE: "0"
-    command: python manage.py run_database_transfer_worker --poll-interval 1
+      backend:
+        condition: service_healthy
+    ports:
+      - "8088:80"
     volumes:
-      - ./data:/app
-      - ./config/redis.conf:/app/config/redis.conf:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./data/static:/srv/devops-static:ro
+
+  transfer-worker:
+    image: devops-tools-backend:latest
+    restart: unless-stopped
+    command: ["python", "manage.py", "run_database_transfer_worker", "--poll-interval", "1"]
+    environment:
+      APP_CONFIG_FILE: /etc/devops-tools/app.conf
+      REDIS_CONFIG_FILE: /etc/devops-tools/redis.conf
+      RUN_MIGRATE: "0"
+      RUN_COLLECTSTATIC: "0"
+    volumes:
+      - ./config/app.conf:/etc/devops-tools/app.conf:ro
+      - ./config/redis.conf:/etc/devops-tools/redis.conf:ro
+      - ./data:/data
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+
+  guacd:
+    image: guacamole/guacd:1.5.5
+    restart: unless-stopped
 
 volumes:
   redis-data:

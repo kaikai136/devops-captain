@@ -25,7 +25,7 @@ class BulkExecutionApiTests(TestCase):
             name="linux-ok",
             group=self.group,
             private_ip="10.0.0.11",
-            port=2222,
+            port=22022,
             login_user="root",
             login_password="secret",
             verified=True,
@@ -89,7 +89,7 @@ class BulkExecutionApiTests(TestCase):
         self.assertEqual(payload[0]["name"], "linux-ok")
         self.assertEqual(payload[0]["groupName"], "prod")
         self.assertEqual(payload[0]["privateIp"], "10.0.0.11")
-        self.assertEqual(payload[0]["port"], 2222)
+        self.assertEqual(payload[0]["port"], 22022)
         self.assertEqual(payload[0]["loginUser"], "root")
 
     def test_target_tree_requires_execute_permission(self):

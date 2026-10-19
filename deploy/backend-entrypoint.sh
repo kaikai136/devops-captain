@@ -1,9 +1,9 @@
 #!/usr/bin/env sh
 set -eu
 
-mkdir -p /app/config /app/data /app/media /app/recordings
+mkdir -p /data/config /data/data /data/media /data/recordings
 
-APP_CONFIG_FILE="${APP_CONFIG_FILE:-/app/config/app.conf}"
+APP_CONFIG_FILE="${APP_CONFIG_FILE:-/etc/devops-tools/app.conf}"
 
 if [ ! -f "$APP_CONFIG_FILE" ]; then
   echo "Missing config file: $APP_CONFIG_FILE" >&2
@@ -77,7 +77,7 @@ PY
 
 SECRET_KEY_FILE="$(read_config_value DJANGO_SECRET_KEY_FILE)"
 if [ -z "$SECRET_KEY_FILE" ]; then
-  SECRET_KEY_FILE="/app/data/django-secret-key"
+  SECRET_KEY_FILE="/data/data/django-secret-key"
 fi
 
 CONFIG_SECRET_KEY="$(read_config_value DJANGO_SECRET_KEY)"
@@ -110,7 +110,7 @@ wait_for_database
 # RUN_MIGRATE / RUN_COLLECTSTATIC let callers skip these steps.
 # Defaults keep the docker-compose flow unchanged (both run). In Kubernetes
 # migrations run in a dedicated initContainer and static files are baked into
-# the image, so the app/gateway containers set both to 0.
+# the image, so the app/worker containers set both to 0.
 RUN_MIGRATE="${RUN_MIGRATE:-1}"
 RUN_COLLECTSTATIC="${RUN_COLLECTSTATIC:-1}"
 

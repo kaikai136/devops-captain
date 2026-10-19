@@ -2,7 +2,6 @@ from contextlib import nullcontext
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-import asyncssh
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group, Permission
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -10,7 +9,6 @@ from django.test import SimpleTestCase, TestCase
 
 from host_management.models import HostGroup, ManagedHost
 from system_management.services import FEATURE_PERMISSION_CODE_BY_KEY, PAGE_ACTION_PERMISSION_CODE_BY_KEY, ensure_feature_permissions
-from web_terminal.gateway.server import RemoteSFTPFile
 from web_terminal.models import TerminalFileAudit
 from web_terminal.services import (
     borrow_sftp_client,
@@ -219,39 +217,3 @@ class MultipartUploadApiTests(TestCase):
         self.assertEqual(audit.path, "/srv/folder/report.txt")
         self.assertEqual(audit.size, 9)
         self.assertEqual(audit.protocol, "sftp")
-
-
-class GatewayTransferAuditTests(SimpleTestCase):
-    def test_remote_sftp_file_records_one_read_audit_on_close(self):
-        class RemoteFile:
-            def __init__(self):
-                self.data = b"abcdef"
-
-            def seek(self, offset):
-                self.offset = offset
-
-            def read(self, size):
-                return self.data[self.offset:self.offset + size]
-
-            def close(self):
-                pass
-
-        remote_file = RemoteFile()
-        sftp = MagicMock()
-        sftp.open.return_value = remote_file
-        client = MagicMock()
-        client.open_sftp.return_value = sftp
-
-        with patch("web_terminal.gateway.server.open_ssh_client", return_value=client), patch(
-            "web_terminal.gateway.server.record_file_audit"
-        ) as record:
-            handle = RemoteSFTPFile(object(), None, "/tmp/data.bin", asyncssh.FXF_READ)
-            self.assertEqual(handle.read(0, 3), b"abc")
-            self.assertEqual(handle.read(3, 3), b"def")
-            handle.close()
-
-        record.assert_called_once()
-        self.assertEqual(record.call_args.kwargs["operation"], "read")
-        self.assertEqual(record.call_args.kwargs["path"], "/tmp/data.bin")
-        self.assertEqual(record.call_args.kwargs["size"], 6)
-        self.assertEqual(record.call_args.kwargs["status"], "success")

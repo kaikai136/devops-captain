@@ -1,12 +1,9 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: devops-tools-runtime-pvc
-  namespace: default
+  name: devops-tools-data
 spec:
-  storageClassName: storage
-  accessModes:
-    - ReadWriteMany
+  accessModes: [ReadWriteOnce]
   resources:
     requests:
       storage: 10Gi
