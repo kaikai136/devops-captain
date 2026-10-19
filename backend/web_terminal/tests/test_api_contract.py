@@ -1,10 +1,13 @@
-﻿from importlib import import_module
+from importlib import import_module
 from django.test import TestCase
 
 from web_terminal import views
 
 
 ENDPOINTS = [
+    ("containers", "terminal_images", "/api/web-terminal/hosts/1/images/", ("post",)),
+    ("containers", "terminal_networks", "/api/web-terminal/hosts/1/networks/", ("post",)),
+    ("containers", "terminal_volumes", "/api/web-terminal/hosts/1/volumes/", ("post",)),
     ("files", "terminal_file_content", "/api/web-terminal/hosts/1/files/content/", ("get",)),
     ("files", "terminal_file_content_update", "/api/web-terminal/hosts/1/files/content/update/", ("post",)),
     ("sessions", "terminal_tree", "/api/web-terminal/tree/", ("get",)),

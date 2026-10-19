@@ -7,6 +7,9 @@ from web_terminal.consumers import RdpTerminalConsumer, TerminalConsumer
 
 
 EXPECTED_HTTP_ROUTES = [
+    ("web-terminal/hosts/<int:host_id>/images/", None, "terminal_images", "view"),
+    ("web-terminal/hosts/<int:host_id>/networks/", None, "terminal_networks", "view"),
+    ("web-terminal/hosts/<int:host_id>/volumes/", None, "terminal_volumes", "view"),
     ("web-terminal/tree/", None, "terminal_tree", "view"),
     ("web-terminal/sessions/", None, "terminal_sessions", "view"),
     (

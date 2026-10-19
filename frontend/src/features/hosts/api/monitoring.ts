@@ -18,17 +18,34 @@ export interface HostContainer {
 
 export type ContainerAction = 'start' | 'stop' | 'restart';
 export interface HostContainers { available: boolean; containers: HostContainer[]; reason?: string }
+export interface DockerImage {
+  id: string;
+  repositories: string[];
+  tags: string[];
+  references?: string[];
+  createdAt: string;
+  size: string;
+  diskUsage?: string;
+  contentSize?: string;
+  extra?: string;
+}
+export interface DockerImages { available: boolean; images: DockerImage[]; total: number; reason?: string }
+export interface DockerNetworks { available: boolean; networks: Array<{ id: string; name: string; driver: string; scope: string }>; total: number; reason?: string }
+export interface DockerVolumes { available: boolean; volumes: Array<{ name: string; driver: string }>; total: number; reason?: string }
 
-const base = (hostId: number) => `/api/web-terminal/hosts/${hostId}/containers/`;
+const base = (hostId: number) => `/api/web-terminal/hosts/${hostId}`;
 export const getHostMonitor = getTerminalMonitor;
 export function getHostContainers(hostId: number, options: RequestInit = {}) {
-  return apiPost<HostContainers>(base(hostId), {}, options);
+  return apiPost<HostContainers>(`${base(hostId)}/containers/`, {}, options);
 }
+export function getDockerImages(hostId: number, options: RequestInit = {}) { return apiPost<DockerImages>(`${base(hostId)}/images/`, {}, options); }
+export function getDockerNetworks(hostId: number, options: RequestInit = {}) { return apiPost<DockerNetworks>(`${base(hostId)}/networks/`, {}, options); }
+export function getDockerVolumes(hostId: number, options: RequestInit = {}) { return apiPost<DockerVolumes>(`${base(hostId)}/volumes/`, {}, options); }
 export function controlHostContainer(hostId: number, containerId: string, action: ContainerAction) {
-  return apiPost<{ success: boolean }>(`${base(hostId)}action/`, { containerId, action });
+  return apiPost<{ success: boolean }>(`${base(hostId)}/containers/action/`, { containerId, action });
 }
 export function getHostContainerLogs(hostId: number, containerId: string, tail = 200, options: RequestInit = {}) {
-  return apiPost<{ logs: string; truncated: boolean }>(`${base(hostId)}logs/`, { containerId, tail }, options);
+  return apiPost<{ logs: string; truncated: boolean }>(`${base(hostId)}/containers/logs/`, { containerId, tail }, options);
 }
 
 export function containerTerminalUrl(hostId: number, containerId: string) {

@@ -10,6 +10,7 @@ from system_management.models import OperationLog
 from web_terminal.models import TerminalCommandAudit
 from web_terminal.consumers.ssh import TerminalConsumer
 from web_terminal.services import TerminalConnectionError
+from web_terminal.services.docker_resources import get_remote_docker_resources, parse_docker_resources
 from web_terminal.services.containers import (
     MAX_LOG_BYTES, container_action_command, container_terminal_command,
     get_remote_containers, parse_docker_containers, read_bounded_logs,
@@ -47,6 +48,51 @@ class ExtendedMonitorTests(SimpleTestCase):
         self.assertIsNone(payload["management"]["bbrEnabled"])
         self.assertEqual(payload["system"]["cpuModel"], "-")
 
+
+class DockerResourceServiceTests(SimpleTestCase):
+    def test_image_references_preserve_repository_tag_pairs(self):
+        records = [
+            {"ID": "sha256:abc", "Repository": "registry:5000/first", "Tag": "v1", "Size": "20MB"},
+            {"ID": "sha256:abc", "Repository": "second", "Tag": "v2", "Size": "20MB"},
+            {"ID": "sha256:abc", "Repository": "second", "Tag": "v2", "Size": "20MB"},
+        ]
+        rows = parse_docker_resources("images", "\n".join(json.dumps(record) for record in records))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["references"], ["registry:5000/first:v1", "second:v2"])
+        self.assertEqual(rows[0]["size"], "20MB")
+        self.assertEqual(rows[0]["diskUsage"], "20MB")
+        self.assertEqual(rows[0]["contentSize"], "")
+        self.assertEqual(rows[0]["extra"], "")
+
+    def test_explicit_image_sizes_and_extra_are_not_inferred(self):
+        record = {"ID": "sha256:abc", "Size": "10MB", "DiskUsage": "30MB", "ContentSize": "8MB", "Extra": "U"}
+        row = parse_docker_resources("images", json.dumps(record))[0]
+        self.assertEqual(row["diskUsage"], "30MB")
+        self.assertEqual(row["contentSize"], "8MB")
+        self.assertEqual(row["extra"], "U")
+        missing = parse_docker_resources("images", '{"ID":"missing"}')[0]
+        self.assertEqual(missing["references"], [])
+        for field in ("diskUsage", "contentSize", "extra"):
+            self.assertEqual(missing[field], "")
+
+    @patch("web_terminal.services.docker_resources.run_one_shot_ssh_command", return_value='{"ID":"sha256:abc","Repository":"repo","Tag":"one","CreatedAt":"today","Size":"10MB"}\n{"ID":"sha256:abc","Repository":"repo","Tag":"two","CreatedAt":"today","Size":"10MB"}')
+    def test_images_merge_tags_by_unique_id_and_run_only_requested_command(self, command):
+        rows = get_remote_docker_resources(Mock(), "images")
+        self.assertEqual(rows["total"], 1)
+        self.assertEqual(rows["images"][0]["tags"], ["one", "two"])
+        self.assertIn("docker image ls", command.call_args.args[1])
+
+    def test_empty_and_other_resource_parsers(self):
+        self.assertEqual(parse_docker_resources("networks", ""), [])
+        self.assertEqual(parse_docker_resources("networks", '{"ID":"id","Name":"bridge","Driver":"bridge","Scope":"local"}')[0]["name"], "bridge")
+        self.assertEqual(parse_docker_resources("volumes", '{"Name":"data","Driver":"local"}')[0]["name"], "data")
+
+    @patch("web_terminal.services.docker_resources.run_one_shot_ssh_command", side_effect=TerminalConnectionError("permission denied"))
+    def test_unavailable_docker_does_not_return_a_successful_empty_list(self, command):
+        result = get_remote_docker_resources(Mock(), "volumes")
+        self.assertFalse(result["available"])
+        self.assertEqual(result["total"], 0)
+        self.assertEqual(result["volumes"], [])
 
 class ContainerServiceTests(SimpleTestCase):
     def test_container_and_stats_parser(self):
@@ -131,6 +177,29 @@ class ContainerServiceTests(SimpleTestCase):
 
 
 class HostContainerApiTests(TestCase):
+    @patch("web_terminal.api.containers.get_remote_docker_resources")
+    def test_resource_queries_are_isolated_and_permission_gated(self, resources):
+        for resource in ("images", "networks", "volumes"):
+            resources.return_value = {"available": True, resource: [], "total": 0}
+            url = f"/api/web-terminal/hosts/{self.host.id}/{resource}/"
+            response = self.client.post(url, {}, content_type="application/json")
+            self.assertEqual(response.status_code, 200)
+            resources.assert_called_with(self.host, resource)
+            self.assertEqual(response.json()["total"], 0)
+        resources.reset_mock()
+        self.host.os = "windows"
+        self.host.save(update_fields=["os"])
+        for resource in ("images", "networks", "volumes"):
+            url = f"/api/web-terminal/hosts/{self.host.id}/{resource}/"
+            self.assertEqual(self.client.post(url, {}, content_type="application/json").status_code, 400)
+        resources.assert_not_called()
+        regular = get_user_model().objects.create_user(username="resource-reader", password="pass")
+        self.client.force_login(regular)
+        for resource in ("images", "networks", "volumes"):
+            url = f"/api/web-terminal/hosts/{self.host.id}/{resource}/"
+            self.assertEqual(self.client.post(url, {}, content_type="application/json").status_code, 403)
+        resources.assert_not_called()
+
     def setUp(self):
         self.user = get_user_model().objects.create_superuser(username="host-admin", password="pass", email="")
         self.host = ManagedHost.objects.create(group=HostGroup.objects.create(name="monitor-hosts"), name="node", private_ip="10.0.0.1")

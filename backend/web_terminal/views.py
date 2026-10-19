@@ -23,7 +23,7 @@ from .api.files import (
     terminal_file_transfer,
 )
 from .api.monitoring import terminal_monitor
-from .api.containers import terminal_containers, terminal_container_action, terminal_container_logs
+from .api.containers import terminal_containers, terminal_container_action, terminal_container_logs, terminal_images, terminal_networks, terminal_volumes
 from .api.recordings import terminal_rdp_recording, terminal_session_recording
 from .api.file_audits import terminal_file_audits
 from .api.sessions import (
@@ -68,6 +68,9 @@ __all__ = [
     "terminal_containers",
     "terminal_container_action",
     "terminal_container_logs",
+    "terminal_images",
+    "terminal_networks",
+    "terminal_volumes",
     "terminal_quick_command_detail",
     "terminal_quick_commands",
     "terminal_quick_commands_reorder",

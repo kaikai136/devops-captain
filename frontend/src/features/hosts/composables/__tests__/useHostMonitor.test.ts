@@ -69,7 +69,7 @@ describe('host monitor', () => {
     expect(api.monitor).toHaveBeenCalledTimes(2);
     await vi.advanceTimersByTimeAsync(10000 * 100);
     expect(state.history.value).toHaveLength(90);
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBe(1);
   });
 
   it('uses the selected 10, 15 or 20 second interval for the next poll', async () => {
@@ -101,7 +101,7 @@ describe('host monitor', () => {
     await nextTick();
     await vi.advanceTimersByTimeAsync(10000);
     expect(api.monitor).toHaveBeenCalledTimes(5);
-    expect(vi.getTimerCount()).toBe(2);
+    expect(vi.getTimerCount()).toBe(1);
   });
 
   it('keeps values visible during manual refresh and changes interval without overlapping requests', async () => {
@@ -200,21 +200,17 @@ describe('host monitor', () => {
     expect(api.monitor).toHaveBeenCalledTimes(3);
   });
 
-  it('preserves last values on failures and recovers without resetting history', async () => {
+  it('preserves resource values on failures and recovers without resetting history', async () => {
     const { api, state } = setup();
     await vi.advanceTimersByTimeAsync(0);
     api.monitor.mockRejectedValueOnce(new Error('SSH failed'));
-    api.containers.mockRejectedValueOnce(new Error('Docker failed'));
     await state.refresh();
-    await state.refreshContainers();
     expect(state.error.value).toBe('SSH failed');
-    expect(state.containerError.value).toBe('Docker failed');
     expect(state.snapshot.value).not.toBeNull();
     await state.refresh();
     expect(state.error.value).toBe('');
     expect(state.history.value).toHaveLength(2);
   });
-
   it('does not collect Windows metrics', async () => {
     const { host, state, api } = setup();
     await vi.advanceTimersByTimeAsync(0);
@@ -226,25 +222,12 @@ describe('host monitor', () => {
     expect(api.monitor).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps monitoring responsive while a slow Docker request is pending', async () => {
-    const { state, api } = setup();
-    await vi.advanceTimersByTimeAsync(0);
-    api.containers.mockImplementationOnce(() => new Promise(() => {}));
-    void state.refreshContainers();
-    await vi.advanceTimersByTimeAsync(10000);
-    expect(api.monitor).toHaveBeenCalledTimes(2);
-    expect(state.loading.value).toBe(false);
-    expect(state.containersLoading.value).toBe(true);
-    expect(state.snapshot.value?.cpu.usagePercent).toBe(42);
-  });
-
-  it('refreshes containers less frequently than core host metrics', async () => {
+  it('never requests Docker during resource monitoring or interval refreshes', async () => {
     const { api } = setup();
     await vi.advanceTimersByTimeAsync(30000);
     expect(api.monitor).toHaveBeenCalledTimes(4);
-    expect(api.containers).toHaveBeenCalledTimes(2);
+    expect(api.containers).not.toHaveBeenCalled();
   });
-
   it('shows timeouts without clearing the last successful snapshot', async () => {
     const { state, api } = setup();
     await vi.advanceTimersByTimeAsync(0);

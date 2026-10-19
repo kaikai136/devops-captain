@@ -11,6 +11,7 @@ from ..services.audit import create_command_audit
 from ..services.commands import run_one_shot_ssh_command
 from ..services.containers import container_action_command, get_remote_containers, read_bounded_logs
 from ..services.errors import TerminalConnectionError
+from ..services.docker_resources import get_remote_docker_resources
 from .common import terminal_permission_required
 
 
@@ -72,3 +73,31 @@ def terminal_container_logs(request, host_id):
         return bad_request(error)
     audit_container_operation(request, host, "docker logs", "读取成功", "查看日志")
     return Response(payload)
+
+
+def docker_resource_response(request, host_id, resource):
+    host, error = container_host(host_id)
+    if error is not None:
+        return error
+    try:
+        return Response(get_remote_docker_resources(host, resource))
+    except TerminalConnectionError as error:
+        return bad_request(error)
+
+
+@api_view(["POST"])
+@terminal_permission_required
+def terminal_images(request, host_id):
+    return docker_resource_response(request, host_id, "images")
+
+
+@api_view(["POST"])
+@terminal_permission_required
+def terminal_networks(request, host_id):
+    return docker_resource_response(request, host_id, "networks")
+
+
+@api_view(["POST"])
+@terminal_permission_required
+def terminal_volumes(request, host_id):
+    return docker_resource_response(request, host_id, "volumes")

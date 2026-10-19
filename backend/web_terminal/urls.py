@@ -2,7 +2,11 @@ from django.urls import path
 
 from . import views
 
+
 urlpatterns = [
+    path("web-terminal/hosts/<int:host_id>/images/", views.terminal_images),
+    path("web-terminal/hosts/<int:host_id>/networks/", views.terminal_networks),
+    path("web-terminal/hosts/<int:host_id>/volumes/", views.terminal_volumes),
     path("web-terminal/tree/", views.terminal_tree),
     path("web-terminal/sessions/", views.terminal_sessions),
     path("web-terminal/sessions/<uuid:session_id>/commands/", views.terminal_commands),

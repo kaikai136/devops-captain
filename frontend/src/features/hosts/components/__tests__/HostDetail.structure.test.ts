@@ -10,6 +10,22 @@ const table = readFileSync(new URL('../HostTable.vue', import.meta.url), 'utf8')
 const css = readFileSync(new URL('../../../../styles/tools/host/detail.css', import.meta.url), 'utf8');
 
 describe('host detail UI contract', () => {
+  it('matches Docker image and network screenshot columns', () => {
+    const images = source.slice(source.indexOf(`<el-table v-if="docker.activeTab === 'images'"`), source.indexOf(`<el-table v-if="docker.activeTab === 'networks'"`));
+    const networks = source.slice(source.indexOf(`<el-table v-if="docker.activeTab === 'networks'"`), source.indexOf(`<el-table v-if="docker.activeTab === 'volumes'"`));
+    expect(images).toContain('v-for="column in visibleImageColumns"');
+    expect(images).toContain(':label="column.label"');
+    expect([...networks.matchAll(/label="([^"]+)"/g)].map((match) => match[1])).toEqual(['NETWORK ID', 'NAME', 'DRIVER', 'SCOPE']);
+    expect(images).toContain('v-for="reference in imageReferences(row)"');
+    expect(images).toContain(':title="reference"');
+    expect(images).not.toContain('repositories.join');
+    for (const table of [images, networks]) {
+      expect(table).toContain(':title="row.id"');
+      expect(table).toContain('shortDockerId(row.id)');
+    }
+    expect(images).toContain('dockerField(imageValue(row, column.key))');
+    expect(css).toContain('.host-docker-references { display: flex; flex-direction: column;');
+  });
   it('switches resource views inside a fixed viewport through accessible icon buttons', () => {
     expect(source).toContain('@click="toggleMetric(gauge.icon)"');
     expect(source).toContain(':aria-pressed="detailMetrics.has(gauge.icon)"');
@@ -38,7 +54,10 @@ describe('host detail UI contract', () => {
     expect(source).not.toContain('返回主机列表');
     expect(source).not.toContain('v-loading');
     expect(source).toContain('时间颗粒度');
-    expect(source).toContain('containersLoading && !containers');
+    expect(source).toContain('docker.loading[docker.activeTab] && !dockerData');
+    expect(source).toContain('aria-current');
+    expect(source).toContain('docker.select(tab.key)');
+    expect(source).toContain("'images'");
     expect(source).toContain('最近 15 分钟');
   });
 

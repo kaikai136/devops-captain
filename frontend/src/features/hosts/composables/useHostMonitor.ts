@@ -1,7 +1,7 @@
 import { computed, onScopeDispose, ref, shallowRef, watch, type Ref } from 'vue';
 import type { ManagedHost } from '../types';
 import type { TerminalMonitorResponse } from '../../terminal/types';
-import { getHostContainers, getHostMonitor, type HostContainers } from '../api/monitoring';
+import { getHostMonitor } from '../api/monitoring';
 
 export interface MonitorPoint {
   time: number;
@@ -36,37 +36,27 @@ export function formatUptime(seconds: number | undefined) {
 export function useHostMonitor(
   host: Ref<ManagedHost>,
   enabled: Ref<boolean>,
-  api = { monitor: getHostMonitor, containers: getHostContainers },
+  api = { monitor: getHostMonitor },
   refreshIntervalSeconds: Ref<number> = ref(10),
 ) {
   const snapshot = shallowRef<TerminalMonitorResponse | null>(null);
-  const containers = shallowRef<HostContainers | null>(null);
   const history = shallowRef<MonitorPoint[]>([]);
   const loading = ref(false);
-  const containersLoading = ref(false);
   const error = ref('');
-  const containerError = ref('');
   const updatedAt = ref<number | null>(null);
   const supported = computed(() => !String(host.value.os || '').toLowerCase().includes('windows'));
   const active = computed(() => enabled.value && supported.value);
   let monitorTimer: ReturnType<typeof setTimeout> | null = null;
-  let containerTimer: ReturnType<typeof setTimeout> | null = null;
   let monitorController: AbortController | null = null;
-  let containerController: AbortController | null = null;
   let generation = 0;
 
   function stop() {
     generation += 1;
     if (monitorTimer) clearTimeout(monitorTimer);
-    if (containerTimer) clearTimeout(containerTimer);
     monitorTimer = null;
-    containerTimer = null;
     monitorController?.abort();
-    containerController?.abort();
     monitorController = null;
-    containerController = null;
     loading.value = false;
-    containersLoading.value = false;
   }
 
   async function refresh() {
@@ -115,56 +105,22 @@ export function useHostMonitor(
     if (active.value && !loading.value) monitorTimer = setTimeout(refresh, seconds * 1000);
   });
 
-  async function refreshContainers() {
-    if (!active.value || containersLoading.value) return;
-    if (containerTimer) clearTimeout(containerTimer);
-    containerTimer = null;
-    const current = generation;
-    const hostId = host.value.id;
-    const controller = new AbortController();
-    containerController = controller;
-    let timedOut = false;
-    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, 25000);
-    controller.signal.addEventListener('abort', () => clearTimeout(timeout), { once: true });
-    containersLoading.value = true;
-    try {
-      const data = await api.containers(hostId, { signal: controller.signal });
-      if (current !== generation || controller.signal.aborted) return;
-      containers.value = data;
-      containerError.value = '';
-    } catch (reason) {
-      if (current === generation) {
-        if (timedOut) containerError.value = '容器采集超时，主机监控不受影响';
-        else if (!controller.signal.aborted) containerError.value = (reason as Error).message || '容器服务不可用';
-      }
-    } finally {
-      clearTimeout(timeout);
-      if (current === generation) {
-        containersLoading.value = false;
-        containerController = null;
-        if (active.value) containerTimer = setTimeout(refreshContainers, 30000);
-      }
-    }
-  }
-
   watch([() => host.value.id, () => host.value.os, active], ([hostId, os], previous) => {
     stop();
     if (!previous || hostId !== previous[0] || os !== previous[1]) {
       snapshot.value = null;
-      containers.value = null;
       history.value = [];
       error.value = '';
-      containerError.value = '';
       updatedAt.value = null;
     }
-    if (active.value) { void refresh(); void refreshContainers(); }
+    if (active.value) void refresh();
   }, { immediate: true });
   onScopeDispose(() => {
     stop();
   });
   async function reload() {
     stop();
-    await Promise.all([refresh(), refreshContainers()]);
+    await refresh();
   }
-  return { snapshot, containers, history, loading, containersLoading, error, containerError, updatedAt, supported, active, refresh, refreshContainers, reload };
+  return { snapshot, history, loading, error, updatedAt, supported, active, refresh, reload };
 }
