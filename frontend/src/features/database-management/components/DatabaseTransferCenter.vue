@@ -3,6 +3,8 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { ElMessage, ElNotification } from 'element-plus';
 import { Bell } from '@lucide/vue';
 import { errorMessage } from '@shared/utils/errors';
+import DatabaseExportProgress from './DatabaseExportProgress.vue';
+import DatabaseImportProgress from './DatabaseImportProgress.vue';
 import {
   beginDatabaseTransferUpload, createDatabaseTransfer,
   listDatabaseTransferTasks, uploadDatabaseTransferChunk,
@@ -26,11 +28,18 @@ let mounted = false;
 const notified = new Set<string>();
 
 function onOpenRequest() { emit('update:open', true); }
+function openExportResult(task: DatabaseTransferTask) {
+  emit('update:open', false);
+  window.dispatchEvent(new CustomEvent('database-export:show', { detail: task }));
+}
+function openImportResult(task: DatabaseTransferTask) {
+  emit('update:open', false);
+  window.dispatchEvent(new CustomEvent('database-import:show', { detail: task }));
+}
 async function onExportRequest(event: Event) {
   emit('update:open', true);
   const detail = (event as CustomEvent<Record<string, unknown>>).detail || {};
-  const relational = detail.scope === 'table' || detail.scope === 'database';
-  const payload = { ...detail, direction: 'export', format: relational ? 'sql' : detail.format, scope: detail.scope === 'table' ? 'table' : detail.scope === 'database' ? 'database' : detail.scope };
+  const payload = { ...detail, direction: 'export', scope: detail.scope };
   try { acceptSocketTask(await createDatabaseTransfer(payload)); await refresh(); }
   catch (error) { ElMessage.error(errorMessage(error)); }
 }
@@ -97,6 +106,7 @@ async function uploadFile(file: File, target: Record<string, unknown>) {
   const count = Math.max(1, Math.ceil(file.size / size));
   const task = await beginDatabaseTransferUpload({ ...target, fileName: file.name, chunks: count, totalBytes: file.size });
   acceptSocketTask(task);
+  openImportResult(task);
   for (let index = 0; index < count; index++) {
     const chunk = file.slice(index * size, Math.min(file.size, (index + 1) * size));
     for (let attempt = 0; ; attempt++) {
@@ -113,7 +123,7 @@ function previewObjects(task: DatabaseTransferTask) {
 }
 function formatBytes(value: number) { if (value < 1024) return `${value} B`; if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`; return `${(value / 1024 ** 2).toFixed(1)} MB`; }
 function stageLabel(task: DatabaseTransferTask) {
-  const labels: Record<string, string> = { uploading: '分片上传', inspection_queued: '等待预检', inspection_running: '预检中', validating_sql: '校验 SQL', awaiting_confirmation: '等待确认', queued: '等待执行', starting: '开始执行', complete: '完成', failed: '失败', cancelled: '取消', timeout: '超时' };
+  const labels: Record<string, string> = { packaging: '生成文件', uploading: '分片上传', inspection_queued: '等待预检', inspection_running: '预检中', validating_sql: '校验 SQL', awaiting_confirmation: '等待确认', queued: '等待执行', starting: '开始执行', complete: '完成', failed: '失败', cancelled: '取消', timeout: '超时' };
   if (task.stage.startsWith('exporting_table:')) return `导出表：${task.stage.slice(16)}`;
   if (task.stage.startsWith('importing_table:')) return `导入表：${task.stage.slice(16)}`;
   return labels[task.stage] || task.stage || statusLabel(task.status);
@@ -150,10 +160,14 @@ function statusLabel(value: string) { return ({ uploading: '上传中', inspecti
           <p v-if="task.checkpoints?.completedTables?.length" class="transfer-checkpoint">已完成表：{{ task.checkpoints.completedTables.join('、') }}</p>
           <p v-if="task.checkpoints?.ddlMayBeCommitted" class="transfer-error">{{ task.checkpoints.currentTable }} 的结构变更可能已提交，失败或取消不能自动恢复。</p>
           <footer><small>{{ new Date(task.createdAt).toLocaleString() }} · 保留至 {{ new Date(task.expiresAt).toLocaleDateString() }}</small></footer>
+          <el-button v-if="task.direction === 'export' && (task.preview.files || task.checkpoints?.totalSteps || (task.canDownload && task.sourceName.toLowerCase().endsWith('.zip')))" size="small" link type="primary" @click="openExportResult(task)">查看导出结果 / 保存到本地</el-button>
+          <el-button v-if="task.direction === 'import'" size="small" link type="primary" @click="openImportResult(task)">查看导入 / 确认执行</el-button>
         </article>
       </el-scrollbar>
     </section>
   </el-popover>
+  <DatabaseExportProgress :tasks="tasks" />
+  <DatabaseImportProgress :tasks="tasks" @updated="acceptSocketTask" />
 </template>
 
 <style scoped>

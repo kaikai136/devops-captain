@@ -6,6 +6,10 @@ function readPanel() {
   return readFileSync(fileURLToPath(new URL('../components/DatabaseManagementPanel.vue', import.meta.url)), 'utf8');
 }
 
+function readSource(relativePath: string) {
+  return readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8');
+}
+
 describe('database management HexHub asset tree', () => {
   it('keeps the database tree inside the expanded asset node', () => {
     const panel = readPanel();
@@ -70,17 +74,31 @@ describe('database management HexHub asset tree', () => {
     expect(panel).toContain('isAssetConnected(entry.asset!.id) ?');
   });
 
-  it('maps Redis and relational assets to distinct local icon styles', () => {
+  it('binds database brand icons to each asset connection state', () => {
     const panel = readPanel();
 
     expect(panel).toContain('isRedisType(entry.asset!.dbType)');
-    expect(panel).toContain('db-asset-icon redis');
+    expect(panel).toContain('<DatabaseBrandIcon :db-type="entry.asset!.dbType" :connected="isAssetConnected(entry.asset!.id)" />');
     expect(panel).toContain('v-for="db in 16"');
     expect(panel).toContain('{{ redisDbCounts[db - 1] }}');
     expect(panel).toContain('selectRedisDatabase(db - 1)');
     expect(panel).not.toContain('键空间');
-    expect(panel).toContain('.db-asset-icon.redis');
+    expect(panel).not.toContain('db-asset-icon.redis');
     expect(panel).toContain('.db-workspace{grid-template-columns:284px');
+  });
+
+  it('uses locally bundled database brand logos with a grayscale disconnected state', () => {
+    const brands = readSource('../utils/databaseBrand.ts');
+    const icon = readSource('../components/DatabaseBrandIcon.vue');
+
+    for (const brand of ['mysql', 'mariadb', 'postgresql', 'mongodb', 'redis', 'kingbase', 'sqlserver', 'clickhouse', 'sqlite', 'oracle', 'dameng', 'doris', 'starrocks', 'duckdb', 'tdengine']) {
+      expect(brands).toContain(`${brand},`);
+    }
+    expect(icon).toContain("class=\"db-brand-icon\" :class=\"{ 'is-connected': connected }\"");
+    expect(icon).toContain('filter: grayscale(1)');
+    expect(icon).toContain('.db-brand-icon.is-connected');
+    expect(icon).toContain('filter: none');
+    expect(icon).toContain('<Database v-else');
   });
 
   it('shows category totals for the selected database and schema', () => {

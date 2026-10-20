@@ -4,6 +4,7 @@ import { Delete, Plus } from '@lucide/vue';
 import { ElMessage } from 'element-plus';
 import { errorMessage } from '@shared/utils/errors';
 import { runDatabaseObjectAction } from '../api/databaseManagement';
+import DatabaseEditorFrame from './DatabaseEditorFrame.vue';
 
 export type DatabaseObjectEditorContext = {
   assetId: number;
@@ -17,17 +18,22 @@ export type DatabaseObjectEditorContext = {
   signature?: string;
 };
 
-const props = defineProps<{ modelValue: boolean; context: DatabaseObjectEditorContext | null }>();
+const props = defineProps<{ modelValue: boolean; context: DatabaseObjectEditorContext | null; embedded?: boolean; readonly?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: boolean]; saved: [] }>();
 const name = ref('');
 const newName = ref('');
 const definition = ref('');
 const saving = ref(false);
+const tableIndexes = ref<{ name: string; columns: string[]; unique: boolean }[]>([]);
+const engine = ref('InnoDB');
+const comment = ref('');
+const created = ref(false);
 const columns = ref([{ name: 'id', type: 'INTEGER', nullable: false, primary: true, autoIncrement: true, defaultValue: '' }]);
 
 watch(() => [props.modelValue, props.context] as const, () => {
   if (!props.modelValue || !props.context) return;
   name.value = props.context.name;
+  tableIndexes.value = []; engine.value = 'InnoDB'; comment.value = ''; created.value = false;
   newName.value = props.context.name;
   definition.value = props.context.definition || starterDefinition(props.context);
   columns.value = [{ name: 'id', type: props.context.dbType === 'clickhouse' ? 'Int64' : 'INTEGER', nullable: false, primary: true, autoIncrement: props.context.dbType !== 'clickhouse', defaultValue: '' }];
@@ -75,7 +81,10 @@ const tableDefinition = computed(() => {
   });
   const primary = columns.value.filter(item => item.primary);
   if (primary.length && !(props.context.dbType === 'sqlite' && columns.value.some(item => item.autoIncrement))) fields.push(`PRIMARY KEY (${primary.map(item => quote(item.name.trim())).join(', ')})`);
-  const suffix = props.context.dbType === 'clickhouse' ? ` ENGINE = MergeTree ORDER BY ${primary.length ? `(${primary.map(item => quote(item.name.trim())).join(', ')})` : 'tuple()'}` : '';
+  if (['mysql', 'mariadb'].includes(props.context.dbType)) {
+    for (const index of tableIndexes.value) fields.push(`${index.unique ? 'UNIQUE ' : ''}KEY ${quote(index.name)} (${index.columns.map(value => quote(value)).join(', ')})`);
+  }
+  const suffix = props.context.dbType === 'clickhouse' ? ` ENGINE = MergeTree ORDER BY ${primary.length ? `(${primary.map(item => quote(item.name.trim())).join(', ')})` : 'tuple()'}` : ['mysql', 'mariadb'].includes(props.context.dbType) ? ` ENGINE=${engine.value} COMMENT='${comment.value.replace(/\\/g, '\\\\').replace(/'/g, "''")}'` : '';
   return `CREATE TABLE ${table} (\n  ${fields.join(',\n  ')}\n)${suffix}`;
 });
 
@@ -87,7 +96,10 @@ const title = computed(() => {
 
 async function save() {
   const context = props.context;
-  if (!context) return;
+  if (!context || saving.value || props.readonly || created.value) return;
+  if (context.objectType === 'table' && context.mode === 'create' && (!name.value.trim() || columns.value.some(item => !item.name.trim() || !item.type.trim()) || new Set(columns.value.map(item => item.name.trim().toLowerCase())).size !== columns.value.length || tableIndexes.value.some(item => !item.name.trim() || !item.columns.length || item.columns.some(value => !columns.value.some(column => column.name === value))))) {
+    ElMessage.error('请填写唯一的字段名、字段类型和有效的索引配置'); return;
+  }
   if (context.objectType === 'table' && context.mode === 'create' && context.dbType === 'sqlite' && columns.value.some(item => item.autoIncrement) && (columns.value.filter(item => item.primary).length !== 1 || columns.value.some(item => item.autoIncrement && (!item.primary || item.type.toUpperCase() !== 'INTEGER')))) {
     ElMessage.error('SQLite 自增字段必须是唯一的 INTEGER 主键'); return;
   }
@@ -102,34 +114,44 @@ async function save() {
       newName: context.mode === 'rename' ? newName.value : undefined,
       definition: context.objectType === 'table' ? tableDefinition.value : definition.value,
     });
-    emit('update:modelValue', false); emit('saved');
+    created.value = true; ElMessage.success('数据库对象已保存');
+    if (!props.embedded) emit('update:modelValue', false);
+    emit('saved');
   } catch (error) { ElMessage.error(errorMessage(error)); }
   finally { saving.value = false; }
 }
 </script>
 
 <template>
-  <el-dialog :model-value="modelValue" :title="title" width="min(760px, 94vw)" :close-on-click-modal="false" @update:model-value="emit('update:modelValue', $event)">
-    <el-form v-if="context" label-position="top">
+  <DatabaseEditorFrame :embedded="embedded" :model-value="modelValue" :title="title" width="min(960px, 94vw)" @update:model-value="emit('update:modelValue', $event)">
+    <el-alert v-if="created" title="表已创建。再次新建请打开新的表标签。" type="success" :closable="false" />
+    <el-form v-if="context" label-position="top" :disabled="readonly || saving || created">
       <el-form-item v-if="context.mode === 'create'" label="名称"><el-input v-model="name" /></el-form-item>
       <el-form-item v-else-if="context.mode === 'rename'" label="新名称"><el-input v-model="newName" /></el-form-item>
       <template v-else-if="context.objectType === 'table'" />
       <template v-if="context.objectType === 'table' && context.mode === 'create'">
         <div class="object-fields-head"><strong>字段</strong><el-button size="small" @click="columns.push({ name: '', type: 'VARCHAR(255)', nullable: true, primary: false, autoIncrement: false, defaultValue: '' })"><Plus :size="14" />添加字段</el-button></div>
-        <div v-for="(column, index) in columns" :key="index" class="object-field-row">
+        <div class="object-column-head"><span>字段名</span><span>类型（含长度 / 精度）</span><span>默认值（SQL 表达式）</span><span>字段选项</span></div>
+        <div v-for="(column, index) in columns" :key="index" class="object-field-row object-column-row">
           <el-input v-model="column.name" placeholder="字段名" /><el-input v-model="column.type" placeholder="类型" />
           <el-input v-model="column.defaultValue" placeholder="默认值" />
           <el-checkbox v-model="column.nullable">可空</el-checkbox><el-checkbox v-model="column.primary">主键</el-checkbox><el-checkbox v-model="column.autoIncrement">自增</el-checkbox>
           <el-button text type="danger" :disabled="columns.length === 1" @click="columns.splice(index, 1)"><Delete :size="14" /></el-button>
         </div>
+        <template v-if="['mysql', 'mariadb'].includes(context.dbType)">
+          <div class="object-fields-head"><strong>索引</strong><el-button size="small" @click="tableIndexes.push({ name: '', columns: [], unique: false })">添加索引</el-button></div>
+          <div v-for="(index, i) in tableIndexes" :key="i" class="object-field-row"><el-input v-model="index.name" placeholder="索引名称" /><el-select v-model="index.columns" multiple placeholder="选择字段（按顺序）" style="flex:2"><el-option v-for="column in columns.filter(item => item.name)" :key="column.name" :value="column.name" /></el-select><el-checkbox v-model="index.unique">唯一</el-checkbox><el-button text type="danger" @click="tableIndexes.splice(i, 1)">删除</el-button></div>
+          <div class="object-field-row"><el-form-item label="存储引擎"><el-select v-model="engine" style="width:180px"><el-option value="InnoDB" /><el-option value="MyISAM" /></el-select></el-form-item><el-form-item label="表注释" style="flex:1"><el-input v-model="comment" maxlength="2048" /></el-form-item></div>
+        </template>
         <el-form-item label="SQL 预览"><el-input :model-value="tableDefinition" type="textarea" :rows="7" readonly /></el-form-item>
       </template>
       <el-form-item v-else-if="context.mode !== 'rename'" label="SQL 定义"><el-input v-model="definition" type="textarea" :rows="14" /></el-form-item>
     </el-form>
-    <template #footer><el-button @click="emit('update:modelValue', false)">取消</el-button><el-button type="primary" :loading="saving" @click="save">保存</el-button></template>
-  </el-dialog>
+    <template #footer><el-button v-if="!embedded" @click="emit('update:modelValue', false)">取消</el-button><el-button type="primary" :loading="saving" :disabled="readonly || created" @click="save">保存</el-button></template>
+  </DatabaseEditorFrame>
 </template>
 
 <style scoped>
 .object-fields-head,.object-field-row{display:flex;align-items:center;gap:8px}.object-fields-head{justify-content:space-between;margin-bottom:8px}.object-field-row{margin-bottom:8px}.object-field-row>.el-input{flex:1}.object-field-row>.el-checkbox{margin-right:0;white-space:nowrap}@media(max-width:720px){.object-field-row{flex-wrap:wrap}.object-field-row>.el-input{flex:1 1 180px}}
+.object-column-head{display:grid;grid-template-columns:repeat(3,minmax(100px,1fr)) 250px;gap:8px;background:var(--el-fill-color-light);padding:10px;font-size:12px;border:1px solid var(--el-border-color)}.object-column-row{padding:10px;border:1px solid var(--el-border-color);border-top:0}.object-column-row>.el-input{min-width:100px}.object-column-row>.el-button{flex:none}.object-fields-head{margin-top:16px}.object-field-row>.el-form-item{min-width:0}@media(max-width:900px){.object-column-head{display:none}.object-column-row{border-top:1px solid var(--el-border-color);flex-wrap:wrap}.object-column-row>.el-input{flex:1 1 180px}}
 </style>

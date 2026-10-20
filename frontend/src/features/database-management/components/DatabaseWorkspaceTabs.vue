@@ -4,10 +4,13 @@ import { Database, DatabaseZap, List as ListIcon, X } from '@lucide/vue';
 
 export interface DatabaseWorkspaceTab {
   id: string;
-  kind: 'list' | 'asset';
+  kind: 'list' | 'asset' | 'document';
   label: string;
   assetId?: number;
   dbType?: string;
+  documentType?: 'table' | 'query' | 'er' | 'accounts';
+  database?: string;
+  schema?: string;
   sticky?: boolean;
 }
 

@@ -21,6 +21,11 @@ class DumpError(ValueError):
     pass
 
 
+class ResourceLimitError(DumpError):
+    """A task-wide limit must never be ignored by continue-on-error."""
+    pass
+
+
 IDENTIFIER = re.compile(r"^[\w$]+$", re.UNICODE)
 TOKEN = re.compile(
     r"\s+|'(?:\\.|''|[^'\\])*'|\"(?:\\.|\"\"|[^\"\\])*\"|`(?:``|[^`])*`"
@@ -422,11 +427,11 @@ def sql_literal(value):
 
 def resource_guard(task, output_bytes=0):
     if shutil.disk_usage(Path(task.input_path or task.output_path).parent).free < settings.DATABASE_TRANSFER_MIN_FREE_BYTES:
-        raise DumpError("服务器临时磁盘空间不足")
+        raise ResourceLimitError("服务器临时磁盘空间不足")
     if task.started_at and (timezone.now() - task.started_at).total_seconds() > settings.DATABASE_TRANSFER_TASK_TIMEOUT_SECONDS:
-        raise DumpError("任务超过执行超时时间")
+        raise ResourceLimitError("任务超过执行超时时间")
     if settings.DATABASE_TRANSFER_MAX_RESULT_BYTES and output_bytes > settings.DATABASE_TRANSFER_MAX_RESULT_BYTES:
-        raise DumpError("结果超过系统配置上限")
+        raise ResourceLimitError("结果超过系统配置上限")
 
 
 def export_dump(task, output, report):
@@ -482,7 +487,11 @@ def export_dump(task, output, report):
 
 def import_dump(task, report):
     from .transfers import require_task_permissions, update
-    batch_size = max(1, settings.DATABASE_TRANSFER_BATCH_ROWS)
+    options = task.parameters.get("options", {})
+    batch_size = max(1, settings.DATABASE_TRANSFER_BATCH_ROWS) if options.get("asyncInsert", True) else 1
+    continue_on_error = options.get("continueOnError", False)
+    failures = []
+    logs = list(task.checkpoints.get("logs", []))
     with tempfile.TemporaryDirectory(prefix=f"{task.pk}-", dir=Path(task.input_path).parent) as folder:
         def heartbeat():
             resource_guard(task); report(task, stage="validating_sql")
@@ -508,8 +517,8 @@ def import_dump(task, report):
                         completed.add(name)
                         update(task, checkpoints={**task.checkpoints, "completedTables": sorted(completed)})
                         continue
-                    if not exists and not definition: raise DumpError("目标表不存在且文件不包含结构")
                     try:
+                        if not exists and not definition: raise DumpError("目标表不存在且文件不包含结构")
                         if task.conflict_policy == "overwrite" and definition and exists:
                             update(task, checkpoints={**task.checkpoints, "currentTable": name, "ddlMayBeCommitted": True})
                             query(conn, f"DROP TABLE {quote(name)}")
@@ -540,13 +549,23 @@ def import_dump(task, report):
                                         report(task, stage=f"importing_table:{name}", rows=done_rows + count, total=total_rows)
                                         resource_guard(task)
                         conn.commit()
-                    except Exception:
+                    except Exception as exc:
                         conn.rollback()
                         update(task, processed_rows=done_rows)
-                        raise
+                        if isinstance(exc, (InterruptedError, PermissionError, ResourceLimitError)):
+                            raise
+                        failures.append(name)
+                        logs.append({"time": timezone.now().isoformat(), "level": "error", "message": f"{name}: {adapters.connection_error(exc)}"})
+                        update(task, checkpoints={**task.checkpoints, "failedTables": failures, "logs": logs})
+                        if not continue_on_error:
+                            raise
+                        continue
                     done_rows += count
                     completed.add(name)
-                    update(task, processed_rows=done_rows, checkpoints={"completedTables": sorted(completed), "currentTable": "", "ddlMayBeCommitted": False})
+                    update(task, processed_rows=done_rows, checkpoints={**task.checkpoints, "completedTables": sorted(completed), "currentTable": "", "ddlMayBeCommitted": bool(failures and task.checkpoints.get("ddlMayBeCommitted"))})
+                if failures:
+                    update(task, preview={**task.preview, "warnings": [*task.preview.get("warnings", []), f"{len(failures)} 张表导入失败，请查看失败结果；部分结构变更可能已提交。"]})
+                    raise DumpError(f"导入已处理完成，但 {len(failures)} 张表失败：{', '.join(failures)}")
             finally:
                 conn.rollback()
                 query(conn, "SET FOREIGN_KEY_CHECKS=%s", (original_fk,))

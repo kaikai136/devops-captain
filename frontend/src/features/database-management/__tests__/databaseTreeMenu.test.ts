@@ -22,6 +22,25 @@ function byId(items: ReturnType<typeof menu>, id: string) {
 }
 
 describe('HexHub database tree menus', () => {
+  it('matches MySQL database groups without changing categories and other drivers', () => {
+    const entries = menu({ kind: 'database', name: 'tele' });
+    expect(entries.map(item => item.label)).toEqual(['关闭', '编辑数据库', '删除数据库', '新建表', '新建查询', '新建 ER 图', '账号管理', '导出', '导入', '刷新']);
+    const noRights = buildDatabaseTreeMenu({ kind: 'database', name: 'tele' }, { connected: true, dbType: 'mysql', capabilities: ['accounts'], selectedCount: 0, pinned: false, can: () => false, run: vi.fn() });
+    for (const id of ['edit-database', 'delete-database', 'new-table', 'new-query', 'new-er-diagram', 'accounts', 'database-export', 'database-import']) expect(byId(noRights, id).enabled).toBe(false);
+    expect(menu({ kind: 'category', name: 'table', category: 'table' }).map(item => item.id)).not.toContain('close-database');
+    expect(menu({ kind: 'database', name: 'tele' }, { dbType: 'postgresql' }).map(item => item.id)).not.toContain('edit-database');
+  });
+  it('offers six export formats with SQL engine and permission gating', () => {
+    const mysql = byId(menu({ kind: 'database', name: 'tele' }), 'database-export');
+    expect(mysql.children?.map(item => item.label)).toEqual(['SQL', 'Excel', '数据字典', 'TXT', 'CSV', 'JSON']);
+    expect(mysql.children?.every(item => item.enabled)).toBe(true);
+    const pg = byId(menu({ kind: 'database', name: 'tele' }, { dbType: 'postgresql' }), 'database-export');
+    expect(pg.children?.[0].enabled).toBe(false);
+    expect(pg.children?.slice(1).every(item => item.enabled)).toBe(true);
+    const denied = buildDatabaseTreeMenu({ kind: 'database', name: 'tele' }, { connected: true, dbType: 'mysql', capabilities: [], selectedCount: 0, pinned: false, can: () => false, run: vi.fn() });
+    expect(byId(denied, 'database-export').enabled).toBe(false);
+    expect(byId(denied, 'database-export').children?.every(item => !item.enabled)).toBe(true);
+  });
   it('guards query mutation and file operations independently', () => {
     const entries = buildDatabaseTreeMenu({ kind: 'query', name: 'report', category: 'query' }, { connected: true, dbType: 'mysql', capabilities: [], selectedCount: 0, pinned: false, can: action => action === 'view_data', run: vi.fn() });
     expect(byId(entries, 'open-query').enabled).toBe(true);

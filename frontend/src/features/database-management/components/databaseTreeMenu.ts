@@ -90,17 +90,44 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
       item(context, 'disconnect', '断开', 'link', { enabled: context.connected }),
     ] }),
   ];
-  if (target.kind === 'database') return [
+  if (target.kind === 'database' || (target.kind === 'category' && target.category === 'table')) {
+    if (target.kind === 'database' && context.dbType === 'mysql') return [
+      item(context, 'close-database', '关闭', 'x', { separatorBefore: true }),
+      item(context, 'edit-database', '编辑数据库', 'settings', { enabled: context.can('database_admin') }),
+      item(context, 'delete-database', '删除数据库', 'trash', { enabled: context.can('database_admin'), danger: true }),
+      item(context, 'new-table', '新建表', 'database', { enabled: manageSchema, shortcut: 'Ctrl+Shift+T', separatorBefore: true }),
+      item(context, 'new-query', '新建查询', 'search', { enabled: context.can('execute_sql'), shortcut: 'Ctrl+Shift+Q' }),
+      item(context, 'new-er-diagram', '新建 ER 图', 'database', { enabled: context.can('view_data') }),
+      item(context, 'accounts', '账号管理', 'userCog', { enabled: context.can('manage_accounts') && supports('accounts') }),
+      item(context, 'database-export', '导出', 'download', { enabled: importExport, separatorBefore: true, children: [
+        item(context, 'export-format-sql', 'SQL', 'fileCode', { enabled: importExport && context.can('view_data') && dumpSupported }),
+        item(context, 'export-format-xlsx', 'Excel', 'download', { enabled: importExport && context.can('view_data') }),
+        item(context, 'export-format-dictionary', '数据字典', 'fileCode', { enabled: importExport && context.can('view_data') && context.can('manage_schema') }),
+        item(context, 'export-format-txt', 'TXT', 'file', { enabled: importExport && context.can('view_data') }),
+        item(context, 'export-format-csv', 'CSV', 'file', { enabled: importExport && context.can('view_data') }),
+        item(context, 'export-format-json', 'JSON', 'fileCode', { enabled: importExport && context.can('view_data') }),
+      ] }),
+      item(context, 'database-import', '导入', 'upload', { enabled: importExport && dumpSupported }),
+      item(context, 'refresh', '刷新', 'refresh', { shortcut: 'F5' }),
+    ];
+    return [
     item(context, 'new-table', '新建表', 'database', { enabled: manageSchema, shortcut: 'Ctrl+Shift+T' }),
     item(context, 'new-query', '新建查询', 'search', { enabled: context.can('execute_sql'), shortcut: 'Ctrl+Shift+Q' }),
     disabled(context, 'new-object-folder', '新建目录', 'folderPlus'),
     item(context, 'refresh', '刷新', 'refresh', { shortcut: 'F5' }),
     ...commonDisabled(context).slice(1),
     item(context, 'delete-selected', '删除', 'trash', { enabled: manageSchema && context.selectedCount > 0, danger: true }),
-    item(context, 'database-export', '导出', 'download', { enabled: importExport && dumpSupported }),
+    item(context, 'database-export', '导出', 'download', { enabled: importExport, children: [
+      item(context, 'export-format-sql', 'SQL', 'fileCode', { enabled: importExport && context.can('view_data') && dumpSupported }),
+      item(context, 'export-format-xlsx', 'Excel', 'download', { enabled: importExport && context.can('view_data') }),
+      item(context, 'export-format-dictionary', '数据字典', 'fileCode', { enabled: importExport && context.can('view_data') && context.can('manage_schema') }),
+      item(context, 'export-format-txt', 'TXT', 'file', { enabled: importExport && context.can('view_data') }),
+      item(context, 'export-format-csv', 'CSV', 'file', { enabled: importExport && context.can('view_data') }),
+      item(context, 'export-format-json', 'JSON', 'fileCode', { enabled: importExport && context.can('view_data') }),
+    ] }),
     item(context, 'database-import', '导入', 'upload', { enabled: importExport && dumpSupported }),
   ];
-  if (target.kind === 'category' && target.category === 'table') return buildDatabaseTreeMenu({ ...target, kind: 'database' }, context);
+  }
   if (target.kind === 'object' && target.category === 'table') return [
     item(context, 'open-data', '打开数据', 'eye', { shortcut: 'Enter' }),
     item(context, 'edit-structure', '编辑结构', 'settings', { shortcut: 'Ctrl+Shift+S' }),

@@ -1,6 +1,7 @@
 """Database-level operations with bounded, portable data snapshots."""
 
 import json
+import re
 import sqlite3
 from pathlib import Path
 
@@ -86,6 +87,43 @@ def delete_database(asset, value):
     return {"name": label}
 
 
+def alter_mysql_database(asset, data):
+    if asset.db_type != "mysql": raise ValueError("当前操作仅支持 MySQL")
+    _, name = database_name(asset, data.get("name"))
+    charset = str(data.get("charset", "")).strip()
+    collation = str(data.get("collation", "")).strip()
+    if not charset or not collation: raise ValueError("请选择字符编码和字符集排序规则")
+    if not all(re.fullmatch(r"[A-Za-z0-9_]+", value) for value in (charset, collation)): raise ValueError("字符集参数不合法")
+    with adapters.connection(asset, "information_schema") as conn:
+        rows, _ = adapters.run(conn, "SELECT COLLATION_NAME AS collation FROM COLLATIONS WHERE CHARACTER_SET_NAME=%s AND COLLATION_NAME=%s", (charset, collation), db_type=asset.db_type)
+        if not rows: raise ValueError("字符集排序规则与字符编码不匹配")
+        adapters.run(conn, f"ALTER DATABASE {adapters.quote(name, asset.db_type)} CHARACTER SET {charset} COLLATE {collation}", db_type=asset.db_type)
+        conn.commit()
+    return {"name": name, "charset": charset, "collation": collation}
+
+
+@api_view(["GET"])
+def mysql_metadata(request, asset_id):
+    diagram = request.query_params.get("diagram") == "1"
+    denied = require_feature_permission(request, "databaseManagement", "view_data" if diagram else "database_admin")
+    if denied: return denied
+    asset, error = get_object_or_error(DatabaseAsset, pk=asset_id, error_message="数据库资产不存在")
+    if error: return error
+    if asset.db_type != "mysql": return bad_request("当前操作仅支持 MySQL")
+    try:
+        _, name = database_name(asset, request.query_params.get("name"))
+        with adapters.connection(asset, "information_schema") as conn:
+            if diagram:
+                fields, _ = adapters.run(conn, "SELECT TABLE_NAME AS table_name, COLUMN_NAME AS name, COLUMN_TYPE AS type, COLUMN_KEY AS column_key, COLUMN_COMMENT AS comment FROM COLUMNS WHERE TABLE_SCHEMA=%s ORDER BY TABLE_NAME, ORDINAL_POSITION", (name,), db_type="mysql", max_rows=20000)
+                links, _ = adapters.run(conn, "SELECT CONSTRAINT_NAME AS name, TABLE_NAME AS source, COLUMN_NAME AS source_column, REFERENCED_TABLE_NAME AS target, REFERENCED_COLUMN_NAME AS target_column FROM KEY_COLUMN_USAGE WHERE TABLE_SCHEMA=%s AND REFERENCED_TABLE_SCHEMA=%s AND REFERENCED_TABLE_NAME IS NOT NULL ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION", (name, name), db_type="mysql", max_rows=20000)
+                return Response({"columns": fields, "relations": links})
+            current, _ = adapters.run(conn, "SELECT DEFAULT_CHARACTER_SET_NAME AS charset, DEFAULT_COLLATION_NAME AS collation FROM SCHEMATA WHERE SCHEMA_NAME=%s", (name,), db_type="mysql")
+            if not current: raise ValueError("数据库不存在")
+            choices, _ = adapters.run(conn, "SELECT CHARACTER_SET_NAME AS charset, COLLATION_NAME AS collation FROM COLLATIONS ORDER BY CHARACTER_SET_NAME, COLLATION_NAME", db_type="mysql", max_rows=5000)
+            return Response({"name": name, **current[0], "choices": choices})
+    except Exception as exc: return bad_request(adapters.connection_error(exc))
+
+
 def snapshot(asset, name):
     if asset.db_type == "redis":
         selected = int(name)
@@ -144,6 +182,10 @@ def database_operation(request, asset_id):
     action = "export" if request.method == "GET" else request.data.get("action")
     name = request.query_params.get("name") if request.method == "GET" else request.data.get("name")
     try:
+        if request.method == "POST" and request.data.get("action") == "edit":
+            result = alter_mysql_database(asset, request.data)
+            record_operation_log(request, "应用管理", "编辑数据库", result["name"], f"字符集={result['charset']}; 排序规则={result['collation']}")
+            return Response(result)
         _, name = database_name(asset, name)
         if action == "create": result = create_database(asset, name)
         elif action == "delete": result = delete_database(asset, name)

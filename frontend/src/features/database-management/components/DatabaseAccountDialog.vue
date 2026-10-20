@@ -3,8 +3,9 @@ import { computed, ref, watch } from 'vue';
 import { ElMessage } from 'element-plus';
 import { errorMessage } from '@shared/utils/errors';
 import { listDatabaseAccounts, manageDatabaseAccount, type DatabaseAccount } from '../api/databaseManagement';
+import DatabaseEditorFrame from './DatabaseEditorFrame.vue';
 
-const props = defineProps<{ modelValue: boolean; assetId: number; database: string; dbType: string; schema: string }>();
+const props = defineProps<{ modelValue: boolean; assetId: number; database: string; dbType: string; schema: string; embedded?: boolean }>();
 const emit = defineEmits<{ 'update:modelValue': [value: boolean] }>();
 const accounts = ref<DatabaseAccount[]>([]);
 const loading = ref(false);
@@ -14,7 +15,7 @@ const form = ref({ name: '', host: '%', password: '', schema: '', grants: [] as 
 const roleOptions = computed(() => accounts.value[0]?.availableRoles || []);
 const privileges = computed(() => accounts.value[0]?.capabilities?.grants || (['postgresql', 'kingbase'].includes(props.dbType) ? ['CONNECT', 'USAGE', 'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'EXECUTE'] : props.dbType === 'sqlserver' ? ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'ALTER', 'EXECUTE'] : ['oracle', 'dameng'].includes(props.dbType) ? ['CONNECT'] : ['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'ALTER', 'DROP', 'EXECUTE']));
 
-watch(() => props.modelValue, open => { if (open) void load(); });
+watch(() => props.modelValue, open => { if (open) void load(); }, { immediate: true });
 async function load() { loading.value = true; try { accounts.value = await listDatabaseAccounts(props.assetId, props.database, props.schema); } catch (error) { ElMessage.error(errorMessage(error)); } finally { loading.value = false; } }
 function openAccount(item?: DatabaseAccount) { formOpen.value = true; editing.value = item || null; form.value = { name: item?.name || '', host: item?.host || '%', password: '', schema: props.schema, grants: [], revokes: [], addRoles: [], removeRoles: [] }; }
 async function save() {
@@ -48,7 +49,7 @@ async function remove(item: DatabaseAccount) {
 </script>
 
 <template>
-  <el-dialog :model-value="modelValue" :close-on-click-modal="false" title="数据库账号管理" width="min(820px, 94vw)" @update:model-value="emit('update:modelValue', $event)">
+  <DatabaseEditorFrame :embedded="embedded" :model-value="modelValue" title="数据库账号管理" width="min(820px, 94vw)" @update:model-value="emit('update:modelValue', $event)">
     <div class="account-toolbar"><el-button type="primary" @click="openAccount()">新增账号</el-button><el-button @click="load">刷新</el-button></div>
     <el-table v-loading="loading" :data="accounts" height="360">
       <el-table-column prop="name" label="账号" min-width="180" /><el-table-column prop="host" label="Host" width="150" />
@@ -65,7 +66,7 @@ async function remove(item: DatabaseAccount) {
       <el-form-item v-if="editing" label="撤销角色"><el-select v-model="form.removeRoles" multiple :disabled="editing.protected" style="width:100%"><el-option v-for="role in roleOptions" :key="JSON.stringify([role.name, role.host])" :label="role.host ? `${role.name}@${role.host}` : role.name" :value="JSON.stringify([role.name, role.host])" /></el-select></el-form-item>
       <el-button type="primary" @click="save">保存账号</el-button><el-button @click="formOpen = false; editing = null">取消</el-button>
     </el-form>
-  </el-dialog>
+  </DatabaseEditorFrame>
 </template>
 
 <style scoped>

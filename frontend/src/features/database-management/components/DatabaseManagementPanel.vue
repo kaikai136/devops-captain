@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { ChevronDown, ChevronRight, Database, DatabaseZap, Download, Folder, FolderPlus, LayoutList, Link2, List as ListIcon, MoreHorizontal, Play, Plus, RefreshCw, Search, Table2, Trash2, Upload } from '@lucide/vue';
+import { computed, onMounted, onUnmounted, ref, shallowReactive, watch } from 'vue';
+import { ChevronDown, ChevronRight, Database, Download, Folder, FolderPlus, LayoutList, Link2, List as ListIcon, MoreHorizontal, Play, Plus, RefreshCw, Search, Table2, Trash2, Upload } from '@lucide/vue';
 import { ElMessageBox } from 'element-plus';
 import { useAppContext } from '@app/context';
 import AppContextMenu from '@shared/components/context-menu/AppContextMenu.vue';
@@ -8,9 +8,14 @@ import type { ContextMenuEntry } from '@shared/components/context-menu/types';
 import { errorMessage } from '@shared/utils/errors';
 import { compressSqlText, formatSqlText } from '../utils/sqlText';
 import { useDatabaseObjectActions } from '../composables/useDatabaseObjectActions';
+import DatabaseBrandIcon from './DatabaseBrandIcon.vue';
 import DatabaseAccountDialog from './DatabaseAccountDialog.vue';
 import DatabaseObjectEditor, { type DatabaseObjectEditorContext } from './DatabaseObjectEditor.vue';
 import DatabaseWorkspaceTabs, { type DatabaseWorkspaceTab } from './DatabaseWorkspaceTabs.vue';
+import DatabaseWorkspaceDocument from './DatabaseWorkspaceDocument.vue';
+import MysqlDatabaseDialog from './MysqlDatabaseDialog.vue';
+import DatabaseImportDialog from './DatabaseImportDialog.vue';
+import DatabaseExportDialog, { type ExportTarget } from './DatabaseExportDialog.vue';
 import { buildDatabaseTreeMenu, type DatabaseObjectCategory, type DatabaseTreeMenuTarget } from './databaseTreeMenu';
 import {
   commitDatabaseRows, createDatabaseAsset, deleteDatabaseAsset, deleteRedisKey, executeDatabaseSql, exportDatabaseUrl, getDatabaseColumns,
@@ -46,6 +51,7 @@ const objectSortAsc = ref(true);
 const selectedTables = ref<DatabaseTable[]>([]);
 const dumpSupported = computed(() => ['mysql', 'mariadb'].includes(selected.value?.dbType || ''));
 const dumpDialog = ref(false);
+const databaseExportTarget = ref<ExportTarget | null>(null);
 const dumpContent = ref('structure_data');
 const dumpRange = ref('database');
 const dumpTarget = ref<{ assetId: number; database: string; schema: string; table: string; selected: string[] } | null>(null);
@@ -111,7 +117,7 @@ type WorkspaceSnapshot = {
   queries: SavedDatabaseQuery[];
   activeQueryId: number | null;
 };
-const workspaceSnapshots = new Map<number, WorkspaceSnapshot>();
+const workspaceSnapshots = shallowReactive(new Map<number, WorkspaceSnapshot>());
 const expandedAssets = ref<number[]>([]);
 const expandedDatabase = ref('');
 const expandedSchema = ref('');
@@ -178,6 +184,8 @@ const queryInput = ref<HTMLInputElement | null>(null);
 const objectEditorOpen = ref(false);
 const objectEditorContext = ref<DatabaseObjectEditorContext | null>(null);
 const accountDialogOpen = ref(false);
+const mysqlEditDatabase = ref<{ assetId: number; database: string } | null>(null);
+const mysqlImportDatabase = ref<{ assetId: number; database: string; schema: string } | null>(null);
 const pinStorageKey = `database-pinned-objects:${currentUser.value?.username || 'anonymous'}`;
 function readPins(): string[] {
   try { const value: unknown = JSON.parse(localStorage.getItem(pinStorageKey) || '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }
@@ -305,7 +313,7 @@ function isAssetConnected(assetId: number) {
   return workspaceSnapshots.get(assetId)?.connected === true;
 }
 function saveWorkspaceSnapshot() {
-  if (!selected.value || activeWorkspaceTabId.value === 'list') return;
+  if (!selected.value || activeWorkspaceTabId.value !== workspaceTabId(selected.value.id)) return;
   workspaceSnapshots.set(selected.value.id, {
     assetExpanded: expandedAssets.value.includes(selected.value.id),
     connected: connected.value,
@@ -438,6 +446,10 @@ async function activateWorkspaceTab(id: string) {
     resetWorkspace();
     return;
   }
+  if (target.kind === 'document') {
+    activeWorkspaceTabId.value = id;
+    return;
+  }
   const asset = assets.value.find(item => item.id === target.assetId);
   if (!asset) return;
   const snapshot = workspaceSnapshots.get(asset.id);
@@ -495,7 +507,7 @@ function markAssetDisconnected(assetId: number) {
   }
 }
 function closeAssetWorkspaceTabs(assetId: number) {
-  const closedIds = new Set(workspaceTabs.value.filter(item => item.kind === 'asset' && item.assetId === assetId).map(item => item.id));
+  const closedIds = new Set(workspaceTabs.value.filter(item => item.assetId === assetId).map(item => item.id));
   if (!closedIds.size) return;
   const wasActive = closedIds.has(activeWorkspaceTabId.value);
   const firstClosedIndex = workspaceTabs.value.findIndex(item => closedIds.has(item.id));
@@ -512,22 +524,27 @@ function closeAssetWorkspaceTabs(assetId: number) {
     resetWorkspace();
   } else void activateWorkspaceTab(nextId);
 }
-function closeWorkspaceTab(id: string) {
+function closeWorkspaceTab(id: string, confirmed = false) {
   const index = workspaceTabs.value.findIndex(item => item.id === id);
   if (index < 0 || workspaceTabs.value[index].sticky) return;
+  if (!confirmed && dirtyDocuments.value[id]) { requestConfirm('关闭标签', '编辑内容尚未保存，确定丢弃并关闭吗？', '关闭', async () => closeWorkspaceTab(id, true)); return; }
   const wasActive = activeWorkspaceTabId.value === id;
   workspaceTabs.value.splice(index, 1);
-  workspaceSnapshots.delete(Number(id.replace('asset-', '')));
+  delete dirtyDocuments.value[id];
+  if (id.startsWith('asset-')) workspaceSnapshots.delete(Number(id.replace('asset-', '')));
   if (!wasActive) return;
-  const next = workspaceTabs.value[Math.max(0, index - 1)] || workspaceTabs.value[0];
-  void activateWorkspaceTab(next.id);
+  const next = [...recentWorkspaceTabs].reverse().find(recent => workspaceTabs.value.some(item => item.id === recent)) || 'list';
+  activeWorkspaceTabId.value = 'list';
+  if (next === 'list') resetWorkspace(); else void activateWorkspaceTab(next);
 }
-function closeOtherWorkspaceTabs(id: string) {
+function closeOtherWorkspaceTabs(id: string, confirmed = false) {
+  if (!confirmed && documentTabs.value.some(item => item.id !== id && dirtyDocuments.value[item.id])) { requestConfirm('关闭其他标签', '其他标签中有未保存的编辑，确定丢弃吗？', '关闭', async () => closeOtherWorkspaceTabs(id, true)); return; }
   workspaceTabs.value.filter(item => item.kind === 'asset' && item.id !== id).forEach(item => workspaceSnapshots.delete(item.assetId || 0));
   workspaceTabs.value = workspaceTabs.value.filter(item => item.sticky || item.id === id);
   if (activeWorkspaceTabId.value !== id) void activateWorkspaceTab(id);
 }
-function closeAllWorkspaceTabs() {
+function closeAllWorkspaceTabs(confirmed = false) {
+  if (!confirmed && documentTabs.value.some(item => dirtyDocuments.value[item.id])) { requestConfirm('关闭全部标签', '标签中有未保存的编辑，确定丢弃吗？', '关闭', async () => closeAllWorkspaceTabs(true)); return; }
   workspaceSnapshots.clear();
   workspaceTabs.value = workspaceTabs.value.filter(item => item.sticky);
   void activateWorkspaceTab('list');
@@ -1088,12 +1105,82 @@ async function updateQueryAction(item: SavedDatabaseQuery, data: Partial<SavedDa
   try { await updateSavedDatabaseQuery(item.id, data); await loadQueries(); }
   catch (error) { showToast('更新查询失败', errorMessage(error)); }
 }
+const documentTabs = computed(() => workspaceTabs.value.filter(item => item.kind === 'document' && assets.value.some(asset => asset.id === item.assetId)));
+const activeDocument = computed(() => documentTabs.value.find(item => item.id === activeWorkspaceTabId.value));
+const dirtyDocuments = ref<Record<string, boolean>>({});
+const recentWorkspaceTabs: string[] = [];
+watch(activeWorkspaceTabId, id => { const index = recentWorkspaceTabs.indexOf(id); if (index >= 0) recentWorkspaceTabs.splice(index, 1); recentWorkspaceTabs.push(id); }, { flush: 'sync' });
+let documentSequence = 0;
+function openDatabaseDocument(asset: DatabaseAsset, database: string, owner: string, documentType: NonNullable<DatabaseWorkspaceTab['documentType']>) {
+  saveWorkspaceSnapshot();
+  const number = ++documentSequence;
+  const id = `document-${number}`;
+  const labels = { table: '新建表', query: '查询', er: 'ER 图', accounts: '账号管理' };
+  workspaceTabs.value.push({ id, kind: 'document', assetId: asset.id, database, schema: owner, documentType, dbType: asset.dbType, label: `${database} · ${labels[documentType]} ${number}` });
+  dirtyDocuments.value[id] = documentType === 'table';
+  activeWorkspaceTabId.value = id;
+}
+function closeDatabaseDocuments(assetId: number, database: string) {
+  saveWorkspaceSnapshot();
+  const cachedDatabase = selected.value?.id === assetId && activeWorkspaceTabId.value === workspaceTabId(assetId) ? activeDatabase.value : workspaceSnapshots.get(assetId)?.database;
+  const ids = new Set(workspaceTabs.value.filter(item => item.assetId === assetId && (item.kind === 'document' ? item.database === database : item.kind === 'asset' && cachedDatabase === database)).map(item => item.id));
+  const activeRemoved = ids.has(activeWorkspaceTabId.value);
+  workspaceTabs.value = workspaceTabs.value.filter(item => !ids.has(item.id));
+  ids.forEach(id => { delete dirtyDocuments.value[id]; });
+  if (activeRemoved) {
+    activeWorkspaceTabId.value = 'list';
+    const next = [...recentWorkspaceTabs].reverse().find(id => id !== 'list' && workspaceTabs.value.some(item => item.id === id)) || 'list';
+    if (next === 'list') resetWorkspace(); else void activateWorkspaceTab(next);
+  }
+}
+async function refreshMysqlDatabase(assetId: number, database: string, deleted = false) {
+  try {
+    const tree = await getDatabaseTree(assetId, deleted ? '' : database);
+    const snapshot = workspaceSnapshots.get(assetId);
+    const objects = deleted ? [] : (await listDatabaseObjects(assetId, database, '', snapshot?.database === database ? snapshot.objectCategory : 'table')).objects;
+    if (snapshot) workspaceSnapshots.set(assetId, { ...snapshot, databases: tree.databases, ...(snapshot.database === database ? { tables: objects, selectedTables: [], ...(deleted ? { database: '', table: '', expandedDatabase: '', columns: [], indexes: [], rows: [], queries: [] } : {}) } : {}) });
+    if (selected.value?.id === assetId) {
+      databases.value = tree.databases;
+      if (activeDatabase.value === database) {
+        if (deleted) { activeDatabase.value = ''; expandedDatabase.value = ''; activeTable.value = ''; tables.value = []; columns.value = []; indexes.value = []; rows.value = []; queries.value = []; }
+        else if (activeWorkspaceTabId.value === workspaceTabId(assetId)) { await loadObjects(); await loadQueries(); }
+      }
+    }
+  } catch (error) { showToast('刷新数据库失败', errorMessage(error)); }
+}
 async function runMenuAction(action: string) {
   const item = treeMenu.value;
   treeMenuOpen.value = false;
   if (!item) return;
   if (action === 'refresh' && (item.kind === 'root' || item.kind === 'directory')) { await refreshCatalog(); return; }
   const asset = assets.value.find(value => value.id === item.assetId);
+  if (asset?.dbType === 'mysql' && item.kind === 'database') {
+    const database = item.database || item.name;
+    const documentActions: Record<string, { type: NonNullable<DatabaseWorkspaceTab['documentType']>; permission: string }> = { 'new-table': { type: 'table', permission: 'manage_schema' }, 'new-query': { type: 'query', permission: 'execute_sql' }, 'new-er-diagram': { type: 'er', permission: 'view_data' }, accounts: { type: 'accounts', permission: 'manage_accounts' } };
+    const documentAction = documentActions[action];
+    if (documentAction) { if (can(documentAction.permission)) openDatabaseDocument(asset, database, '', documentAction.type); return; }
+    if (action === 'close-database') {
+      const hasStaged = selected.value?.id === asset.id && activeDatabase.value === database && stagedChanges.value.length > 0;
+      const cached = workspaceSnapshots.get(asset.id);
+      const close = async () => {
+        if (hasStaged) stagedChanges.value = [];
+        if (cached?.database === database) workspaceSnapshots.set(asset.id, { ...cached, stagedChanges: [] });
+        closeDatabaseDocuments(asset.id, database);
+      };
+      if (hasStaged || (cached?.database === database && cached.stagedChanges.length) || documentTabs.value.some(tab => tab.assetId === asset.id && tab.database === database && dirtyDocuments.value[tab.id])) requestConfirm('关闭数据库工作区', '该数据库有未保存的编辑，关闭后将丢弃。确定关闭吗？', '关闭', close); else await close();
+      return;
+    }
+    if (action === 'edit-database') { if (can('database_admin')) mysqlEditDatabase.value = { assetId: asset.id, database }; return; }
+    if (action === 'delete-database') {
+      if (!can('database_admin')) return;
+      requestConfirm('删除数据库', `确定删除数据库“${database}”吗？该数据库中的所有表和数据将永久删除，此操作无法恢复。`, '确认删除', async () => {
+        try { await databaseAdmin(asset.id, 'delete', database); closeDatabaseDocuments(asset.id, database); await refreshMysqlDatabase(asset.id, database, true); showToast('数据库已删除', database); }
+        catch (error) { showToast('删除数据库失败', errorMessage(error)); }
+      }); return;
+    }
+    if (action === 'database-import') { if (can('import_export')) mysqlImportDatabase.value = { assetId: asset.id, database, schema: '' }; return; }
+    if (action === 'refresh') { await refreshMysqlDatabase(asset.id, database); return; }
+  }
   const folder = directories.value.find(value => value.id === item.directoryId);
   if (action === 'new-folder') { openDirectory(item.kind === 'directory' ? item.directoryId! : null); return; }
   if (action === 'new-connection') { activeDirectoryId.value = item.kind === 'directory' ? item.directoryId! : null; createMenu.value = true; return; }
@@ -1125,6 +1212,11 @@ async function runMenuAction(action: string) {
   if (action === 'delete-asset' && asset) { removeAsset(asset); return; }
   if (action === 'disconnect') { if (asset) markAssetDisconnected(asset.id); return; }
   if (item.kind === 'asset' && (action === 'open' || action === 'refresh')) { if (asset) await openAssetWorkspace(asset); return; }
+  if (action.startsWith('export-format-') && asset && can('import_export') && can('view_data')) {
+    const format = action.slice('export-format-'.length) as ExportTarget['format'];
+    databaseExportTarget.value = { assetId: asset.id, database: item.database || item.name, schema: item.schema || '', dbType: asset.dbType, format };
+    return;
+  }
   if (!(await activateMenuTarget(item, action))) return;
   treeMenu.value = item;
   if (action === 'open' || action === 'refresh') { await runTreeAction(action); return; }
@@ -1444,7 +1536,7 @@ onUnmounted(() => {
         <div v-if="!catalogEntries.length" class="db-empty">暂无连接资产</div>
         <div v-for="entry in catalogEntries" :key="entry.key" class="db-catalog-entry" :style="{ paddingLeft: `${10 + entry.depth * 12}px` }" draggable="true" @dragstart="dragItem($event, entry.directory ? 'directory' : 'asset', entry.directory?.id || entry.asset!.id)" @dragover.prevent @drop.stop="entry.directory && dropItem($event, entry.directory.id)" @contextmenu="entry.directory ? openTreeMenu($event, 'directory', entry.directory.name, undefined, entry.directory.id) : openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)">
           <template v-if="entry.directory"><div class="db-catalog-row"><button class="db-tree-toggle" @click.stop="toggleDirectory(entry.directory.id)"><ChevronDown v-if="expandedDirectories.includes(entry.directory.id)" :size="14" /><ChevronRight v-else :size="14" /></button><Folder class="db-folder-icon" :size="15" /><button class="db-catalog-label" @click="toggleDirectory(entry.directory.id)">{{ entry.directory.name }}</button></div></template>
-            <template v-else><div class="db-catalog-row" :class="{ active: sidebarAssetId === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="isSidebarAssetExpanded(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseZap v-if="isRedisType(entry.asset!.dbType)" class="db-asset-icon redis" :size="15" /><Database v-else class="db-asset-icon" :size="15" /><button class="db-catalog-label" :class="{ active: sidebarAssetId === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span>{{ entry.asset!.name }}</span><small>{{ isAssetConnected(entry.asset!.id) ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenuFromButton($event, entry.asset!)"><MoreHorizontal :size="15" /></button></div>
+            <template v-else><div class="db-catalog-row" :class="{ active: sidebarAssetId === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="isSidebarAssetExpanded(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseBrandIcon :db-type="entry.asset!.dbType" :connected="isAssetConnected(entry.asset!.id)" /><button class="db-catalog-label" :class="{ active: sidebarAssetId === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span>{{ entry.asset!.name }}</span><small>{{ isAssetConnected(entry.asset!.id) ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenuFromButton($event, entry.asset!)"><MoreHorizontal :size="15" /></button></div>
             <div v-if="isSidebarAssetExpanded(entry.asset!.id) || (expandedAssets.includes(entry.asset!.id) && sidebarAssetId === entry.asset!.id)" class="db-asset-children">
               <template v-if="isRedisType(entry.asset!.dbType)">
                 <div v-for="db in 16" :key="db" class="db-tree-row db-redis-db-row" :class="{ active: sidebarWorkspace?.redisDb === db - 1 }" @contextmenu="openTreeMenu($event, 'database', String(db - 1))">
@@ -1505,7 +1597,11 @@ onUnmounted(() => {
         @context-action="handleWorkspaceContextAction"
         @update:model-value="activateWorkspaceTab"
       />
+      <div v-for="document in documentTabs" v-show="activeWorkspaceTabId === document.id" :key="document.id" class="db-document-host">
+        <DatabaseWorkspaceDocument :document="document" :asset="assets.find(asset => asset.id === document.assetId)!" @dirty="dirtyDocuments[document.id] = $event" @saved="refreshMysqlDatabase(document.assetId!, document.database!)" />
+      </div>
       <template v-if="activeWorkspaceTabId === 'list'"><div class="db-center-empty"><ListIcon :size="36" /><strong>选择资产打开工作区</strong><span>连接标签会显示在顶部，可随时切换</span></div></template>
+      <template v-else-if="activeDocument" />
       <template v-else-if="!selected || !connected"><div class="db-center-empty"><Database :size="36" /><strong>{{ connecting ? '正在连接数据库' : connectionError || '选择左侧连接资产' }}</strong></div></template>
       <template v-else-if="isRedis">
         <div class="db-redis-layout"><div class="db-redis-list"><div class="db-inline"><el-input v-model="redisPattern" placeholder="匹配键名" @keyup.enter="loadRedis()" /><el-button title="搜索" @click="loadRedis()"><Search :size="16" /></el-button></div><button v-for="item in redisKeys" :key="item.key" class="db-redis-key" :class="{ active: redisDetail?.key === item.key }" @click="selectRedisKey(item.key)"><strong>{{ item.key }}</strong><small>{{ item.type }} · TTL {{ item.ttl }} · {{ item.size }} B</small></button></div>
@@ -1557,6 +1653,8 @@ onUnmounted(() => {
     <input ref="databaseInput" class="db-hidden" type="file" :accept="isRedis ? '.json' : '.sql'" @change="onDatabaseImport" />
     <input ref="queryInput" class="db-hidden" type="file" accept=".sql,text/plain" @change="onQueryImport" />
     <DatabaseObjectEditor v-model="objectEditorOpen" :context="objectEditorContext" @saved="loadObjects" />
+    <MysqlDatabaseDialog v-if="mysqlEditDatabase" :key="`${mysqlEditDatabase.assetId}:${mysqlEditDatabase.database}`" v-bind="mysqlEditDatabase" @close="mysqlEditDatabase = null" @saved="refreshMysqlDatabase(mysqlEditDatabase.assetId, mysqlEditDatabase.database)" />
+    <DatabaseImportDialog v-if="mysqlImportDatabase" :key="`${mysqlImportDatabase.assetId}:${mysqlImportDatabase.database}`" v-bind="mysqlImportDatabase" @close="mysqlImportDatabase = null" />
     <el-dialog v-model="dumpDialog" title="导出 SQL" width="min(480px, 94vw)" :close-on-click-modal="false">
       <el-form label-position="top">
         <el-form-item label="数据库"><el-input :model-value="dumpTarget?.database" disabled /></el-form-item>
@@ -1566,6 +1664,7 @@ onUnmounted(() => {
       <template #footer><el-button @click="dumpDialog = false">取消</el-button><el-button type="primary" @click="submitDumpExport">提交导出</el-button></template>
     </el-dialog>
     <DatabaseAccountDialog v-if="selected" v-model="accountDialogOpen" :asset-id="selected.id" :database="activeDatabase" :db-type="selected.dbType" :schema="schema" />
+    <DatabaseExportDialog :target="databaseExportTarget" :can-structure="can('manage_schema')" @close="databaseExportTarget = null" />
     <el-dialog :close-on-click-modal="false" v-model="directoryDialog" :title="editingDirectory ? '重命名目录' : '新建目录'" width="min(420px, 94vw)"><el-input v-model="directoryName" maxlength="160" placeholder="目录名称" @keyup.enter="saveDirectory" /><template #footer><el-button @click="directoryDialog = false">取消</el-button><el-button type="primary" @click="saveDirectory">保存</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="moveDialog" title="移动到目录" width="min(420px, 94vw)"><el-select v-model="moveTarget" placeholder="选择目标目录" style="width:100%"><el-option label="根目录" :value="null" /><el-option v-for="folder in directories" :key="folder.id" :label="folder.name" :value="folder.id" /></el-select><template #footer><el-button @click="moveDialog = false">取消</el-button><el-button type="primary" @click="saveMove">移动</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="databaseDialog" :title="({ create: '新建数据库', delete: '删除数据库', clear: '清空数据库', import: '导入数据库' } as Record<string, string>)[databaseAction]" width="min(440px, 94vw)"><el-input v-model="databaseTarget" :placeholder="selected?.dbType === 'sqlite' ? '受限目录中的 .db 文件名' : selected?.dbType === 'redis' ? 'DB 编号 0-255' : '数据库名称'" /><template #footer><el-button @click="databaseDialog = false">取消</el-button><el-button type="primary" @click="saveDatabaseAction">确认</el-button></template></el-dialog>
@@ -1599,6 +1698,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.db-document-host{flex:1;min-height:0;min-width:0;overflow:hidden}
 .db-workspace{height:100%;min-height:0;display:grid;grid-template-columns:minmax(240px,280px) minmax(0,1fr);border:1px solid var(--border-color,#dce2e9);background:var(--panel-bg,#fff);overflow:hidden}.db-sidebar{min-width:0;border-right:1px solid var(--border-color,#dce2e9);display:flex;flex-direction:column;padding:14px;gap:12px}.db-sidebar-head,.db-inline,.db-data-tools,.db-sql-toolbar{display:flex;align-items:center;gap:8px}.db-sidebar-head strong{font-size:16px}.db-asset-scroll{min-height:0;overflow:auto;flex:1}.db-asset-line{display:flex;align-items:center;border-radius:5px}.db-asset-line.active,.db-tree-node.active,.db-redis-key.active{background:var(--el-color-primary-light-9,#edf4ff)}.db-asset-main{display:flex;align-items:center;gap:8px;min-width:0;flex:1;text-align:left;border:0;background:none;padding:8px;cursor:pointer;color:inherit}.db-asset-main span{min-width:0}.db-asset-main strong,.db-asset-main small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-asset-main small{color:var(--el-text-color-secondary,#778);font-size:11px}.db-type-option{display:flex;align-items:center;gap:8px;width:100%;padding:7px;border:0;background:none;text-align:left;cursor:pointer;color:inherit}.db-type-option:hover{background:var(--el-fill-color-light,#eee)}.db-tree{padding-left:22px}.db-tree-branch{padding-left:15px;border-left:1px solid var(--border-color,#ddd)}.db-tree-node,.db-tree-category{display:block;width:100%;text-align:left;border:0;background:none;padding:6px 8px;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:inherit}.db-tree-category{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-main{min-width:0;min-height:0;overflow:hidden;display:flex;flex-direction:column}.db-tabs{flex:none;display:flex;border-bottom:1px solid var(--border-color,#ddd);overflow:auto}.db-tabs button{border:0;border-bottom:2px solid transparent;background:none;color:inherit;padding:10px 16px;white-space:nowrap;cursor:pointer}.db-tabs button.active{border-bottom-color:var(--el-color-primary,#409eff);color:var(--el-color-primary,#409eff)}.db-content{flex:1;min-height:0;overflow:auto;padding:12px 16px;display:flex;flex-direction:column;gap:10px}.db-content>.el-table{flex:1}.db-data-tools .el-select{width:145px}.db-sql-toolbar{justify-content:flex-start}.db-sql-toolbar span{font-size:12px;color:var(--el-text-color-secondary,#778)}.db-center-empty{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;color:var(--el-text-color-secondary,#778)}.db-redis-layout{display:grid;grid-template-columns:260px minmax(0,1fr);flex:1;min-height:0}.db-redis-list{border-right:1px solid var(--border-color,#ddd);padding:12px;overflow:auto}.db-redis-key{width:100%;display:block;text-align:left;padding:8px;border:0;background:none;color:inherit;cursor:pointer}.db-redis-key strong,.db-redis-key small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.db-redis-key small{font-size:11px;color:var(--el-text-color-secondary,#778)}.db-redis-detail{min-width:0;overflow:auto;padding:18px;display:flex;flex-direction:column}.db-redis-detail h3{margin:0}.db-redis-detail pre,.db-command pre{white-space:pre-wrap;overflow-wrap:anywhere;background:var(--el-fill-color-light,#f3f4f6);padding:10px;border-radius:4px}.db-command{margin-top:auto;padding-top:18px;display:flex;gap:8px;flex-wrap:wrap}.db-command .el-input{flex:1}.db-command pre{width:100%}.db-hidden{display:none}.db-empty{padding:20px;text-align:center;color:var(--el-text-color-secondary,#778)}@media(max-width:720px){.db-workspace{display:flex;flex-direction:column;min-height:0}.db-sidebar{flex:0 0 250px;height:auto;border-right:0;border-bottom:1px solid var(--border-color,#ddd)}.db-main{flex:1;min-height:0}.db-redis-layout{grid-template-columns:38% minmax(0,1fr)}.db-data-tools{flex-wrap:wrap}}
 .db-data-tools,.db-sql-toolbar,.db-redis-edit,.db-redis-title{display:flex;align-items:center;gap:8px;flex-wrap:wrap;min-width:0}
 .db-object-toolbar-dense{min-height:34px;padding:0 2px;gap:6px}.db-object-toolbar-dense .el-button{margin-left:0}.db-object-toolbar-dense .el-input{width:210px}.db-selection-summary{font-size:12px;color:var(--el-text-color-secondary,#778);white-space:nowrap}.db-object-toolbar-spacer{flex:1}.db-content>.el-table{--el-table-header-bg-color:var(--el-fill-color-light);--el-table-row-hover-bg-color:var(--ui-primary-soft);font-size:12px}.db-content>.el-table :deep(.el-table__cell){padding:5px 0}.db-content>.el-table :deep(.cell){white-space:nowrap}
@@ -1651,8 +1751,6 @@ onUnmounted(() => {
 .db-catalog-label small{font-size:10px}
 .db-tree-toggle{width:16px;height:22px;padding:0}
 .db-folder-icon{color:#4e8b7b;flex:none}
-.db-asset-icon{flex:none;color:#368b66}
-.db-asset-icon.redis{color:#d84a4a}
 .db-asset-more{display:grid;place-items:center;flex:none;width:22px;height:24px;padding:0;border:0;border-radius:3px;background:none;color:var(--el-text-color-secondary,#64748b);cursor:pointer}
 .db-asset-more:hover{background:var(--el-fill-color,#e5e7eb);color:var(--el-text-color-primary,#293344)}
 .db-asset-children{margin:0 0 3px 10px;padding:2px 0 2px 6px;border-left:1px solid var(--el-border-color,#dce2e9)}

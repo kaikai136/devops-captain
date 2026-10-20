@@ -28,6 +28,7 @@ urlpatterns = [
     path("database-management/assets/<int:asset_id>/copy/", catalog.asset_copy),
     path("database-management/assets/<int:asset_id>/move/", catalog.asset_move),
     path("database-management/assets/<int:asset_id>/database/", database_admin.database_operation),
+    path("database-management/assets/<int:asset_id>/mysql-metadata/", database_admin.mysql_metadata),
     path("database-management/assets/<int:asset_id>/test/", views.asset_test),
     path("database-management/databases/", views.asset_databases),
     path("database-management/tables/", views.asset_tables),

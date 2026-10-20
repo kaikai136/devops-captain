@@ -178,6 +178,33 @@ class MysqlDumpExecutionTests(SimpleTestCase):
         self.assertEqual(self.queries[-1], ("SET FOREIGN_KEY_CHECKS=%s", (1,)))
 
 
+    def test_continue_on_error_finishes_remaining_tables_and_reports_failure(self):
+        self.path.write_text("CREATE TABLE first (id int); INSERT INTO first VALUES (1); CREATE TABLE sample (id int); INSERT INTO sample VALUES (2);", encoding="utf-8")
+        self.task.scope = "database"
+        self.task.parameters["options"] = {"continueOnError": True, "asyncInsert": False}
+        self.conn.cursor.return_value.__enter__.return_value.executemany.side_effect = [RuntimeError("bad row"), None]
+        with self.context(), self.assertRaises(DumpError): mysql_dump.import_dump(self.task, MagicMock())
+        self.assertEqual(self.task.checkpoints["failedTables"], ["first"])
+        self.assertEqual(self.task.checkpoints["completedTables"], ["sample"])
+        self.assertEqual(self.conn.cursor.return_value.__enter__.return_value.executemany.call_count, 2)
+        self.assertTrue(self.task.preview["warnings"])
+
+    def test_disabled_batching_writes_one_row_at_a_time(self):
+        self.path.write_text("INSERT INTO sample (id) VALUES (1),(2),(3);", encoding="utf-8")
+        self.task.parameters["options"] = {"asyncInsert": False}
+        with self.context(): mysql_dump.import_dump(self.task, MagicMock())
+        calls = self.conn.cursor.return_value.__enter__.return_value.executemany.call_args_list
+        self.assertEqual([len(call.args[1]) for call in calls], [1, 1, 1])
+
+    def test_continue_never_swallows_cancellation_permissions_or_resource_limits(self):
+        for error in [InterruptedError("cancel"), PermissionError("revoked"), mysql_dump.ResourceLimitError("limit")]:
+            with self.subTest(error=error):
+                self.path.write_text("INSERT INTO sample (id) VALUES (1);", encoding="utf-8")
+                self.task.parameters["options"] = {"continueOnError": True}
+                self.conn.cursor.return_value.__enter__.return_value.executemany.side_effect = error
+                with self.context(), self.assertRaises(type(error)): mysql_dump.import_dump(self.task, MagicMock())
+
+
 class MysqlDumpTaskTests(TestCase):
     def setUp(self):
         self.folder = tempfile.TemporaryDirectory()
@@ -197,11 +224,41 @@ class MysqlDumpTaskTests(TestCase):
         for changes in ({"format": "csv"}, {"tables": ["sample", "other"]}, {"tables": ["bad.name"]}):
             self.assertEqual(self.client.post(self.base, {**data, **changes}, format="json").status_code, 400)
 
+    def test_upload_persists_validated_import_options(self):
+        payload = {"assetId": self.asset.pk, "scope": "database", "format": "sql", "fileName": "dump.sql", "chunks": 1, "totalBytes": 0,
+                   "options": {"continueOnError": True, "asyncInsert": False}}
+        response = self.client.post(self.base + "uploads/", payload, format="json")
+        self.assertEqual(response.status_code, 201)
+        self.assertEqual(DatabaseTransferTask.objects.get(pk=response.data["id"]).parameters["options"], payload["options"])
+        self.assertEqual(self.client.post(self.base + "uploads/", {**payload, "options": {"continueOnError": "yes"}}, format="json").status_code, 400)
+
     def test_export_normalizes_format_and_database_type(self):
         self.asset.db_type = "MySQL"
         self.asset.save(update_fields=["db_type"])
         data = {"assetId": self.asset.pk, "direction": "EXPORT", "scope": "DATABASE", "format": ".SQL", "database": "test"}
         self.assertEqual(self.client.post(self.base, data, format="json").status_code, 202)
+
+    def test_multi_format_exports_are_versioned_and_preserve_sql_options(self):
+        self.asset.db_type = "sqlite"
+        self.asset.save(update_fields=["db_type"])
+        payload = {"assetId": self.asset.pk, "direction": "export", "scope": "database", "database": "test",
+                   "tables": ["sample"], "format": "csv", "exportVersion": 2}
+        response = self.client.post(self.base, payload, format="json")
+        self.assertEqual(response.status_code, 202)
+        self.assertEqual(response.data["sourceName"], "database-export.zip")
+        self.assertEqual(response.data["format"], "csv")
+        task = DatabaseTransferTask.objects.get(pk=response.data["id"])
+        self.assertEqual(task.parameters["exportVersion"], 2)
+        self.assertEqual(task.parameters["tables"], ["sample"])
+        invalid = self.client.post(self.base, {**payload, "options": {"upsert": "yes"}}, format="json")
+        self.assertEqual(invalid.status_code, 400)
+
+    def test_multi_format_sql_remains_mysql_only(self):
+        self.asset.db_type = "sqlite"
+        self.asset.save(update_fields=["db_type"])
+        payload = {"assetId": self.asset.pk, "direction": "export", "scope": "database", "database": "test",
+                   "tables": ["sample"], "format": "sql", "exportVersion": 2}
+        self.assertEqual(self.client.post(self.base, payload, format="json").status_code, 400)
 
     def test_connection_export_does_not_require_asset(self):
         response = self.client.post(self.base, {"direction": "export", "scope": "connections", "format": "json"}, format="json")
