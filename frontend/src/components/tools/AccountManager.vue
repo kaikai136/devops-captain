@@ -9,7 +9,6 @@ import SystemSearchPanel from '@shared/components/SystemSearchPanel.vue';
 
 interface CredentialForm {
   name: string;
-  credentialType: 'host' | 'application';
   username: string;
   password: string;
   privateKeyName: string;
@@ -71,7 +70,6 @@ function openCreateDialog() {
 function openEditDialog(credential: HostCredential) {
   form.value = {
     name: credential.name,
-    credentialType: credential.credentialType === 'application' ? 'application' : 'host',
     username: credential.username,
     password: credential.password,
     privateKeyName: credential.privateKeyName,
@@ -85,7 +83,6 @@ async function saveCredential() {
   message.value = '';
   const payload = {
     name: form.value.name.trim(),
-    credentialType: form.value.credentialType,
     username: form.value.username.trim(),
     password: form.value.password.trim(),
     privateKeyName: form.value.privateKeyName.trim(),
@@ -133,7 +130,6 @@ async function deleteCredential() {
 function emptyForm(): CredentialForm {
   return {
     name: '',
-    credentialType: 'host',
     username: '',
     password: '',
     privateKeyName: '',
@@ -178,7 +174,6 @@ function emptyForm(): CredentialForm {
               <div class="account-name">
                 <div class="account-title">
                   <strong>{{ row.name }}</strong>
-                  <el-tag size="small" :type="row.credentialType === 'application' ? 'warning' : 'primary'">{{ row.credentialType === 'application' ? '应用密钥' : '主机密钥' }}</el-tag>
                 </div>
                 <span>ID {{ row.id }}</span>
               </div>
@@ -225,12 +220,6 @@ function emptyForm(): CredentialForm {
         <el-form-item label="账号名称" required>
           <el-input v-model="form.name" autofocus />
         </el-form-item>
-        <el-form-item label="账号类型" required>
-          <el-select v-model="form.credentialType" style="width: 100%">
-            <el-option label="主机密钥" value="host" />
-            <el-option label="应用密钥" value="application" />
-          </el-select>
-        </el-form-item>
         <el-form-item label="用户">
           <el-input v-model="form.username" placeholder="选填" />
         </el-form-item>
@@ -245,7 +234,7 @@ function emptyForm(): CredentialForm {
             <em>{{ form.privateKeyName || '未上传独立密钥' }}</em>
           </div>
         </el-form-item>
-        <el-form-item label="备注信息">
+        <el-form-item class="account-form-full" label="备注信息">
           <el-input v-model="form.remark" type="textarea" :rows="3" />
         </el-form-item>
         <p v-if="message" class="account-message">{{ message }}</p>

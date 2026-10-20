@@ -15,7 +15,7 @@ from redis.exceptions import (
     TimeoutError as RedisTimeoutError,
 )
 
-from .services import decrypt_password
+from .credentials import resolve_credentials
 
 
 TYPE_INFO = {
@@ -88,9 +88,13 @@ def marker(db_type, index=1):
     return "?" if db_type in {"sqlite", "dameng"} else f":{index}" if db_type == "oracle" else "%s"
 
 
-def connection_error(exc):
+def connection_error(exc, *, secrets=()):
+    detail = str(exc)
+    for secret in secrets:
+        if secret:
+            detail = detail.replace(secret, "[已隐藏]")
     if isinstance(exc, ValueError):
-        return str(exc)
+        return detail
     if isinstance(exc, RedisAuthenticationError):
         return "Redis 认证失败，请检查用户名和密码；仅使用密码认证时请留空用户名，ACL 认证时请填写已启用的用户名"
     if isinstance(exc, RedisNoPermissionError):
@@ -101,7 +105,7 @@ def connection_error(exc):
         return "无法连接 Redis，请检查地址、端口、网络及 TLS 配置"
     # Keep the generic context while exposing the driver's sanitized reason so
     # operators can distinguish authentication, network, and missing-driver errors.
-    detail = " ".join(str(exc).split())[:240]
+    detail = " ".join(detail.split())[:240]
     if not detail:
         return "数据库操作失败，请检查连接配置、对象名称及账号权限"
     return f"数据库操作失败：{detail}"
@@ -115,11 +119,23 @@ def module_for(db_type):
 
 
 def connect(asset, database=None):
+    from .connection_config import ConnectionPolicyError
+
+    credentials = resolve_credentials(asset)
+    try:
+        return _connect(asset, database, credentials)
+    except ConnectionPolicyError:
+        raise
+    except Exception as exc:
+        raise ValueError(connection_error(exc, secrets=(credentials[1],))) from None
+
+
+def _connect(asset, database, credentials):
     kind = asset.db_type
     if kind not in TYPE_INFO:
         raise ValueError("不支持的数据库类型")
     options = asset.options or {}
-    password = decrypt_password(asset.password_encrypted)
+    username, password = credentials
     if kind == "sqlite":
         path = sqlite_path(options.get("file"))
         if not path.is_file():
@@ -128,11 +144,11 @@ def connect(asset, database=None):
         conn.set_authorizer(lambda action, *_args: sqlite3.SQLITE_DENY if action in {sqlite3.SQLITE_ATTACH, sqlite3.SQLITE_DETACH} else sqlite3.SQLITE_OK)
         return conn
     module = module_for(kind)
-    common = {"host": asset.host, "port": asset.port, "user": asset.username, "password": password}
+    common = {"host": asset.host, "port": asset.port, "user": username, "password": password}
     if kind in {"mysql", "mariadb"}:
         if kind == "mysql":
             from .mysql_connection import connect as connect_mysql
-            return connect_mysql(asset, database, module)
+            return connect_mysql(asset, database, module, credentials=credentials)
         if options.get("ssl"):
             common["ssl"] = {}
         return module.connect(**common, database=database or asset.database or None,
@@ -145,10 +161,10 @@ def connect(asset, database=None):
                               options="-c statement_timeout=20000")
     if kind == "sqlserver":
         server = asset.host + ("\\" + str(options["instance"]) if options.get("instance") else "")
-        return module.connect(server=server, port=asset.port, user=asset.username,
+        return module.connect(server=server, port=asset.port, user=username,
                               password=password, database=database or asset.database or "master", login_timeout=5, timeout=20)
     if kind == "redis":
-        return module.Redis(host=asset.host, port=asset.port, username=asset.username or None,
+        return module.Redis(host=asset.host, port=asset.port, username=username or None,
                             password=password or None, db=int(database if database is not None and database != "" else options.get("db", 0)), socket_connect_timeout=5,
                             socket_timeout=20, decode_responses=True, ssl=bool(options.get("ssl")))
     if kind == "clickhouse":
@@ -161,8 +177,8 @@ def connect(asset, database=None):
         if not service:
             raise ValueError("Oracle 需要 Service Name 或 SID")
         dsn = module.makedsn(asset.host, asset.port, service_name=service) if options.get("service") or not options.get("sid") else module.makedsn(asset.host, asset.port, sid=service)
-        return module.connect(user=asset.username, password=password, dsn=dsn, tcp_connect_timeout=5)
-    return module.connect(user=asset.username, password=password, server=asset.host,
+        return module.connect(user=username, password=password, dsn=dsn, tcp_connect_timeout=5)
+    return module.connect(user=username, password=password, server=asset.host,
                           port=asset.port, database=database or asset.database)
 
 
@@ -253,9 +269,9 @@ def schema_names(asset):
     if kind == "sqlite":
         return ["main"]
     if kind == "oracle":
-        return [asset.username.upper()]
+        return [resolve_credentials(asset)[0].upper()]
     if kind == "dameng":
-        return [asset.username.upper()]
+        return [resolve_credentials(asset)[0].upper()]
     with connection(asset) as conn:
         sql = ("SHOW DATABASES" if kind in {"mysql", "mariadb", "clickhouse"} else
                "SELECT datname FROM pg_database WHERE datallowconn ORDER BY datname" if kind in {"postgresql", "kingbase"} else
@@ -271,7 +287,7 @@ def schemas(asset, database):
     elif kind == "sqlserver":
         sql = "SELECT name FROM sys.schemas ORDER BY name"
     elif kind in {"oracle", "dameng"}:
-        return [asset.username.upper()]
+        return [resolve_credentials(asset)[0].upper()]
     else:
         return []
     with connection(asset, database) as conn:
@@ -299,7 +315,7 @@ def object_list(asset, database, schema=None, object_type=None):
             params = (schema or 'dbo',)
         else:
             sql = f"SELECT OBJECT_NAME AS name, OBJECT_TYPE AS type FROM ALL_OBJECTS WHERE OWNER={marker(kind)} AND OBJECT_TYPE={marker(kind, 2)} ORDER BY OBJECT_NAME"
-            params = (schema or asset.username.upper(), routine_type)
+            params = (schema or resolve_credentials(asset)[0].upper(), routine_type)
         with connection(asset, database if kind not in {"oracle", "dameng"} else None) as conn:
             rows, _ = run(conn, sql, params, db_type=kind)
         rows = metadata_rows(rows)
@@ -329,7 +345,7 @@ def object_list(asset, database, schema=None, object_type=None):
     else:
         sql = (f"SELECT TABLE_NAME AS name, 'TABLE' AS type FROM ALL_TABLES WHERE OWNER={marker(kind)} "
                f"UNION ALL SELECT VIEW_NAME AS name, 'VIEW' AS type FROM ALL_VIEWS WHERE OWNER={marker(kind)} ORDER BY name")
-        params = (schema or asset.username.upper(),) * (2 if kind == "dameng" else 1)
+        params = (schema or resolve_credentials(asset)[0].upper(),) * (2 if kind == "dameng" else 1)
     with connection(asset, database if kind not in {"oracle", "dameng", "sqlite"} else None) as conn:
         rows, _ = run(conn, sql, params, db_type=kind)
     rows = metadata_rows(rows)
@@ -394,7 +410,7 @@ def table_ddl(asset, database, table, schema=None):
         cols = [f'[{row["column_name"]}] {row["data_type"]}' + (" NOT NULL" if str(row.get("is_nullable")).upper() == "NO" else "") for row in rows]
         return f'CREATE TABLE [{owner}].[{table}] (\n  ' + ",\n  ".join(cols) + "\n);"
     if kind in {"oracle", "dameng"}:
-        owner = schema or asset.username.upper()
+        owner = schema or resolve_credentials(asset)[0].upper()
         with connection(asset) as conn:
             rows, _ = run(conn, f"SELECT DBMS_METADATA.GET_DDL('TABLE', {marker(kind)}, {marker(kind, 2)}) AS ddl FROM DUAL", (table.upper(), owner.upper()), db_type=kind)
         rows = metadata_rows(rows)
@@ -411,7 +427,7 @@ def object_ddl(asset, database, name, schema=None, object_type="table", signatur
     kind = asset.db_type
     name = str(name or "").strip()
     if not IDENTIFIER.fullmatch(name): raise ValueError("对象名称格式不正确")
-    owner = schema or ("dbo" if kind == "sqlserver" else "public" if kind in {"postgresql", "kingbase"} else asset.username.upper())
+    owner = schema or ("dbo" if kind == "sqlserver" else "public" if kind in {"postgresql", "kingbase"} else resolve_credentials(asset)[0].upper())
     with connection(asset, database if kind not in {"oracle", "dameng", "sqlite"} else None) as conn:
         if kind in {"mysql", "mariadb"}:
             command = "SHOW CREATE VIEW" if object_type == "view" else f"SHOW CREATE {object_type.upper()}"
@@ -465,7 +481,7 @@ def columns(asset, database, table, schema=None):
         params = (owner, table)
     else:
         sql = f"SELECT c.COLUMN_NAME AS name, c.DATA_TYPE AS type, c.NULLABLE AS nullable, CASE WHEN k.COLUMN_NAME IS NULL THEN '' ELSE 'PRI' END AS column_key, c.DATA_DEFAULT AS default_value FROM ALL_TAB_COLUMNS c LEFT JOIN (SELECT cc.OWNER, cc.TABLE_NAME, cc.COLUMN_NAME FROM ALL_CONSTRAINTS co JOIN ALL_CONS_COLUMNS cc ON cc.OWNER=co.OWNER AND cc.CONSTRAINT_NAME=co.CONSTRAINT_NAME WHERE co.CONSTRAINT_TYPE='P') k ON k.OWNER=c.OWNER AND k.TABLE_NAME=c.TABLE_NAME AND k.COLUMN_NAME=c.COLUMN_NAME WHERE c.OWNER={marker(kind, 1)} AND c.TABLE_NAME={marker(kind, 2)} ORDER BY c.COLUMN_ID"
-        params = (schema or asset.username.upper(), table.upper())
+        params = (schema or resolve_credentials(asset)[0].upper(), table.upper())
     with connection(asset, database) as conn:
         rows, _ = run(conn, sql, params, db_type=kind)
     rows = metadata_rows(rows)
@@ -496,7 +512,7 @@ def indexes(asset, database, table, schema=None):
         params = {"db": database or asset.database or "default", "table": table}
     else:
         sql = f"SELECT c.INDEX_NAME AS name, c.COLUMN_NAME AS column_name, i.UNIQUENESS AS uniqueness FROM ALL_IND_COLUMNS c JOIN ALL_INDEXES i ON i.OWNER=c.INDEX_OWNER AND i.INDEX_NAME=c.INDEX_NAME WHERE c.TABLE_OWNER={marker(kind)} AND c.TABLE_NAME={marker(kind, 2)} ORDER BY c.INDEX_NAME, c.COLUMN_POSITION"
-        params = (schema or asset.username.upper(), table.upper())
+        params = (schema or resolve_credentials(asset)[0].upper(), table.upper())
     with connection(asset, database) as conn:
         rows, _ = run(conn, sql, params, db_type=kind)
         rows = metadata_rows(rows)

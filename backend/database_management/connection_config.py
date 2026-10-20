@@ -35,8 +35,12 @@ def hostname(value):
 
 
 def validate_options(options, kind):
-    if not isinstance(options, dict) or set(options) - LEGACY_KEYS - (MYSQL_KEYS if kind == "mysql" else set()):
+    if not isinstance(options, dict) or set(options) - LEGACY_KEYS - {"authMethod"} - (MYSQL_KEYS if kind == "mysql" else set()):
         raise ValueError("包含不支持的连接选项")
+    if options.get("authMethod", "password") not in {"password", "none", "applicationKey"}:
+        raise ValueError("验证方式无效")
+    if kind == "sqlite" and options.get("authMethod") == "applicationKey":
+        raise ValueError("SQLite 不支持应用密钥认证")
     if kind != "mysql":
         return options
     for key in ("ssl", "readOnly"):
@@ -46,8 +50,6 @@ def validate_options(options, kind):
         raise ValueError("颜色标签无效")
     if options.get("environment", "") not in {"", "development", "test", "staging", "production"}:
         raise ValueError("环境无效")
-    if options.get("authMethod", "password") not in {"password", "none"}:
-        raise ValueError("验证方式无效")
     if options.get("charset", "auto") not in {"auto", "utf8mb4", "utf8", "latin1", "gbk", "gb18030"}:
         raise ValueError("编码无效")
     integer(options.get("connectTimeout", 5), 1, 120, "连接超时")

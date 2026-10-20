@@ -19,10 +19,10 @@ describe('AccountManager Element Plus migration', () => {
     expect(template).toContain('<el-form-item');
     expect(template).toContain('<el-button');
     expect(template).toContain('<el-input');
-    expect(template).toContain('账号类型');
-    expect(template).toContain('主机密钥');
-    expect(template).toContain('应用密钥');
-    expect(template).toContain('row.credentialType');
+    expect(template).not.toContain('账号类型');
+    expect(template).not.toContain('主机密钥');
+    expect(template).not.toContain('应用密钥');
+    expect(template).not.toContain('row.credentialType');
     expect(template).toContain('<el-upload');
     expect(template).toContain('class="account-table-wrap app-data-table-wrap"');
     expect(template).toContain('class="account-table app-data-table"');
@@ -51,5 +51,6 @@ describe('AccountManager Element Plus migration', () => {
     expect(styles).toContain('grid-template-columns: repeat(2, minmax(0, 1fr))');
     expect(styles).toContain('box-shadow: 0 0 0 1px var(--el-border-color, #d6e3f4) inset');
     expect(styles).toContain('@media (max-width: 640px)');
+    expect(template.match(/class="account-form-full"/g)).toHaveLength(1);
   });
 });

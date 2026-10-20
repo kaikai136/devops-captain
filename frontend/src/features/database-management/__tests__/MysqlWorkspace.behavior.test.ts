@@ -5,6 +5,7 @@ import * as Vue from 'vue';
 import * as diagramUtils from '../utils/databaseDiagram';
 import * as connectionUtils from '../utils/mysqlConnection';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { keyHarness } from './applicationKeyHarness';
 
 // Run the actual setup functions with mocked network/UI boundaries; no live database mutations.
 const scopes: Vue.EffectScope[] = [];
@@ -20,8 +21,9 @@ function setup(name: string, props: Record<string, unknown> = {}, allowed = true
   const confirm = vi.fn().mockResolvedValue('confirm');
   const requestConfirm = vi.fn();
   const event = vi.fn();
-  const context = { canUsePageAction: () => allowed, showToast: vi.fn(), requestConfirm, currentUser: Vue.ref({ username: 'test' }), hostCredentials: Vue.ref([]), loadHostCredentials: vi.fn() };
+  const context = { canUsePageAction: () => allowed, showToast: vi.fn(), requestConfirm, currentUser: Vue.ref({ username: 'test' }) };
   const exports: any = {};
+  const keys = keyHarness(context, mounted);
   const require = (path: string) => {
     if (path === 'vue') return { ...Vue, useId: () => `test-${scopes.length}`, onMounted: (fn: () => unknown) => mounted.push(fn), onUnmounted: vi.fn() };
     if (path === 'element-plus') return { ElMessage: { error: vi.fn(), success: vi.fn() }, ElMessageBox: { confirm, prompt: vi.fn().mockResolvedValue({ value: 'query' }) } };
@@ -32,6 +34,7 @@ function setup(name: string, props: Record<string, unknown> = {}, allowed = true
     if (path.endsWith('/errors')) return { errorMessage: (error: unknown) => String(error) };
     if (path.endsWith('/databaseDiagram')) return diagramUtils;
     if (path.endsWith('/mysqlConnection')) return connectionUtils;
+    if (path.endsWith('/useApplicationKeyChoices')) return keys.choices;
     if (path.endsWith('/useDatabaseObjectActions')) return { useDatabaseObjectActions: () => ({ executeObjectAction: vi.fn() }) };
     return {};
   };
@@ -43,6 +46,49 @@ function setup(name: string, props: Record<string, unknown> = {}, allowed = true
 }
 const asset = { id: 7, name: 'mysql', dbType: 'mysql', databaseName: 'other', options: {} };
 describe('MySQL workspace behavior', () => {
+  it('prunes removed connections, document drafts, selections, snapshots and pins on refresh', async () => {
+    const { state, api } = setup('DatabaseManagementPanel');
+    state.assets.value = [asset]; state.selected.value = asset; state.sidebarAssetId.value = asset.id;
+    state.openDatabaseDocument(asset, 'tele', '', 'table');
+    state.workspaceSnapshots.set(asset.id, { connected: true });
+    state.pinnedObjects.value = [JSON.stringify([asset.id, 'tele', '', 'table', 'sample'])];
+    api.listDatabaseAssets.mockResolvedValue([]);
+    await state.loadAssets();
+    expect(state.selected.value).toBeNull(); expect(state.sidebarAssetId.value).toBeNull();
+    expect(state.workspaceTabs.value.map((tab: any) => tab.id)).toEqual(['list']);
+    expect(state.activeWorkspaceTabId.value).toBe('list');
+    expect(state.workspaceSnapshots.size).toBe(0); expect(state.dirtyDocuments.value).toEqual({});
+    expect(state.pinnedObjects.value).toEqual([]);
+  });
+  it('keeps new forms empty for every database protocol and resets previous drafts', () => {
+    const { state } = setup('DatabaseManagementPanel');
+    for (const kind of ['mysql', 'mariadb', 'postgresql', 'kingbase', 'sqlserver', 'sqlite', 'redis', 'clickhouse', 'oracle', 'dameng']) {
+      state.openCreate(kind);
+      expect(state.form.value).toMatchObject({ name: '', host: '', username: '', password: '', databaseName: '', dbType: kind });
+      state.form.value.name = 'previous'; state.form.value.username = 'previous'; state.form.value.password = 'previous';
+      state.openCreate(kind);
+      expect(state.form.value).toMatchObject({ name: '', host: '', username: '', password: '', databaseName: '' });
+    }
+    expect(state.emptyForm('redis').port).toBe(6379);
+  });
+  it('binds keys for supported protocols, allows Redis password-only keys and unlinks in manual mode', async () => {
+    const { state, api } = setup('DatabaseManagementPanel');
+    await state.loadKeys();
+    for (const kind of ['mariadb', 'postgresql', 'kingbase', 'sqlserver', 'redis', 'clickhouse', 'oracle', 'dameng']) {
+      state.openCreate(kind);
+      expect(state.form.value.applicationKeyId).toBeNull(); expect(state.form.value.options.authMethod).toBe('password');
+      state.form.value.options.authMethod = 'applicationKey'; state.form.value.applicationKeyId = kind === 'redis' ? 6 : 5;
+      state.form.value.password = 'draft';
+      await state.saveAsset();
+      const sent = api.createDatabaseAsset.mock.calls.at(-1)![0];
+      expect(sent.applicationKeyId).toBe(kind === 'redis' ? 6 : 5); expect(sent.username).toBe(''); expect(sent).not.toHaveProperty('password');
+      state.form.value.options.authMethod = 'password';
+      await state.saveAsset();
+      expect(api.createDatabaseAsset.mock.calls.at(-1)![0]).toMatchObject({ applicationKeyId: null, password: 'draft' });
+    }
+    api.createDatabaseAsset.mockClear(); state.openCreate('postgresql'); state.form.value.options.authMethod = 'applicationKey'; state.form.value.applicationKeyId = 6;
+    await state.saveAsset(); expect(api.createDatabaseAsset).not.toHaveBeenCalled();
+  });
   it('opens independent documents, retains drafts while switching, and closes only the target database', async () => {
     const { state } = setup('DatabaseManagementPanel');
     state.assets.value = [asset];

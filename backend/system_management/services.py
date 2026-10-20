@@ -15,7 +15,7 @@ from django.utils import timezone
 from .models import LoginLog, OperationLog, SystemSetting
 from .settings_defaults import AUTH_SESSION_FIELD_LIMITS, DEFAULT_AUTH_SESSION, DEFAULT_LOG_RETENTION, DEFAULT_TERMINAL_SETTINGS, TERMINAL_SETTINGS_FIELD_LIMITS
 
-FEATURE_PERMISSIONS_CACHE_KEY = "system.feature_permissions_ready.v1"
+FEATURE_PERMISSIONS_CACHE_KEY = "system.feature_permissions_ready.v2"
 FEATURE_PERMISSION_CACHE_SECONDS = getattr(settings, "FEATURE_PERMISSION_CACHE_SECONDS", 300)
 
 BUILTIN_ADMIN_USERNAME = "admin"
@@ -35,6 +35,7 @@ FEATURE_PERMISSION_DEFINITIONS = [
     ("host", "主机管理", "applicationMarket", "应用市场"),
     ("host", "主机管理", "databaseManagement", "应用管理"),
     ("host", "主机管理", "accounts", "账号管理"),
+    ("market", "应用管理", "applicationKeys", "应用密钥"),
     ("company", "设备管理", "companyDevices", "设备资产"),
     ("security", "安全工具", "auth", "双因子认证"),
     ("security", "安全工具", "password", "密码生成器"),
@@ -98,6 +99,11 @@ PAGE_ACTION_PERMISSION_DEFINITIONS = [
     ("accounts", "create", "新增账号"),
     ("accounts", "edit", "编辑账号"),
     ("accounts", "delete", "删除账号"),
+    ("applicationKeys", "view", "查看应用密钥"),
+    ("applicationKeys", "create", "新增应用密钥"),
+    ("applicationKeys", "edit", "编辑应用密钥"),
+    ("applicationKeys", "delete", "删除应用密钥"),
+    ("applicationKeys", "use", "使用应用密钥"),
     ("companyDevices", "create", "添加设备"),
     ("companyDevices", "edit", "编辑设备"),
     ("companyDevices", "delete", "删除设备"),

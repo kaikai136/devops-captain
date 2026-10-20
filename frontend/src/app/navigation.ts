@@ -37,6 +37,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { key: 'databaseManagement' as const, label: 'DBA管理', desc: '数据库资产、表结构与数据展示' },
       { key: 'applicationMarket' as const, label: '应用市场', desc: 'Docker 应用目录、目标主机安装和后台任务' },
+      { key: 'applicationKeys' as const, label: '应用密钥', desc: '管理数据库连接使用的凭据' },
     ],
   },
   {

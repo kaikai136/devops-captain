@@ -81,7 +81,6 @@ def export_host_management_payload() -> dict:
         "credentials": [
             {
                 "name": credential.name,
-                "credentialType": credential.credential_type,
                 "username": credential.username,
                 "password": credential.password,
                 "port": credential.port,
@@ -228,11 +227,6 @@ def import_credentials(credentials: list, imported: dict[str, int]) -> None:
 
 def build_credential_defaults(item: dict) -> dict:
     defaults = {}
-    if "credentialType" in item:
-        credential_type = str(item.get("credentialType") or HostCredential.TYPE_HOST)
-        if credential_type not in dict(HostCredential.TYPE_CHOICES):
-            credential_type = HostCredential.TYPE_HOST
-        defaults["credential_type"] = credential_type
     if "username" in item:
         defaults["username"] = str(item.get("username") or "").strip()
     if "password" in item:

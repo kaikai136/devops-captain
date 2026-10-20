@@ -15,6 +15,7 @@ import DatabaseWorkspaceTabs, { type DatabaseWorkspaceTab } from './DatabaseWork
 import DatabaseWorkspaceDocument from './DatabaseWorkspaceDocument.vue';
 import MysqlDatabaseDialog from './MysqlDatabaseDialog.vue';
 import MysqlConnectionDialog from './MysqlConnectionDialog.vue';
+import { useApplicationKeyChoices } from '../composables/useApplicationKeyChoices';
 import { connectionCan, connectionExpired, environments } from '../utils/mysqlConnection';
 import DatabaseImportDialog from './DatabaseImportDialog.vue';
 import DatabaseExportDialog, { type ExportTarget } from './DatabaseExportDialog.vue';
@@ -32,8 +33,7 @@ import {
 } from '../api/databaseManagement';
 
 type Tab = 'tables' | 'structure' | 'data' | 'sql' | 'transfer';
-const { canUsePageAction, showToast, requestConfirm, currentUser, hostCredentials, loadHostCredentials } = useAppContext();
-const applicationCredentials = computed(() => hostCredentials.value.filter(item => item.credentialType === 'application'));
+const { canUsePageAction, showToast, requestConfirm, currentUser } = useAppContext();
 const can = (action: string) => canUsePageAction('databaseManagement', action) && connectionCan(selected.value, action);
 const canAsset = (asset: DatabaseAsset | undefined, action: string) => canUsePageAction('databaseManagement', action === 'import_data' ? 'import_export' : action) && connectionCan(asset, action);
 const assets = ref<DatabaseAsset[]>([]);
@@ -132,6 +132,9 @@ const createMenu = ref(false);
 const dialog = ref(false);
 const editing = ref<DatabaseAsset | null>(null);
 const form = ref<DatabaseAssetPayload>(emptyForm('mysql'));
+const formKeyId = computed({ get: () => form.value.applicationKeyId, set: value => { form.value.applicationKeyId = value; } });
+const { canUseKeys, keyChoices, selectedKey, loadingKeys, keyError, loadKeys } = useApplicationKeyChoices(() => editing.value, formKeyId);
+const savingAsset = ref(false);
 const databases = ref<string[]>([]);
 const schemas = ref<string[]>([]);
 const activeDatabase = ref('');
@@ -429,13 +432,25 @@ function updateWorkspaceTabLabel(asset: DatabaseAsset) {
 }
 function pruneWorkspaceTabs(nextAssets: DatabaseAsset[]) {
   const ids = new Set(nextAssets.map(asset => asset.id));
-  const stale = workspaceTabs.value.filter(item => item.kind === 'asset' && item.assetId && !ids.has(item.assetId)).map(item => item.id);
+  const stale = workspaceTabs.value.filter(item => item.assetId && !ids.has(item.assetId)).map(item => item.id);
   const activeWasRemoved = stale.includes(activeWorkspaceTabId.value);
-  stale.forEach(id => workspaceSnapshots.delete(Number(id.replace('asset-', ''))));
+  stale.forEach(id => { delete dirtyDocuments.value[id]; });
+  workspaceSnapshots.forEach((_, id) => { if (!ids.has(id)) workspaceSnapshots.delete(id); });
   workspaceTabs.value = workspaceTabs.value.filter(item => item.kind === 'list' || !item.assetId || ids.has(item.assetId));
-  if (activeWasRemoved || !workspaceTabs.value.some(item => item.id === activeWorkspaceTabId.value)) {
+  expandedAssets.value = expandedAssets.value.filter(id => ids.has(id));
+  if (sidebarAssetId.value && !ids.has(sidebarAssetId.value)) sidebarAssetId.value = null;
+  const selectionRemoved = selected.value && !ids.has(selected.value.id);
+  if (selectionRemoved) selected.value = null;
+  const validPins = pinnedObjects.value.filter(key => {
+    try { const value = JSON.parse(key); return Array.isArray(value) && ids.has(value[0]); }
+    catch { return false; }
+  });
+  if (validPins.length !== pinnedObjects.value.length) {
+    pinnedObjects.value = validPins;
+    try { localStorage.setItem(pinStorageKey, JSON.stringify(validPins)); } catch { /* Storage may be unavailable. */ }
+  }
+  if (selectionRemoved || activeWasRemoved || !workspaceTabs.value.some(item => item.id === activeWorkspaceTabId.value)) {
     activeWorkspaceTabId.value = 'list';
-    if (activeWasRemoved) selected.value = null;
     connectVersion++;
     resetWorkspace();
   }
@@ -625,13 +640,7 @@ function toggleQuery() {
 
 function emptyForm(kind: string): DatabaseAssetPayload {
   const defaults: Record<string, number> = { mysql: 3306, mariadb: 3306, postgresql: 5432, kingbase: 54321, sqlserver: 1433, sqlite: 0, redis: 6379, clickhouse: 8123, oracle: 1521, dameng: 5236 };
-  return { name: '', dbType: kind, host: kind === 'sqlite' ? '' : '127.0.0.1', port: types.value?.find(item => item.key === kind)?.defaultPort || defaults[kind] || 0, username: '', password: '', databaseName: '', remark: '', options: kind === 'redis' ? { db: 0 } : {}, applicationCredentialId: null };
-}
-function applyApplicationCredential(id: number | null) {
-  const credential = applicationCredentials.value.find(item => item.id === id);
-  if (!credential) return;
-  form.value.username = credential.username;
-  form.value.password = credential.password;
+  return { name: '', dbType: kind, host: '', port: types.value?.find(item => item.key === kind)?.defaultPort || defaults[kind] || 0, username: '', password: '', applicationKeyId: null, databaseName: '', remark: '', options: kind === 'redis' ? { db: 0, authMethod: 'password' } : { authMethod: 'password' } };
 }
 async function loadAssets() {
   if (!can('view')) return;
@@ -810,14 +819,19 @@ function resetWorkspace() {
 function openCreate(kind: string) { editing.value = null; form.value = { ...emptyForm(kind), directoryId: activeDirectoryId.value }; createMenu.value = false; dialog.value = true; }
 function openEdit(asset: DatabaseAsset) { editing.value = asset; form.value = { ...asset, password: '', options: { ...asset.options } }; dialog.value = true; }
 async function saveAsset() {
+  if (savingAsset.value || !canUsePageAction('databaseManagement', editing.value ? 'edit' : 'create')) return;
+  if (form.value.options.authMethod === 'applicationKey' && (!form.value.applicationKeyId || (form.value.dbType !== 'redis' && !selectedKey.value?.username.trim()))) { showToast('保存失败', '请选择包含所需用户的应用密钥'); return; }
+  savingAsset.value = true;
   try {
     const payload = { ...form.value };
-    delete payload.applicationCredentialId;
+    if (payload.options.authMethod === 'applicationKey') { payload.username = ''; delete payload.password; }
+    else payload.applicationKeyId = null;
     if (editing.value && !payload.password) delete payload.password;
     if (editing.value) await updateDatabaseAsset(editing.value.id, payload);
     else await createDatabaseAsset(payload);
     dialog.value = false; await loadAssets(); showToast('已保存', '连接资产已保存');
   } catch (error) { showToast('保存失败', errorMessage(error)); }
+  finally { savingAsset.value = false; }
 }
 async function restoreWorkspaceSnapshot(snapshot?: WorkspaceSnapshot) {
   if (!snapshot || !selected.value || !connected.value) return;
@@ -1510,7 +1524,6 @@ function onTransferComplete(event: Event) {
 onMounted(() => {
   window.addEventListener('database-transfer:completed', onTransferComplete);
   window.addEventListener('keydown', onDatabaseShortcut);
-  void loadHostCredentials().catch(() => undefined);
   void refreshCatalog();
   void listDatabaseTypes().then(result => { types.value = result.types; }).catch(error => showToast('加载数据库类型失败', errorMessage(error)));
   void listSQLiteFiles().then(result => { files.value = result.files; }).catch(error => showToast('加载 SQLite 文件失败', errorMessage(error)));
@@ -1672,28 +1685,29 @@ onUnmounted(() => {
     <el-dialog :close-on-click-modal="false" v-model="directoryDialog" :title="editingDirectory ? '重命名目录' : '新建目录'" width="min(420px, 94vw)"><el-input v-model="directoryName" maxlength="160" placeholder="目录名称" @keyup.enter="saveDirectory" /><template #footer><el-button @click="directoryDialog = false">取消</el-button><el-button type="primary" @click="saveDirectory">保存</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="moveDialog" title="移动到目录" width="min(420px, 94vw)"><el-select v-model="moveTarget" placeholder="选择目标目录" style="width:100%"><el-option label="根目录" :value="null" /><el-option v-for="folder in directories" :key="folder.id" :label="folder.name" :value="folder.id" /></el-select><template #footer><el-button @click="moveDialog = false">取消</el-button><el-button type="primary" @click="saveMove">移动</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="databaseDialog" :title="({ create: '新建数据库', delete: '删除数据库', clear: '清空数据库', import: '导入数据库' } as Record<string, string>)[databaseAction]" width="min(440px, 94vw)"><el-input v-model="databaseTarget" :placeholder="selected?.dbType === 'sqlite' ? '受限目录中的 .db 文件名' : selected?.dbType === 'redis' ? 'DB 编号 0-255' : '数据库名称'" /><template #footer><el-button @click="databaseDialog = false">取消</el-button><el-button type="primary" @click="saveDatabaseAction">确认</el-button></template></el-dialog>
-    <MysqlConnectionDialog v-if="dialog && form.dbType === 'mysql'" :asset="editing" :directory-id="form.directoryId" :credentials="applicationCredentials" :can-test="canUsePageAction('databaseManagement', 'test_connection')" :can-save="canUsePageAction('databaseManagement', editing ? 'edit' : 'create')" @close="dialog = false" @saved="dialog = false; loadAssets(); showToast('已保存', '连接资产已保存')" />
+    <MysqlConnectionDialog v-if="dialog && form.dbType === 'mysql'" :asset="editing" :directory-id="form.directoryId" :can-test="canUsePageAction('databaseManagement', 'test_connection')" :can-save="canUsePageAction('databaseManagement', editing ? 'edit' : 'create')" @close="dialog = false" @saved="dialog = false; loadAssets(); showToast('已保存', '连接资产已保存')" />
     <el-dialog v-if="form.dbType !== 'mysql'" v-model="dialog" :close-on-click-modal="false" :title="editing ? '编辑连接' : '新建连接'" width="min(520px, 94vw)">
-      <el-form label-position="top">
+      <el-form label-position="top" :disabled="savingAsset || !canUsePageAction('databaseManagement', editing ? 'edit' : 'create')">
         <el-form-item label="数据库类型"><el-select v-model="form.dbType" :disabled="!!editing" @change="form = emptyForm(form.dbType)"><el-option v-for="kind in types" :key="kind.key" :label="kind.label" :value="kind.key" /></el-select></el-form-item>
         <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
-        <el-form-item v-if="!editing" label="应用密钥">
-          <el-select v-model="form.applicationCredentialId" clearable placeholder="选择应用密钥" style="width:100%" @change="applyApplicationCredential">
-            <el-option v-for="credential in applicationCredentials" :key="credential.id" :label="credential.name" :value="credential.id" />
-          </el-select>
-        </el-form-item>
         <template v-if="form.dbType === 'sqlite'"><el-form-item label="SQLite 文件"><el-select v-model="form.options.file" placeholder="选择服务器文件"><el-option v-for="file in files" :key="file" :label="file" :value="file" /></el-select></el-form-item></template>
         <template v-else>
           <el-form-item label="主机"><el-input v-model="form.host" /></el-form-item>
           <el-form-item label="端口"><el-input-number v-model="form.port" :min="1" :max="65535" /></el-form-item>
-          <el-form-item label="用户名"><el-input v-model="form.username" /></el-form-item>
-          <el-form-item label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editing ? '留空保持原密码' : ''" /></el-form-item>
+          <el-form-item label="认证方式"><el-select v-model="form.options.authMethod"><el-option label="手动填写" value="password" /><el-option label="应用密钥" value="applicationKey" :disabled="!canUseKeys && editing?.options.authMethod !== 'applicationKey'" /></el-select></el-form-item>
+          <el-form-item v-if="form.options.authMethod === 'applicationKey'" label="应用密钥" required>
+            <el-select v-model="form.applicationKeyId" filterable :loading="loadingKeys" :disabled="!canUseKeys" placeholder="请选择应用密钥" @visible-change="$event && loadKeys()"><el-option v-for="key in keyChoices" :key="key.id" :value="key.id" :label="key.name" :disabled="form.dbType !== 'redis' && !key.username.trim()" /></el-select>
+            <span v-if="keyError" role="alert">{{ keyError }}</span><span v-else-if="!loadingKeys && !keyChoices.length">{{ canUseKeys ? '暂无可用密钥，请先在应用密钥页面新增' : '当前账号没有使用应用密钥的权限' }}</span>
+            <span v-if="editing?.options.authMethod === 'applicationKey' && !editing.applicationKeyId">导入的连接需要重新选择应用密钥。</span>
+          </el-form-item>
+          <el-form-item label="用户名"><el-input v-if="form.options.authMethod !== 'applicationKey'" v-model="form.username" /><el-input v-else :model-value="selectedKey?.username || ''" readonly placeholder="所选密钥用户（Redis 可为空）" /></el-form-item>
+          <el-form-item v-if="form.options.authMethod !== 'applicationKey'" label="密码"><el-input v-model="form.password" type="password" show-password :placeholder="editing ? '留空保持原密码' : ''" /></el-form-item>
           <el-form-item v-if="form.dbType !== 'redis'" label="默认数据库"><el-input v-model="form.databaseName" /></el-form-item>
           <el-form-item v-for="field in activeType?.fields.filter(item => !['file'].includes(item))" :key="field" :label="({ db: 'Redis DB 编号', https: 'HTTPS', service: 'Oracle Service Name', sid: 'Oracle SID', schema: '默认 Schema', instance: '实例名', ssl: 'SSL' } as Record<string, string>)[field] || field"><el-switch v-if="['ssl', 'https'].includes(field)" v-model="form.options[field]" /><el-input-number v-else-if="field === 'db'" v-model="form.options[field]" :min="0" :max="255" /><el-input v-else v-model="form.options[field]" /></el-form-item>
         </template>
         <el-form-item label="备注"><el-input v-model="form.remark" type="textarea" /></el-form-item>
       </el-form>
-      <template #footer><el-button @click="dialog = false">取消</el-button><el-button type="primary" @click="saveAsset">保存</el-button></template>
+      <template #footer><el-button :disabled="savingAsset" @click="dialog = false">取消</el-button><el-button type="primary" :loading="savingAsset" :disabled="savingAsset || !canUsePageAction('databaseManagement', editing ? 'edit' : 'create')" @click="saveAsset">保存</el-button></template>
     </el-dialog>
     <el-dialog v-model="rowDialog" :close-on-click-modal="false" :title="editMode === 'insert' ? '新增数据行' : '编辑数据行'" width="min(520px, 94vw)"><el-form v-if="editingRow" label-position="top"><el-form-item v-for="field in allDataColumns" :key="field" :label="field"><el-input v-model="editingRow[field]" /></el-form-item></el-form><template #footer><el-button @click="rowDialog = false">取消</el-button><el-button type="primary" @click="saveRow">保存</el-button></template></el-dialog>
     <el-dialog v-model="schemaDialog" :close-on-click-modal="false" title="表结构操作" width="min(520px, 94vw)"><el-form label-position="top"><el-form-item v-if="['drop_column', 'drop_index'].includes(schemaAction)" label="名称"><el-input v-model="schemaForm.name" disabled /></el-form-item><template v-if="schemaAction === 'add_column'"><el-form-item label="字段名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段类型"><el-input v-model="schemaForm.columnType" placeholder="例如 VARCHAR(255)" /></el-form-item></template><template v-else-if="schemaAction === 'create_index'"><el-form-item label="索引名"><el-input v-model="schemaForm.name" /></el-form-item><el-form-item label="字段"><el-select v-model="schemaForm.columns" multiple><el-option v-for="column in columns" :key="column.name" :label="column.name" :value="column.name" /></el-select></el-form-item><el-form-item label="唯一索引"><el-switch v-model="schemaForm.unique" /></el-form-item></template></el-form><template #footer><el-button @click="schemaDialog = false">取消</el-button><el-button type="primary" @click="saveSchema">执行</el-button></template></el-dialog>

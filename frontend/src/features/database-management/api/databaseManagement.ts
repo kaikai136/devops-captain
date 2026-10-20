@@ -5,13 +5,13 @@ export type ConnectionSecrets = Partial<Record<ConnectionSecretKey, string | { n
 export type ConnectionSecretStatus = Partial<Record<ConnectionSecretKey, { configured: boolean; name?: string }>>;
 export interface MysqlConnectionOptions extends Record<string, unknown> {
   color: string; environment: string; readOnly: boolean; expiresAt: string | null;
-  authMethod: 'password' | 'none'; connectTimeout: number; charset: string;
+  authMethod: 'password' | 'none' | 'applicationKey'; connectTimeout: number; charset: string;
   parameters: { readTimeout?: number; writeTimeout?: number; autocommit?: boolean; sqlMode?: string; timeZone?: string };
   ssh: { enabled: boolean; host: string; port: number; username: string; authMethod: 'password' | 'privateKey' };
   ssl: boolean; tls: { mode: 'require' | 'verify_ca' | 'verify_identity' };
 }
-export interface DatabaseAsset { id: number; name: string; directoryId: number | null; dbType: string; host: string; port: number; username: string; databaseName: string; remark: string; options: Record<string, unknown>; connectionSecretStatus?: ConnectionSecretStatus; }
-export interface DatabaseAssetPayload { name: string; directoryId?: number | null; dbType: string; host: string; port: number; username: string; password?: string; databaseName: string; remark: string; options: Record<string, unknown>; applicationCredentialId?: number | null; connectionSecrets?: ConnectionSecrets; }
+export interface DatabaseAsset { applicationKeyId?: number | null; applicationKeyName?: string; id: number; name: string; directoryId: number | null; dbType: string; host: string; port: number; username: string; databaseName: string; remark: string; options: Record<string, unknown>; connectionSecretStatus?: ConnectionSecretStatus; }
+export interface DatabaseAssetPayload { applicationKeyId?: number | null; name: string; directoryId?: number | null; dbType: string; host: string; port: number; username: string; password?: string; databaseName: string; remark: string; options: Record<string, unknown>; connectionSecrets?: ConnectionSecrets; }
 export interface AssetDirectory { id: number; name: string; parentId: number | null; }
 export interface ConnectionManifest { version: number; directories: string[][]; assets: Array<Record<string, unknown>>; }
 export interface DatabaseType { key: string; label: string; defaultPort: number; fields: string[]; capabilities: string[]; }

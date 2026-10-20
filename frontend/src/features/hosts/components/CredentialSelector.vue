@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed } from 'vue';
 
 import type { HostCredential } from '@features/hosts/types';
@@ -17,7 +17,7 @@ const selectedCredential = computed({
   get: () => props.modelValue,
   set: (value) => emit('update:modelValue', value),
 });
-const hostCredentials = computed(() => props.credentials.filter((credential) => credential.credentialType !== 'application'));
+const hostCredentials = computed(() => props.credentials);
 </script>
 
 <template>

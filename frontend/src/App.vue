@@ -19,6 +19,7 @@ type DashboardPageExpose = {
 };
 
 const AccountManager = defineAsyncComponent(() => import('./components/tools/AccountManager.vue'));
+const ApplicationKeyManager = defineAsyncComponent(() => import('./components/tools/ApplicationKeyManager.vue'));
 const AuthenticatorPanel = defineAsyncComponent(() => import('./components/tools/AuthenticatorPanel.vue'));
 const BulkExecutionPanel = defineAsyncComponent(() => import('./features/bulk-execution/components/BulkExecutionPanel.vue'));
 const DatabaseManagementPanel = defineAsyncComponent(() => import('./features/database-management/components/DatabaseManagementPanel.vue'));
@@ -372,7 +373,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
             <template v-else-if="activeTool === 'ip' && ipScanMessage">
               <span class="inline-status">{{ ipScanMessage }}</span>
             </template>
-            <template v-else-if="activeTool === 'dashboard' || activeTool === 'sessionAudits' || activeTool === 'bulkExecution' || activeTool === 'databaseManagement' || activeTool === 'applicationMarket' || activeTool === 'accounts' || activeTool === 'companyDevices' || activeTool === 'users' || activeTool === 'loginLogs' || activeTool === 'operationLogs' || activeTool === 'roles' || activeTool === 'profile' || activeTool === 'systemSettings' || activeTool === 'securityScan'"></template>
+            <template v-else-if="activeTool === 'dashboard' || activeTool === 'sessionAudits' || activeTool === 'bulkExecution' || activeTool === 'databaseManagement' || activeTool === 'applicationMarket' || activeTool === 'applicationKeys' || activeTool === 'accounts' || activeTool === 'companyDevices' || activeTool === 'users' || activeTool === 'loginLogs' || activeTool === 'operationLogs' || activeTool === 'roles' || activeTool === 'profile' || activeTool === 'systemSettings' || activeTool === 'securityScan'"></template>
             <template v-else>
               <article><span>本机 IP</span><strong>{{ localIp }}</strong></article>
               <article class="selected-host-card" title="双击使用选中 IP" @dblclick="useSelectedIpForPing">
@@ -450,6 +451,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
               <BulkExecutionPanel v-else-if="activeTool === 'bulkExecution'" />
               <ApplicationMarketPanel v-else-if="activeTool === 'applicationMarket'" />
               <AccountManager v-else-if="activeTool === 'accounts'" />
+              <ApplicationKeyManager v-else-if="activeTool === 'applicationKeys'" />
               <DeviceManager v-else-if="activeTool === 'companyDevices'" />
               <MachineProbe v-else-if="activeTool === 'ports'" />
               <SubnetCalculator v-else-if="activeTool === 'subnet'" />

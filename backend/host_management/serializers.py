@@ -59,9 +59,13 @@ class ManagedHostSerializer(serializers.ModelSerializer):
 
 
 class HostCredentialSerializer(serializers.ModelSerializer):
-    credentialType = serializers.ChoiceField(source="credential_type", choices=HostCredential.TYPE_CHOICES, required=False)
+    credentialType = serializers.SerializerMethodField()
     privateKeyName = serializers.CharField(source="private_key_name", required=False, allow_blank=True)
     privateKey = serializers.CharField(source="private_key", required=False, allow_blank=True)
+
+    def get_credentialType(self, credential):
+        # Legacy clients may still send this read-only field; ignore it.
+        return "host"
 
     class Meta:
         model = HostCredential

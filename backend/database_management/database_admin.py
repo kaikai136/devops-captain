@@ -128,7 +128,7 @@ def snapshot(asset, name):
     if asset.db_type == "redis":
         selected = int(name)
         clone = DatabaseAsset(db_type="redis", host=asset.host, port=asset.port,
-                              username=asset.username, password_encrypted=asset.password_encrypted,
+                              username=asset.username, password_encrypted=asset.password_encrypted, application_key_id=asset.application_key_id,
                               options={**asset.options, "db": selected})
         with adapters.connection(clone) as client:
             keys = []
@@ -155,7 +155,7 @@ def import_snapshot(asset, name, payload):
 def clear_database(asset, name):
     if asset.db_type == "redis":
         clone = DatabaseAsset(db_type="redis", host=asset.host, port=asset.port,
-                              username=asset.username, password_encrypted=asset.password_encrypted,
+                              username=asset.username, password_encrypted=asset.password_encrypted, application_key_id=asset.application_key_id,
                               options={**asset.options, "db": int(name)})
         with adapters.connection(clone) as client:
             return {"deleted": client.flushdb(asynchronous=False)}

@@ -6,7 +6,7 @@ import threading
 from contextlib import ExitStack
 
 from .connection_config import enforce_policy, enforce_sql, secrets_for, ssl_context
-from .services import decrypt_password
+from .credentials import resolve_credentials
 
 
 class CheckedCursor:
@@ -114,15 +114,16 @@ def ssh_socket(asset, secrets, timeout, resources):
     return local
 
 
-def connect(asset, database, module):
+def connect(asset, database, module, *, credentials=None):
     enforce_policy(asset)
     options, secrets = asset.options or {}, secrets_for(asset)
     params = options.get("parameters", {})
     timeout = options.get("connectTimeout", 5)
+    username, password = resolve_credentials(asset) if credentials is None else credentials
     resources = ExitStack()
     try:
-        kwargs = dict(host=asset.host, port=asset.port, user=asset.username,
-                      password="" if options.get("authMethod") == "none" else decrypt_password(asset.password_encrypted),
+        kwargs = dict(host=asset.host, port=asset.port, user=username,
+                      password=password,
                       database=database or asset.database or None, charset=options.get("charset", "auto"),
                       connect_timeout=timeout, read_timeout=params.get("readTimeout", 20),
                       write_timeout=params.get("writeTimeout", 20), autocommit=params.get("autocommit", False),

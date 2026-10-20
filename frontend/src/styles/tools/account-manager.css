@@ -431,3 +431,7 @@
   color: var(--ui-muted-foreground);
   font-weight: 800;
 }
+
+.account-popup-dialog .account-popup-form .account-form-full {
+  grid-column: 1 / -1;
+}

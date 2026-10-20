@@ -1,3 +1,4 @@
+from .credentials import resolve_credentials
 import re
 
 from rest_framework.decorators import api_view
@@ -73,7 +74,7 @@ def available_roles(conn, kind):
 
 def role_sql(asset, action, name, role, host='%', role_host=''):
     kind = asset.db_type
-    if name.casefold() == asset.username.casefold() or builtin_account(kind, name):
+    if name.casefold() == resolve_credentials(asset)[0].casefold() or builtin_account(kind, name):
         raise ValueError('不能修改当前连接账号或数据库内置账号的角色')
     role_name, user = adapters.quote(role, kind), adapters.quote(name, kind)
     if kind in {'mysql', 'mariadb'}:
@@ -129,7 +130,7 @@ def account_sql(asset, action, name, password="", database="", schema="", grants
     user = adapters.quote(name, kind)
     account = f"{literal(name)}@{literal(host or '%')}" if kind in {"mysql", "mariadb"} else user
     if action == 'revoke':
-        if name.casefold() == asset.username.casefold() or builtin_account(kind, name):
+        if name.casefold() == resolve_credentials(asset)[0].casefold() or builtin_account(kind, name):
             raise ValueError('不能撤销当前连接账号或数据库内置账号的权限')
         commands = account_sql(asset, 'grant', name, database=database, schema=schema, grants=grants, host=host)
         def revoke(command):
@@ -152,7 +153,7 @@ def account_sql(asset, action, name, password="", database="", schema="", grants
         if kind == "clickhouse": return f"ALTER USER {user} IDENTIFIED WITH sha256_password BY {literal(password)}"
         return f"ALTER USER {user} IDENTIFIED BY {password_identifier(password)}"
     if action == "delete":
-        if name.casefold() == asset.username.casefold(): raise ValueError("不能删除当前连接账号")
+        if name.casefold() == resolve_credentials(asset)[0].casefold(): raise ValueError("不能删除当前连接账号")
         if builtin_account(kind, name): raise ValueError("不能删除数据库内置账号")
         if kind == 'sqlserver': raise ValueError("SQL Server 登录账号删除需要先检查跨数据库映射，当前不支持")
         prefix = "LOGIN" if kind == "sqlserver" else "USER"
@@ -206,14 +207,14 @@ def asset_accounts(request, asset_id):
                     name = str(row.get("name") or row.get("NAME") or "")
                     roles, permissions = account_metadata(conn, asset, name, row.get('host', ''), request.query_params.get('database', ''), request.query_params.get('schema', ''))
                     result.append({"name": name, "host": row.get("host", ""), "roles": roles, "permissions": permissions,
-                                   "current": name.casefold() == asset.username.casefold(), "builtIn": builtin_account(kind, name),
-                                   "protected": name.casefold() == asset.username.casefold() or builtin_account(kind, name),
+                                   "current": name.casefold() == resolve_credentials(asset)[0].casefold(), "builtIn": builtin_account(kind, name),
+                                   "protected": name.casefold() == resolve_credentials(asset)[0].casefold() or builtin_account(kind, name),
                                    "capabilities": account_capabilities(kind), "availableRoles": role_options})
             return Response(result)
         data = request.data; action = data.get("action", "create"); name = str(data.get("name", "")).strip()
         expected = {'POST': {'create'}, 'PUT': {'password', 'grant', 'revoke', 'grant_role', 'revoke_role'}, 'DELETE': {'delete'}}
         if action not in expected[request.method]: raise ValueError("请求方法与账号操作不匹配")
-        if not name or name == asset.username and action in {"delete"}: raise ValueError("账号名称无效")
+        if not name or name == resolve_credentials(asset)[0] and action in {"delete"}: raise ValueError("账号名称无效")
         with adapters.connection(asset, data.get("database")) as conn:
             try:
                 if action in {'grant_role', 'revoke_role'}:

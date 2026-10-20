@@ -45,6 +45,7 @@ const icons = {
   bulkExecution: RiTerminalBoxLine,
   accounts: RiIdCardLine,
   applicationMarket: RiAppStoreLine,
+  applicationKeys: RiLockPasswordLine,
   companyDevices: RiMacbookLine,
   ip: RiRadarLine,
   ports: RiScan2Line,

@@ -13,6 +13,21 @@ class AssetDirectory(models.Model):
     class Meta:
         ordering = ["name", "id"]
 
+class ApplicationKey(models.Model):
+    name = models.CharField(max_length=120, unique=True)
+    username = models.CharField(max_length=120, blank=True)
+    password_encrypted = models.TextField()
+    remark = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["id"]
+
+    def __str__(self):
+        return self.name
+
+
 class DatabaseAsset(models.Model):
     DB_TYPES = [(key, label) for key, label in (
         ("mysql", "MySQL"), ("mariadb", "MariaDB"), ("postgresql", "PostgreSQL"),
@@ -26,6 +41,7 @@ class DatabaseAsset(models.Model):
     port = models.PositiveIntegerField(default=3306)
     username = models.CharField(max_length=120)
     password_encrypted = models.TextField(blank=True)
+    application_key = models.ForeignKey(ApplicationKey, null=True, blank=True, on_delete=models.PROTECT, related_name="connections")
     connection_secrets_encrypted = models.TextField(blank=True)
     database = models.CharField(max_length=120, blank=True)
     remark = models.TextField(blank=True)

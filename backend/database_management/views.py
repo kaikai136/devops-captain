@@ -35,18 +35,20 @@ def connection_test(request):
     data = dict(request.data)
     data.pop("assetId", None)
     data.setdefault("name", "连接测试")
-    serializer = DatabaseAssetSerializer(original, data=data, partial=bool(original))
+    serializer = DatabaseAssetSerializer(original, data=data, partial=bool(original), context={"request": request})
     if not serializer.is_valid(): return bad_request(str(serializer.errors))
     # Build an ephemeral asset; serializer.save() is deliberately never called.
     values = dict(serializer.validated_data)
     if values.get("db_type", original.db_type if original else "mysql") != "mysql":
         return bad_request("未保存表单测试目前仅支持 MySQL")
     password = values.pop("password", "")
-    values["password_encrypted"] = encrypt_password(password) if password else (original.password_encrypted if original else "")
+    values.setdefault("password_encrypted", encrypt_password(password) if password else (original.password_encrypted if original else ""))
     options = values.get("options", original.options if original else {})
     if options.get("authMethod") == "none": values["password_encrypted"] = encrypt_password("")
     if original:
-        for field in ("db_type", "host", "port", "username", "database", "options", "connection_secrets_encrypted"):
+        for field in ("db_type", "host", "port", "username", "database", "options", "connection_secrets_encrypted", "application_key_id"):
+            if field == "application_key_id" and "application_key" in values:
+                continue
             values.setdefault(field, getattr(original, field))
     asset = DatabaseAsset(**values)
     start = time.monotonic()
@@ -76,7 +78,7 @@ def assets(request):
         return Response(DatabaseAssetSerializer(qs, many=True).data)
     error = guard(request, "create")
     if error: return error
-    serializer = DatabaseAssetSerializer(data=request.data)
+    serializer = DatabaseAssetSerializer(data=request.data, context={"request": request})
     if not serializer.is_valid(): return bad_request(str(serializer.errors))
     try: unique_name(serializer.validated_data["name"], serializer.validated_data.get("directory"), DatabaseAsset)
     except ValueError as exc: return bad_request(str(exc))
@@ -89,7 +91,7 @@ def asset_detail(request, asset_id):
     asset, error = get_object_or_error(DatabaseAsset, id=asset_id, error_message="数据库资产不存在")
     if error: return error
     if request.method == "DELETE": asset.delete(); return Response({"deleted": True})
-    serializer = DatabaseAssetSerializer(asset, data=request.data, partial=True)
+    serializer = DatabaseAssetSerializer(asset, data=request.data, partial=True, context={"request": request})
     if not serializer.is_valid(): return bad_request(str(serializer.errors))
     try:
         unique_name(serializer.validated_data.get("name", asset.name), serializer.validated_data.get("directory", asset.directory), DatabaseAsset, asset.pk)

@@ -6,7 +6,10 @@ from . import accounts
 from . import object_operations
 from . import queries
 from . import transfers
+from . import application_keys
 urlpatterns = [
+    path("application-keys/", application_keys.collection),
+    path("application-keys/<int:key_id>/", application_keys.detail),
     path("database-management/connection-test/", views.connection_test),
     path("database-management/transfers/", transfers.task_collection),
     path("database-management/transfers/uploads/", transfers.upload_init),

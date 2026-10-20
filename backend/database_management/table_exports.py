@@ -1,3 +1,4 @@
+from .credentials import resolve_credentials
 """Streaming table exports. Temporary per-table files keep partial failures isolated."""
 
 import csv
@@ -61,7 +62,7 @@ def quote_identifier(name, kind):
 
 def qualified(task, table):
     kind = task.asset.db_type
-    owner = task.schema or ("public" if kind in {"postgresql", "kingbase"} else "dbo" if kind == "sqlserver" else task.asset.username.upper() if kind in {"oracle", "dameng"} else "")
+    owner = task.schema or ("public" if kind in {"postgresql", "kingbase"} else "dbo" if kind == "sqlserver" else resolve_credentials(task.asset)[0].upper() if kind in {"oracle", "dameng"} else "")
     return (quote_identifier(owner, kind) + "." if owner else "") + quote_identifier(table, kind)
 
 
@@ -104,7 +105,7 @@ def dictionary_columns(task, conn, table):
                 for c in query(conn, "SELECT * FROM information_schema.columns WHERE TABLE_SCHEMA=%s AND TABLE_NAME=%s ORDER BY ORDINAL_POSITION", (task.database, table))]
     columns = adapters.columns(task.asset, task.database, table, task.schema)
     kind = task.asset.db_type
-    owner = task.schema or ("dbo" if kind == "sqlserver" else "public" if kind in {"postgresql", "kingbase"} else task.asset.username.upper())
+    owner = task.schema or ("dbo" if kind == "sqlserver" else "public" if kind in {"postgresql", "kingbase"} else resolve_credentials(task.asset)[0].upper())
     details = []
     if kind in {"postgresql", "kingbase"}:
         sql = """SELECT c.column_name AS name, COALESCE(c.character_maximum_length, c.numeric_precision) AS length,

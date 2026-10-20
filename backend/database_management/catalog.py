@@ -71,7 +71,7 @@ def duplicate_asset(asset, folder=None):
     return DatabaseAsset.objects.create(
         name=copy_name(asset.name, folder, DatabaseAsset), directory=folder,
         db_type=asset.db_type, host=asset.host, port=asset.port,
-        username=asset.username, password_encrypted=asset.password_encrypted,
+        username=asset.username, password_encrypted=asset.password_encrypted, application_key_id=asset.application_key_id,
         connection_secrets_encrypted=asset.connection_secrets_encrypted,
         database=asset.database, remark=asset.remark, options=dict(asset.options or {}),
         created_by=asset.created_by,
@@ -211,7 +211,7 @@ def import_manifest_payload(owner, manifest, directory_id=None, conflict_policy=
             serializer = DatabaseAssetSerializer(data=payload, context={"connection_import": True})
             if not serializer.is_valid(): raise ValueError(str(serializer.errors))
             serializer.save(created_by=owner); imported += 1
-    return {"imported": imported, "warning": "连接配置不含密码和证书，请编辑连接补全所需认证材料"}
+    return {"imported": imported, "warning": "连接配置不含密码、证书及应用密钥引用，请编辑连接补全认证材料或重新选择应用密钥"}
 
 
 @api_view(["GET", "POST"])
@@ -289,5 +289,5 @@ def connection_manifest(request):
                     raise ValueError(str(serializer.errors))
                 serializer.save(created_by=request.user)
         record_operation_log(request, "应用管理", "导入连接配置", target.name if target else "根目录", f"连接数={len(assets)}")
-        return Response({"imported": len(assets), "warning": "连接配置不含密码和证书，请编辑连接补全所需认证材料"}, status=status.HTTP_201_CREATED)
+        return Response({"imported": len(assets), "warning": "连接配置不含密码、证书及应用密钥引用，请编辑连接补全认证材料或重新选择应用密钥"}, status=status.HTTP_201_CREATED)
     except ValueError as exc: return bad_request(str(exc))

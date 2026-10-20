@@ -11,6 +11,7 @@ export const navItemIcons = {
   bulkExecution: 'bulkExecution',
   accounts: 'accounts',
   applicationMarket: 'applicationMarket',
+  applicationKeys: 'applicationKeys',
   companyDevices: 'companyDevices',
   ip: 'ip',
   ports: 'ports',

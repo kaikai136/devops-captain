@@ -13,7 +13,7 @@ export function mysqlDraft(asset?: DatabaseAsset | null, directoryId?: number | 
     ssh: { enabled: false, host: '', port: 22, username: '', authMethod: 'password', ...(previous.ssh as object || {}) },
     ssl: Boolean(previous.ssl), tls: { mode: 'require', ...(previous.tls as object || {}) },
   };
-  const form: DatabaseAssetPayload = { name: asset?.name || '', directoryId: asset?.directoryId ?? directoryId ?? null, dbType: 'mysql', host: asset?.host || '127.0.0.1', port: asset?.port || 3306, username: asset?.username || '', password: '', databaseName: asset?.databaseName || '', remark: asset?.remark || '', options, connectionSecrets: {} };
+  const form: DatabaseAssetPayload = { applicationKeyId: asset?.applicationKeyId ?? null, name: asset?.name || '', directoryId: asset?.directoryId ?? directoryId ?? null, dbType: 'mysql', host: asset?.host || '', port: asset?.port || 3306, username: asset?.username || '', password: '', databaseName: asset?.databaseName || '', remark: asset?.remark || '', options, connectionSecrets: {} };
   return { form, options };
 }
 export function connectionExpired(asset?: DatabaseAsset | null) {

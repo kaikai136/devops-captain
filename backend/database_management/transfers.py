@@ -365,7 +365,7 @@ def inspect_input(task):
         elif "assets" in payload:
             preview["assets"] = len(payload.get("assets", [])); preview["directories"] = len(payload.get("directories", []))
             if task.scope == "connections":
-                preview["warnings"].append("连接配置不含密码和证书；导入后请编辑连接补全所需认证材料")
+                preview["warnings"].append("连接配置不含密码、证书及应用密钥引用；导入后请编辑连接补全认证材料或重新选择应用密钥")
         else:
             preview["records"] = len(payload) if isinstance(payload, list) else 1
     elif task.format == "csv":
@@ -437,11 +437,29 @@ def task_cancel(request, task_id):
     if error: return error
     if task.status not in ACTIVE: return bad_request("任务已结束")
     if not require_task_permissions(request.user, task): return bad_request("任务所需权限已被撤销")
-    if task.status in {"queued", "uploading", "awaiting_confirmation"} or (task.status == "inspecting" and task.stage == "inspection_queued"):
-        update(task, status="cancelled", stage="cancelled", finished_at=timezone.now(), cancel_requested=True)
-    else:
-        update(task, status="cancel_requested", cancel_requested=True)
+    task = request_task_cancellation(task)
     return Response(serialize(task))
+
+
+def request_task_cancellation(task):
+    """Share cancellation with maintenance commands, without racing worker claims."""
+    while True:
+        task.refresh_from_db()
+        if task.status not in ACTIVE:
+            return task
+        immediate = task.status in {"queued", "uploading", "awaiting_confirmation"} or (
+            task.status == "inspecting" and task.stage == "inspection_queued"
+        )
+        values = {"cancel_requested": True, "updated_at": timezone.now()}
+        if immediate:
+            values.update(status="cancelled", stage="cancelled", finished_at=timezone.now())
+        else:
+            values["status"] = "cancel_requested"
+        changed = DatabaseTransferTask.objects.filter(pk=task.pk, status=task.status, stage=task.stage).update(**values)
+        if changed:
+            task.refresh_from_db()
+            emit(task)
+            return task
 
 
 @api_view(["POST"])

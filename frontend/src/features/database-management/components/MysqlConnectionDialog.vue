@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, nextTick, reactive, ref } from 'vue';
+import { computed, nextTick, reactive, ref, toRef } from 'vue';
+import { useApplicationKeyChoices } from '../composables/useApplicationKeyChoices';
 import { Plus, Trash2, X } from '@lucide/vue';
 import DatabaseBrandIcon from './DatabaseBrandIcon.vue';
 import ConnectionFileField from './ConnectionFileField.vue';
@@ -7,12 +8,13 @@ import { createDatabaseAsset, updateDatabaseAsset, testDatabaseConnection, type 
 import { connectionColors, environments, mysqlDraft, parameterLabels, sqlModes } from '../utils/mysqlConnection';
 import { errorMessage } from '@shared/utils/errors';
 
-const props = defineProps<{ asset?: DatabaseAsset | null; directoryId?: number | null; credentials: { id: number; name: string; username: string; password: string }[]; canTest: boolean; canSave: boolean }>();
+const props = defineProps<{ asset?: DatabaseAsset | null; directoryId?: number | null; canTest: boolean; canSave: boolean }>();
 const emit = defineEmits<{ close: []; saved: [asset: DatabaseAsset] }>();
 const draft = mysqlDraft(props.asset, props.directoryId);
 const form = reactive(draft.form);
 const options = reactive(draft.options);
 form.options = options;
+const { canUseKeys, keyChoices, selectedKey, loadingKeys, keyError, loadKeys } = useApplicationKeyChoices(() => props.asset, toRef(form, 'applicationKeyId'));
 const activeTab = ref('general');
 const tabs = [{ id: 'general', label: '常规' }, { id: 'advanced', label: '高级' }, { id: 'parameters', label: '参数' }, { id: 'ssl', label: 'SSL' }];
 const testing = ref(false);
@@ -21,7 +23,6 @@ const busy = computed(() => testing.value || saving.value);
 const message = ref('');
 const messageType = ref<'error' | 'success'>('error');
 const errors = ref<Record<string, string>>({});
-const credentialId = ref<number | null>(null);
 const databases = ref<string[]>([]);
 function suggestDatabases(query: string, done: (items: { value: string }[]) => void) {
   done(databases.value.filter(name => name.toLowerCase().includes(query.toLowerCase())).map(value => ({ value })));
@@ -33,7 +34,6 @@ const availableParameters = computed(() => Object.keys(parameterLabels).filter(k
 const sqlModeValues = (row: ParameterRow) => String(row.value || '').split(',').filter(Boolean);
 function addParameter() { const key = availableParameters.value[0]; if (key) parameters.value.push({ key, value: key === 'autocommit' ? false : ['readTimeout', 'writeTimeout'].includes(key) ? 20 : '' }); }
 function changeParameter(row: ParameterRow) { row.value = row.key === 'autocommit' ? false : ['readTimeout', 'writeTimeout'].includes(row.key) ? 20 : ''; }
-function applyCredential(id: number | null) { const item = props.credentials.find(value => value.id === id); if (item) { form.username = item.username; form.password = item.password; options.authMethod = 'password'; } }
 function fileName(key: ConnectionSecretKey) { const value = form.connectionSecrets?.[key]; return value === null ? undefined : typeof value === 'object' && value ? value.name : props.asset?.connectionSecretStatus?.[key]?.name; }
 function hasSecret(key: ConnectionSecretKey) { const value = form.connectionSecrets?.[key]; return value === undefined ? Boolean(props.asset?.connectionSecretStatus?.[key]?.configured) : Boolean(value); }
 function secretPlaceholder(key: ConnectionSecretKey) { return hasSecret(key) ? '已设置，留空保留' : '请输入'; }
@@ -52,7 +52,10 @@ async function validate() {
   if (!form.name.trim()) add('general', 'name', '请输入连接名称');
   if (!form.host || /[\s/\\@]/.test(form.host)) add('general', 'host', '请输入合法的主机名或 IP 地址');
   if (!Number.isInteger(form.port) || form.port < 1 || form.port > 65535) add('general', 'port', '端口范围为 1～65535');
-  if (!form.username.trim()) add('general', 'username', '请输入用户');
+  if (options.authMethod === 'applicationKey') {
+    if (!form.applicationKeyId) add('general', 'applicationKey', '请选择应用密钥');
+    else if (!selectedKey.value?.username.trim()) add('general', 'applicationKey', '所选应用密钥缺少用户名');
+  } else if (!form.username.trim()) add('general', 'username', '请输入用户');
   if (!Number.isInteger(options.connectTimeout) || options.connectTimeout < 1 || options.connectTimeout > 120) add('advanced', 'timeout', '连接超时范围为 1～120 秒');
   if (options.ssh.enabled) {
     if (!options.ssh.host || /[\s/\\@]/.test(options.ssh.host)) add('advanced', 'sshHost', '请输入 SSH 地址');
@@ -84,7 +87,8 @@ function payload() {
   options.expiresAt = expiry.value ? new Date(expiry.value).toISOString() : null;
   options.parameters = Object.fromEntries(parameters.value.map(row => [row.key, row.value]));
   const value = JSON.parse(JSON.stringify(form));
-  if (props.asset && !value.password) delete value.password;
+  if (options.authMethod === 'applicationKey') { value.username = ''; delete value.password; }
+  else { value.applicationKeyId = null; if (props.asset && !value.password) delete value.password; }
   return value;
 }
 async function test() {
@@ -119,11 +123,16 @@ async function save() {
           <el-form-item label="环境"><div class="mysql-environment"><el-select v-model="options.environment" placeholder="无"><el-option label="无" value="" /><el-option v-for="(label, value) in environments" :key="value" :label="label" :value="value" /></el-select><el-checkbox v-model="options.readOnly">只读</el-checkbox></div></el-form-item>
           <el-form-item label="名称" :error="errors.name" data-field="name" required><el-input v-model="form.name" maxlength="160" placeholder="连接名称" /></el-form-item>
           <el-form-item label="主机" :error="errors.host" data-field="host" required><el-input v-model="form.host" placeholder="主机名 / IP 地址" /></el-form-item>
-          <el-form-item label="用户" :error="errors.username" data-field="username" required><el-input v-model="form.username" maxlength="120" autocomplete="off" /></el-form-item>
+          <el-form-item label="用户" :error="errors.username" data-field="username" required><el-input v-if="options.authMethod !== 'applicationKey'" v-model="form.username" maxlength="120" autocomplete="off" /><el-input v-else :model-value="selectedKey?.username || ''" readonly placeholder="选择密钥后显示用户" /></el-form-item>
           <el-form-item label="端口" :error="errors.port" data-field="port" required><el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" /></el-form-item>
-          <el-form-item label="验证方式"><el-select v-model="options.authMethod"><el-option label="密码" value="password" /><el-option label="无密码" value="none" /></el-select></el-form-item>
-          <el-form-item label="密码"><el-input v-model="form.password" type="password" show-password autocomplete="new-password" :disabled="options.authMethod === 'none'" :placeholder="asset ? '留空保持原密码' : '请输入密码'" /></el-form-item>
-          <el-form-item label="应用密钥" class="full"><el-select v-model="credentialId" clearable placeholder="可选：使用应用密钥填充用户和密码" @change="applyCredential"><el-option v-for="item in credentials" :key="item.id" :value="item.id" :label="item.name" /></el-select></el-form-item>
+          <el-form-item label="验证方式"><el-select v-model="options.authMethod"><el-option label="密码" value="password" /><el-option label="无密码" value="none" /><el-option label="应用密钥" value="applicationKey" :disabled="!canUseKeys && asset?.options.authMethod !== 'applicationKey'" /></el-select></el-form-item>
+          <el-form-item v-if="options.authMethod !== 'applicationKey'" label="密码"><el-input v-model="form.password" type="password" show-password autocomplete="new-password" :disabled="options.authMethod === 'none'" :placeholder="asset ? '留空保持原密码' : '请输入密码'" /></el-form-item>
+          <el-form-item v-else label="应用密钥" :error="errors.applicationKey" data-field="applicationKey" required>
+            <el-select v-model="form.applicationKeyId" filterable :loading="loadingKeys" :disabled="!canUseKeys" placeholder="请选择应用密钥" @visible-change="$event && loadKeys()"><el-option v-for="key in keyChoices" :key="key.id" :value="key.id" :label="key.name" :disabled="!key.username.trim()" /></el-select>
+            <span v-if="keyError" class="mysql-error">{{ keyError }}</span>
+            <span v-else-if="!loadingKeys && !keyChoices.length" class="mysql-hint">{{ canUseKeys ? '暂无可用密钥，请先在应用密钥页面新增' : '当前账号没有使用应用密钥的权限' }}</span>
+            <span v-if="asset?.options.authMethod === 'applicationKey' && !asset.applicationKeyId" class="mysql-error">导入的连接需要重新选择应用密钥。</span>
+          </el-form-item>
           <el-form-item label="备注" class="full"><el-input v-model="form.remark" type="textarea" :rows="2" resize="vertical" placeholder="可选" /></el-form-item>
         </section>
         <section v-show="activeTab === 'advanced'" id="mysql-panel-advanced" class="mysql-form-grid" role="tabpanel" aria-labelledby="mysql-tab-advanced">

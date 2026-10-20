@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import * as connectionUtils from '../utils/mysqlConnection';
 import { buildDatabaseTreeMenu } from '../components/databaseTreeMenu';
 import type { DatabaseAsset } from '../api/databaseManagement';
+import { keyHarness } from './applicationKeyHarness';
 
 const scopes: Vue.EffectScope[] = [];
 afterEach(() => { scopes.splice(0).forEach(scope => scope.stop()); });
@@ -18,17 +19,24 @@ function setup(props: Record<string, unknown> = {}, component = 'MysqlConnection
   const emit = vi.fn();
   const querySelector = vi.fn().mockReturnValue({ scrollIntoView: vi.fn(), querySelector: () => ({ focus: vi.fn() }) });
   const exports: any = {};
-  const require = (path: string) => path === 'vue' ? Vue : path.endsWith('/mysqlConnection') ? connectionUtils : path.endsWith('/databaseManagement') ? api : path.endsWith('/errors') ? { errorMessage: String } : {};
+  const keys = keyHarness({ canUsePageAction: () => true });
+  const require = (path: string) => path === 'vue' ? Vue : path.endsWith('/useApplicationKeyChoices') ? keys.choices : path.endsWith('/mysqlConnection') ? connectionUtils : path.endsWith('/databaseManagement') ? api : path.endsWith('/errors') ? { errorMessage: String } : {};
   const js = ts.transpileModule(script.content, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText;
   new Function('require', 'exports', 'document', js)(require, exports, { querySelector });
   const scope = Vue.effectScope(); scopes.push(scope);
-  const state: any = scope.run(() => exports.default.setup({ canTest: true, canSave: true, credentials: [], ...props }, { expose: vi.fn(), emit }));
+  const state: any = scope.run(() => exports.default.setup({ canTest: true, canSave: true, ...props }, { expose: vi.fn(), emit }));
   return { state, api, emit, querySelector };
 }
 const asset = { id: 7, name: 'mysql', dbType: 'mysql', host: 'db.test', port: 3306, username: 'user', options: {}, connectionSecretStatus: { sslCa: { configured: true, name: 'old.pem' }, sshPassword: { configured: true } } } as DatabaseAsset;
-function valid(state: any) { state.form.name = 'draft'; state.form.username = 'user'; }
+function valid(state: any) { state.form.name = 'draft'; state.form.username = 'user'; state.form.host = 'db.test'; }
 
 describe('MySQL connection dialog', () => {
+  it('starts each new connection with empty identity fields and keeps protocol defaults', () => {
+    const first = setup().state;
+    expect(first.form).toMatchObject({ name: '', host: '', username: '', password: '', databaseName: '', port: 3306 });
+    first.form.name = 'previous'; first.form.host = 'previous.test'; first.form.password = 'previous';
+    expect(setup().state.form).toMatchObject({ name: '', host: '', username: '', password: '', databaseName: '', port: 3306 });
+  });
   it('preserves draft settings across tabs without mutating the asset and reopens on general', () => {
     const { state } = setup({ asset: Vue.reactive(asset) });
     state.form.name = 'draft'; state.activeTab.value = 'advanced'; state.options.ssh.enabled = true;
@@ -37,13 +45,35 @@ describe('MySQL connection dialog', () => {
     expect(asset.name).toBe('mysql'); expect(asset.options).toEqual({});
     expect(setup({ asset }).state.activeTab.value).toBe('general');
   });
-  it('fills application credentials and preserves or explicitly clears editing passwords', async () => {
-    const { state, api } = setup({ asset, credentials: [{ id: 1, name: 'app', username: 'appuser', password: 'appsecret' }] });
+  it('preserves or explicitly clears editing passwords without linked credentials', async () => {
+    const { state, api } = setup({ asset });
     expect(state.payload()).not.toHaveProperty('password');
-    state.applyCredential(1); expect(state.form.username).toBe('appuser'); expect(state.form.password).toBe('appsecret');
+    expect(state.form.username).toBe('user'); expect(state.form.password).toBe('');
     state.options.authMethod = 'none'; await state.save();
     expect(api.updateDatabaseAsset).toHaveBeenCalledWith(7, expect.objectContaining({ options: expect.objectContaining({ authMethod: 'none' }) }));
     expect(api.testDatabaseConnection).not.toHaveBeenCalled();
+  });
+  it('preserves manual drafts while key mode submits only its reference', async () => {
+    const { state, api } = setup(); valid(state);
+    state.form.password = ' manual password ';
+    state.options.authMethod = 'applicationKey';
+    await state.loadKeys(); state.form.applicationKeyId = 5;
+    expect(state.selectedKey.value.username).toBe('key-user');
+    await state.save();
+    expect(api.createDatabaseAsset).toHaveBeenCalledWith(expect.objectContaining({ applicationKeyId: 5, username: '' }));
+    expect(api.createDatabaseAsset.mock.calls[0][0]).not.toHaveProperty('password');
+    state.options.authMethod = 'password';
+    expect(state.payload()).toMatchObject({ applicationKeyId: null, username: 'user', password: ' manual password ' });
+    state.options.authMethod = 'applicationKey'; state.form.applicationKeyId = 6;
+    expect(await state.validate()).toBe(false);
+    expect(state.errors.value.applicationKey).toBeTruthy();
+  });
+  it('shows the existing key when editing and requires reselection after import', async () => {
+    const linked = { ...asset, applicationKeyId: 12, applicationKeyName: 'linked', username: 'linked-user', options: { authMethod: 'applicationKey' } };
+    const { state } = setup({ asset: linked });
+    expect(state.selectedKey.value).toMatchObject({ id: 12, name: 'linked', username: 'linked-user' });
+    expect(await state.validate()).toBe(true);
+    expect(await setup({ asset: { ...linked, applicationKeyId: null } }).state.validate()).toBe(false);
   });
   it('tests an unsaved draft, lists databases, and blocks duplicate test/save calls', async () => {
     const { state, api } = setup(); valid(state);
