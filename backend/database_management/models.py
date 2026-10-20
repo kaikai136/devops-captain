@@ -26,6 +26,7 @@ class DatabaseAsset(models.Model):
     port = models.PositiveIntegerField(default=3306)
     username = models.CharField(max_length=120)
     password_encrypted = models.TextField(blank=True)
+    connection_secrets_encrypted = models.TextField(blank=True)
     database = models.CharField(max_length=120, blank=True)
     remark = models.TextField(blank=True)
     options = models.JSONField(default=dict, blank=True)

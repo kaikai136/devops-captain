@@ -25,7 +25,12 @@ def checked(request, asset_id, action):
     denied = require_feature_permission(request, "databaseManagement", action, "没有应用管理权限")
     if denied:
         return None, denied
-    return get_object_or_error(DatabaseAsset, id=asset_id, error_message="数据库资产不存在")
+    asset, error = get_object_or_error(DatabaseAsset, id=asset_id, error_message="数据库资产不存在")
+    if error: return None, error
+    from .connection_config import enforce_policy
+    try: enforce_policy(asset, write=action in {"modify_data", "manage_schema"})
+    except ValueError as exc: return None, bad_request(str(exc))
+    return asset, None
 
 
 def failed(exc):
@@ -206,6 +211,8 @@ def asset_sql(request, asset_id):
     if not sql or len(sql) > 100000: return bad_request("SQL 不能为空且最多 100000 字符")
     if asset.db_type == "redis": return bad_request("Redis 请使用命令视图")
     try:
+        from .connection_config import enforce_sql
+        enforce_sql(asset, sql)
         action = sql_action(sql)
         validate_sql_for_asset(asset, sql)
     except ValueError as exc:

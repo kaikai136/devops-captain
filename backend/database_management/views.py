@@ -15,10 +15,50 @@ from .advanced import (
 )
 from . import adapters
 from .catalog import directory_for, unique_name
+import time
+from .services import encrypt_password
 
 def guard(request, action=None): return require_feature_permission(request, "databaseManagement", action, "没有应用管理权限")
 
 def asset_payload(asset): return DatabaseAssetSerializer(asset).data
+
+@api_view(["POST"])
+def connection_test(request):
+    error = guard(request, "test_connection")
+    if error: return error
+    original = None
+    if request.data.get("assetId"):
+        original, error = get_object_or_error(DatabaseAsset, id=request.data["assetId"], error_message="数据库资产不存在")
+        if error: return error
+    error = guard(request, "edit" if original else "create")
+    if error: return error
+    data = dict(request.data)
+    data.pop("assetId", None)
+    data.setdefault("name", "连接测试")
+    serializer = DatabaseAssetSerializer(original, data=data, partial=bool(original))
+    if not serializer.is_valid(): return bad_request(str(serializer.errors))
+    # Build an ephemeral asset; serializer.save() is deliberately never called.
+    values = dict(serializer.validated_data)
+    if values.get("db_type", original.db_type if original else "mysql") != "mysql":
+        return bad_request("未保存表单测试目前仅支持 MySQL")
+    password = values.pop("password", "")
+    values["password_encrypted"] = encrypt_password(password) if password else (original.password_encrypted if original else "")
+    options = values.get("options", original.options if original else {})
+    if options.get("authMethod") == "none": values["password_encrypted"] = encrypt_password("")
+    if original:
+        for field in ("db_type", "host", "port", "username", "database", "options", "connection_secrets_encrypted"):
+            values.setdefault(field, getattr(original, field))
+    asset = DatabaseAsset(**values)
+    start = time.monotonic()
+    try:
+        with adapters.connection(asset, "") as conn:
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT 1")
+                cursor.execute("SHOW DATABASES")
+                names = [next(iter(row.values())) if isinstance(row, dict) else row[0] for row in cursor.fetchall()]
+        return Response({"ok": True, "message": "连接成功", "elapsedMs": round((time.monotonic() - start) * 1000), "databases": names})
+    except Exception as exc:
+        return Response({"ok": False, "message": adapters.connection_error(exc), "elapsedMs": round((time.monotonic() - start) * 1000), "databases": []}, status=400)
 
 @api_view(["GET", "POST"])
 def assets(request):

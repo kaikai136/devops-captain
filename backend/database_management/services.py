@@ -28,6 +28,9 @@ def validate_identifier(value: str, label="标识符") -> str:
     return value
 
 def connect(asset, database=None):
+    if asset.db_type == "mysql":
+        from .adapters import connect as connect_asset
+        return connect_asset(asset, database)
     return pymysql.connect(host=asset.host, port=asset.port, user=asset.username, password=decrypt_password(asset.password_encrypted), database=database or asset.database or None, charset="utf8mb4", cursorclass=pymysql.cursors.DictCursor, connect_timeout=5, read_timeout=15, write_timeout=15)
 
 def databases(asset):

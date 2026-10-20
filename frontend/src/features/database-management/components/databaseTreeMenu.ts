@@ -81,7 +81,7 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
     item(context, 'delete-asset', '删除', 'trash', { enabled: context.can('delete'), danger: true }),
     item(context, 'accounts', '账号管理', 'userCog', { enabled: context.can('manage_accounts') && supports('accounts'), separatorBefore: true }),
     item(context, 'database-create', '新建数据库', 'database', { enabled: context.can('database_admin') }),
-    item(context, 'database-import', '导入数据库', 'upload', { enabled: importExport && dumpSupported }),
+    item(context, 'database-import', '导入数据库', 'upload', { enabled: importExport && dumpSupported && context.can('import_data') }),
     item(context, 'database-export', '导出数据库', 'download', { enabled: importExport && dumpSupported }),
     item(context, 'more', '更多', 'menu', { children: [
       item(context, 'test', '测试连接', 'circleCheck', { enabled: context.can('test_connection') }),
@@ -107,7 +107,7 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
         item(context, 'export-format-csv', 'CSV', 'file', { enabled: importExport && context.can('view_data') }),
         item(context, 'export-format-json', 'JSON', 'fileCode', { enabled: importExport && context.can('view_data') }),
       ] }),
-      item(context, 'database-import', '导入', 'upload', { enabled: importExport && dumpSupported }),
+      item(context, 'database-import', '导入', 'upload', { enabled: importExport && dumpSupported && context.can('import_data') }),
       item(context, 'refresh', '刷新', 'refresh', { shortcut: 'F5' }),
     ];
     return [
@@ -125,7 +125,7 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
       item(context, 'export-format-csv', 'CSV', 'file', { enabled: importExport && context.can('view_data') }),
       item(context, 'export-format-json', 'JSON', 'fileCode', { enabled: importExport && context.can('view_data') }),
     ] }),
-    item(context, 'database-import', '导入', 'upload', { enabled: importExport && dumpSupported }),
+    item(context, 'database-import', '导入', 'upload', { enabled: importExport && dumpSupported && context.can('import_data') }),
   ];
   }
   if (target.kind === 'object' && target.category === 'table') return [
@@ -146,7 +146,7 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
       item(context, 'truncate-table', '快速清空数据', 'zap', { enabled: manageSchema && supports('truncate'), danger: true }),
     ] }),
     item(context, 'export-sql', '导出 SQL', 'fileCode', { enabled: importExport && dumpSupported }),
-    item(context, 'import-table', '导入 SQL', 'upload', { enabled: importExport && dumpSupported }),
+    item(context, 'import-table', '导入 SQL', 'upload', { enabled: importExport && dumpSupported && context.can('import_data') }),
   ];
   if (target.category === 'view') return [
     item(context, 'open-object', '打开视图', 'eye', { enabled: target.kind === 'object', shortcut: 'Enter' }),

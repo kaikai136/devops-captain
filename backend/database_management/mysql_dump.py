@@ -446,9 +446,8 @@ def export_dump(task, output, report):
         warnings = [f"{name} 非 InnoDB 表，无法保证数据快照一致性" for name in names if str(metadata[name]["ENGINE"]).lower() != "innodb"]
         from .transfers import update
         update(task, preview={"warnings": warnings, "tables": len(names), "content": content})
-        query(conn, "SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'")
-        query(conn, "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-        query(conn, "START TRANSACTION WITH CONSISTENT SNAPSHOT")
+        from .mysql_connection import prepare_export_snapshot
+        prepare_export_snapshot(conn)
         version = query(conn, "SELECT VERSION() AS version")[0]["version"]
         output.write(f"/* DevOps Captain Dump SQL\n Source Server Type: {task.asset.db_type}\n Server Version: {str(version).replace('*/', '')}\n Date: {timezone.now().isoformat()}\n File Encoding: UTF-8\n*/\n\nSET NAMES utf8mb4;\nSET SQL_MODE = 'NO_AUTO_VALUE_ON_ZERO';\nSET FOREIGN_KEY_CHECKS = 0;\n\n")
         for index, name in enumerate(names):

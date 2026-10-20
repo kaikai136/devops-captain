@@ -183,9 +183,13 @@ def database_operation(request, asset_id):
     name = request.query_params.get("name") if request.method == "GET" else request.data.get("name")
     try:
         if request.method == "POST" and request.data.get("action") == "edit":
+            from .connection_config import enforce_policy
+            enforce_policy(asset, write=True)
             result = alter_mysql_database(asset, request.data)
             record_operation_log(request, "应用管理", "编辑数据库", result["name"], f"字符集={result['charset']}; 排序规则={result['collation']}")
             return Response(result)
+        from .connection_config import enforce_policy
+        enforce_policy(asset, write=action != "export")
         _, name = database_name(asset, name)
         if action == "create": result = create_database(asset, name)
         elif action == "delete": result = delete_database(asset, name)

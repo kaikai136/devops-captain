@@ -193,6 +193,8 @@ def asset_accounts(request, asset_id):
     if error: return error
     if asset.db_type in {"sqlite", "redis"}: return bad_request("该数据库类型不支持账号管理")
     try:
+        from .connection_config import enforce_policy
+        enforce_policy(asset, write=request.method != "GET")
         if request.method == "GET":
             kind = asset.db_type
             sql = "SELECT User AS name, Host AS host FROM mysql.user" if kind in {"mysql", "mariadb"} else "SELECT rolname AS name FROM pg_roles" if kind in {"postgresql", "kingbase"} else "SELECT name FROM sys.database_principals WHERE type IN ('S','U','G')" if kind == "sqlserver" else "SELECT name FROM system.users" if kind == "clickhouse" else "SELECT USERNAME AS name FROM ALL_USERS"

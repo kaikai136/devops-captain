@@ -1,7 +1,17 @@
 import { apiDelete, apiGet, apiPost, apiPostForm, apiPut } from '../../../api';
 
-export interface DatabaseAsset { id: number; name: string; directoryId: number | null; dbType: string; host: string; port: number; username: string; databaseName: string; remark: string; options: Record<string, unknown>; }
-export interface DatabaseAssetPayload { name: string; directoryId?: number | null; dbType: string; host: string; port: number; username: string; password?: string; databaseName: string; remark: string; options: Record<string, unknown>; applicationCredentialId?: number | null; }
+export type ConnectionSecretKey = 'sshPassword' | 'sshPrivateKey' | 'sshKeyPassword' | 'sslCa' | 'sslCert' | 'sslKey' | 'sslKeyPassword';
+export type ConnectionSecrets = Partial<Record<ConnectionSecretKey, string | { name: string; content: string } | null>>;
+export type ConnectionSecretStatus = Partial<Record<ConnectionSecretKey, { configured: boolean; name?: string }>>;
+export interface MysqlConnectionOptions extends Record<string, unknown> {
+  color: string; environment: string; readOnly: boolean; expiresAt: string | null;
+  authMethod: 'password' | 'none'; connectTimeout: number; charset: string;
+  parameters: { readTimeout?: number; writeTimeout?: number; autocommit?: boolean; sqlMode?: string; timeZone?: string };
+  ssh: { enabled: boolean; host: string; port: number; username: string; authMethod: 'password' | 'privateKey' };
+  ssl: boolean; tls: { mode: 'require' | 'verify_ca' | 'verify_identity' };
+}
+export interface DatabaseAsset { id: number; name: string; directoryId: number | null; dbType: string; host: string; port: number; username: string; databaseName: string; remark: string; options: Record<string, unknown>; connectionSecretStatus?: ConnectionSecretStatus; }
+export interface DatabaseAssetPayload { name: string; directoryId?: number | null; dbType: string; host: string; port: number; username: string; password?: string; databaseName: string; remark: string; options: Record<string, unknown>; applicationCredentialId?: number | null; connectionSecrets?: ConnectionSecrets; }
 export interface AssetDirectory { id: number; name: string; parentId: number | null; }
 export interface ConnectionManifest { version: number; directories: string[][]; assets: Array<Record<string, unknown>>; }
 export interface DatabaseType { key: string; label: string; defaultPort: number; fields: string[]; capabilities: string[]; }
@@ -38,6 +48,7 @@ export const createDatabaseAsset = (payload: DatabaseAssetPayload) => apiPost<Da
 export const updateDatabaseAsset = (id: number, payload: Partial<DatabaseAssetPayload>) => apiPut<DatabaseAsset>(`${base}/assets/${id}/`, payload);
 export const deleteDatabaseAsset = (id: number) => apiDelete<{ deleted: boolean }>(`${base}/assets/${id}/`);
 export const testDatabaseAsset = (id: number) => apiPost<{ ok: boolean; message: string }>(`${base}/assets/${id}/test/`, {});
+export const testDatabaseConnection = (payload: DatabaseAssetPayload & { assetId?: number }) => apiPost<{ ok: boolean; message: string; elapsedMs: number; databases: string[] }>(`${base}/connection-test/`, payload);
 export const getDatabaseTree = (id: number, database = '') => apiGet<{ databases: string[]; schemas: string[]; kind: string }>(`${base}/assets/${id}/tree/${query({ database })}`);
 export const listDatabaseObjects = (id: number, database: string, schema?: string, type?: string) => apiGet<{ objects: DatabaseTable[] }>(`${base}/assets/${id}/objects/${query({ database, schema, type })}`);
 export const getDatabaseDdl = (id: number, database: string, table: string, schema?: string, objectType = 'table', signature = '') => apiGet<{ ddl: string }>(`${base}/assets/${id}/ddl/${query({ database, table, schema, objectType, signature })}`);

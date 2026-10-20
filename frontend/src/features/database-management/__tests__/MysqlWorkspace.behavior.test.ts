@@ -3,6 +3,7 @@ import { compileScript, compileTemplate, parse } from '@vue/compiler-sfc';
 import * as ts from 'typescript';
 import * as Vue from 'vue';
 import * as diagramUtils from '../utils/databaseDiagram';
+import * as connectionUtils from '../utils/mysqlConnection';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 // Run the actual setup functions with mocked network/UI boundaries; no live database mutations.
@@ -30,6 +31,7 @@ function setup(name: string, props: Record<string, unknown> = {}, allowed = true
     if (path.endsWith('/databaseManagement')) return api;
     if (path.endsWith('/errors')) return { errorMessage: (error: unknown) => String(error) };
     if (path.endsWith('/databaseDiagram')) return diagramUtils;
+    if (path.endsWith('/mysqlConnection')) return connectionUtils;
     if (path.endsWith('/useDatabaseObjectActions')) return { useDatabaseObjectActions: () => ({ executeObjectAction: vi.fn() }) };
     return {};
   };

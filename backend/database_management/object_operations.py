@@ -27,7 +27,12 @@ def checked(request, asset_id):
     denied = require_feature_permission(request, "databaseManagement", "manage_schema")
     if denied:
         return None, denied
-    return get_object_or_error(DatabaseAsset, pk=asset_id, error_message="数据库资产不存在")
+    asset, error = get_object_or_error(DatabaseAsset, pk=asset_id, error_message="数据库资产不存在")
+    if error: return None, error
+    from .connection_config import enforce_policy
+    try: enforce_policy(asset, write=True)
+    except ValueError as exc: return None, bad_request(str(exc))
+    return asset, None
 
 
 def validate_name(value, label="对象名称"):

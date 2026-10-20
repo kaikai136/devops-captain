@@ -7,6 +7,7 @@ from . import object_operations
 from . import queries
 from . import transfers
 urlpatterns = [
+    path("database-management/connection-test/", views.connection_test),
     path("database-management/transfers/", transfers.task_collection),
     path("database-management/transfers/uploads/", transfers.upload_init),
     path("database-management/transfers/<uuid:task_id>/chunks/<int:index>/", transfers.upload_chunk),

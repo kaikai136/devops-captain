@@ -72,6 +72,7 @@ def duplicate_asset(asset, folder=None):
         name=copy_name(asset.name, folder, DatabaseAsset), directory=folder,
         db_type=asset.db_type, host=asset.host, port=asset.port,
         username=asset.username, password_encrypted=asset.password_encrypted,
+        connection_secrets_encrypted=asset.connection_secrets_encrypted,
         database=asset.database, remark=asset.remark, options=dict(asset.options or {}),
         created_by=asset.created_by,
     )
@@ -207,10 +208,10 @@ def import_manifest_payload(owner, manifest, directory_id=None, conflict_policy=
             if existing and conflict_policy == "overwrite": existing.delete()
             if existing and conflict_policy == "rename": payload["name"] = copy_name(payload.get("name"), folder, DatabaseAsset)
             payload["directoryId"] = folder.id if folder else None
-            serializer = DatabaseAssetSerializer(data=payload)
+            serializer = DatabaseAssetSerializer(data=payload, context={"connection_import": True})
             if not serializer.is_valid(): raise ValueError(str(serializer.errors))
             serializer.save(created_by=owner); imported += 1
-    return {"imported": imported}
+    return {"imported": imported, "warning": "连接配置不含密码和证书，请编辑连接补全所需认证材料"}
 
 
 @api_view(["GET", "POST"])
@@ -283,10 +284,10 @@ def connection_manifest(request):
                 payload = {key: value for key, value in item.items() if key in {"name", "dbType", "host", "port", "username", "databaseName", "remark", "options"}}
                 payload["directoryId"] = folder.id if folder else None
                 payload["name"] = unique_name(payload.get("name"), folder, DatabaseAsset)
-                serializer = DatabaseAssetSerializer(data=payload)
+                serializer = DatabaseAssetSerializer(data=payload, context={"connection_import": True})
                 if not serializer.is_valid():
                     raise ValueError(str(serializer.errors))
                 serializer.save(created_by=request.user)
         record_operation_log(request, "应用管理", "导入连接配置", target.name if target else "根目录", f"连接数={len(assets)}")
-        return Response({"imported": len(assets)}, status=status.HTTP_201_CREATED)
+        return Response({"imported": len(assets), "warning": "连接配置不含密码和证书，请编辑连接补全所需认证材料"}, status=status.HTTP_201_CREATED)
     except ValueError as exc: return bad_request(str(exc))

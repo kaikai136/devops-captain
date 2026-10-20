@@ -14,6 +14,8 @@ import DatabaseObjectEditor, { type DatabaseObjectEditorContext } from './Databa
 import DatabaseWorkspaceTabs, { type DatabaseWorkspaceTab } from './DatabaseWorkspaceTabs.vue';
 import DatabaseWorkspaceDocument from './DatabaseWorkspaceDocument.vue';
 import MysqlDatabaseDialog from './MysqlDatabaseDialog.vue';
+import MysqlConnectionDialog from './MysqlConnectionDialog.vue';
+import { connectionCan, connectionExpired, environments } from '../utils/mysqlConnection';
 import DatabaseImportDialog from './DatabaseImportDialog.vue';
 import DatabaseExportDialog, { type ExportTarget } from './DatabaseExportDialog.vue';
 import { buildDatabaseTreeMenu, type DatabaseObjectCategory, type DatabaseTreeMenuTarget } from './databaseTreeMenu';
@@ -32,7 +34,8 @@ import {
 type Tab = 'tables' | 'structure' | 'data' | 'sql' | 'transfer';
 const { canUsePageAction, showToast, requestConfirm, currentUser, hostCredentials, loadHostCredentials } = useAppContext();
 const applicationCredentials = computed(() => hostCredentials.value.filter(item => item.credentialType === 'application'));
-const can = (action: string) => canUsePageAction('databaseManagement', action);
+const can = (action: string) => canUsePageAction('databaseManagement', action) && connectionCan(selected.value, action);
+const canAsset = (asset: DatabaseAsset | undefined, action: string) => canUsePageAction('databaseManagement', action === 'import_data' ? 'import_export' : action) && connectionCan(asset, action);
 const assets = ref<DatabaseAsset[]>([]);
 const directories = ref<AssetDirectory[]>([]);
 const expandedDirectories = ref<number[]>([]);
@@ -422,6 +425,7 @@ function restoreCachedWorkspace(asset: DatabaseAsset, snapshot: WorkspaceSnapsho
 function updateWorkspaceTabLabel(asset: DatabaseAsset) {
   const item = workspaceTabs.value.find(tabItem => tabItem.id === workspaceTabId(asset.id));
   if (item) { item.label = asset.name; item.dbType = asset.dbType; }
+  workspaceTabs.value.filter(tab => tab.assetId === asset.id).forEach(tab => { tab.color = String(asset.options.color || ''); tab.environment = environments[String(asset.options.environment || '')] || ''; });
 }
 function pruneWorkspaceTabs(nextAssets: DatabaseAsset[]) {
   const ids = new Set(nextAssets.map(asset => asset.id));
@@ -468,7 +472,7 @@ async function openAssetWorkspace(asset: DatabaseAsset, afterOpen?: () => Promis
     if (!workspaceSaved) saveWorkspaceSnapshot();
     sidebarAssetId.value = asset.id;
     const id = workspaceTabId(asset.id);
-    if (!workspaceTabs.value.some(item => item.id === id)) workspaceTabs.value.push({ id, kind: 'asset', label: asset.name, assetId: asset.id, dbType: asset.dbType });
+    if (!workspaceTabs.value.some(item => item.id === id)) workspaceTabs.value.push({ id, kind: 'asset', label: asset.name, assetId: asset.id, dbType: asset.dbType, color: String(asset.options.color || ''), environment: environments[String(asset.options.environment || '')] || '' });
     activeWorkspaceTabId.value = id;
     if (selected.value?.id === asset.id && connected.value) {
       expandedAssets.value = expandedAssets.value.includes(asset.id) ? expandedAssets.value : [...expandedAssets.value, asset.id];
@@ -1007,7 +1011,7 @@ const menuActions = computed<ContextMenuEntry[]>(() => {
   return buildDatabaseTreeMenu(target, {
     connected: Boolean(asset && isAssetConnected(asset.id)), dbType: asset?.dbType || '', capabilities,
     selectedCount: asset?.id === selected.value?.id && target.database === activeDatabase.value ? selectedTables.value.length : 0,
-    pinned: target.kind === 'query' ? Boolean(queries.value.find(item => item.id === target.queryId)?.pinned) : pinnedObjects.value.includes(objectPinKey(target.assetId, target.database || '', target.schema || '', target.category || '', target.name)), can, run: runMenuAction,
+    pinned: target.kind === 'query' ? Boolean(queries.value.find(item => item.id === target.queryId)?.pinned) : pinnedObjects.value.includes(objectPinKey(target.assetId, target.database || '', target.schema || '', target.category || '', target.name)), can: action => canAsset(asset || undefined, action), run: runMenuAction,
   });
 });
 async function loadQueries() {
@@ -1116,7 +1120,7 @@ function openDatabaseDocument(asset: DatabaseAsset, database: string, owner: str
   const number = ++documentSequence;
   const id = `document-${number}`;
   const labels = { table: '新建表', query: '查询', er: 'ER 图', accounts: '账号管理' };
-  workspaceTabs.value.push({ id, kind: 'document', assetId: asset.id, database, schema: owner, documentType, dbType: asset.dbType, label: `${database} · ${labels[documentType]} ${number}` });
+  workspaceTabs.value.push({ id, kind: 'document', assetId: asset.id, database, schema: owner, documentType, dbType: asset.dbType, color: String(asset.options.color || ''), environment: environments[String(asset.options.environment || '')] || '', label: `${database} · ${labels[documentType]} ${number}` });
   dirtyDocuments.value[id] = documentType === 'table';
   activeWorkspaceTabId.value = id;
 }
@@ -1158,7 +1162,7 @@ async function runMenuAction(action: string) {
     const database = item.database || item.name;
     const documentActions: Record<string, { type: NonNullable<DatabaseWorkspaceTab['documentType']>; permission: string }> = { 'new-table': { type: 'table', permission: 'manage_schema' }, 'new-query': { type: 'query', permission: 'execute_sql' }, 'new-er-diagram': { type: 'er', permission: 'view_data' }, accounts: { type: 'accounts', permission: 'manage_accounts' } };
     const documentAction = documentActions[action];
-    if (documentAction) { if (can(documentAction.permission)) openDatabaseDocument(asset, database, '', documentAction.type); return; }
+    if (documentAction) { if (canAsset(asset, documentAction.permission)) openDatabaseDocument(asset, database, '', documentAction.type); return; }
     if (action === 'close-database') {
       const hasStaged = selected.value?.id === asset.id && activeDatabase.value === database && stagedChanges.value.length > 0;
       const cached = workspaceSnapshots.get(asset.id);
@@ -1170,15 +1174,15 @@ async function runMenuAction(action: string) {
       if (hasStaged || (cached?.database === database && cached.stagedChanges.length) || documentTabs.value.some(tab => tab.assetId === asset.id && tab.database === database && dirtyDocuments.value[tab.id])) requestConfirm('关闭数据库工作区', '该数据库有未保存的编辑，关闭后将丢弃。确定关闭吗？', '关闭', close); else await close();
       return;
     }
-    if (action === 'edit-database') { if (can('database_admin')) mysqlEditDatabase.value = { assetId: asset.id, database }; return; }
+    if (action === 'edit-database') { if (canAsset(asset, 'database_admin')) mysqlEditDatabase.value = { assetId: asset.id, database }; return; }
     if (action === 'delete-database') {
-      if (!can('database_admin')) return;
+      if (!canAsset(asset, 'database_admin')) return;
       requestConfirm('删除数据库', `确定删除数据库“${database}”吗？该数据库中的所有表和数据将永久删除，此操作无法恢复。`, '确认删除', async () => {
         try { await databaseAdmin(asset.id, 'delete', database); closeDatabaseDocuments(asset.id, database); await refreshMysqlDatabase(asset.id, database, true); showToast('数据库已删除', database); }
         catch (error) { showToast('删除数据库失败', errorMessage(error)); }
       }); return;
     }
-    if (action === 'database-import') { if (can('import_export')) mysqlImportDatabase.value = { assetId: asset.id, database, schema: '' }; return; }
+    if (action === 'database-import') { if (canAsset(asset, 'import_data')) mysqlImportDatabase.value = { assetId: asset.id, database, schema: '' }; return; }
     if (action === 'refresh') { await refreshMysqlDatabase(asset.id, database); return; }
   }
   const folder = directories.value.find(value => value.id === item.directoryId);
@@ -1212,7 +1216,7 @@ async function runMenuAction(action: string) {
   if (action === 'delete-asset' && asset) { removeAsset(asset); return; }
   if (action === 'disconnect') { if (asset) markAssetDisconnected(asset.id); return; }
   if (item.kind === 'asset' && (action === 'open' || action === 'refresh')) { if (asset) await openAssetWorkspace(asset); return; }
-  if (action.startsWith('export-format-') && asset && can('import_export') && can('view_data')) {
+  if (action.startsWith('export-format-') && asset && canAsset(asset, 'import_export') && canAsset(asset, 'view_data')) {
     const format = action.slice('export-format-'.length) as ExportTarget['format'];
     databaseExportTarget.value = { assetId: asset.id, database: item.database || item.name, schema: item.schema || '', dbType: asset.dbType, format };
     return;
@@ -1536,7 +1540,7 @@ onUnmounted(() => {
         <div v-if="!catalogEntries.length" class="db-empty">暂无连接资产</div>
         <div v-for="entry in catalogEntries" :key="entry.key" class="db-catalog-entry" :style="{ paddingLeft: `${10 + entry.depth * 12}px` }" draggable="true" @dragstart="dragItem($event, entry.directory ? 'directory' : 'asset', entry.directory?.id || entry.asset!.id)" @dragover.prevent @drop.stop="entry.directory && dropItem($event, entry.directory.id)" @contextmenu="entry.directory ? openTreeMenu($event, 'directory', entry.directory.name, undefined, entry.directory.id) : openTreeMenu($event, 'asset', entry.asset!.name, entry.asset!.id, entry.asset!.directoryId || undefined)">
           <template v-if="entry.directory"><div class="db-catalog-row"><button class="db-tree-toggle" @click.stop="toggleDirectory(entry.directory.id)"><ChevronDown v-if="expandedDirectories.includes(entry.directory.id)" :size="14" /><ChevronRight v-else :size="14" /></button><Folder class="db-folder-icon" :size="15" /><button class="db-catalog-label" @click="toggleDirectory(entry.directory.id)">{{ entry.directory.name }}</button></div></template>
-            <template v-else><div class="db-catalog-row" :class="{ active: sidebarAssetId === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="isSidebarAssetExpanded(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseBrandIcon :db-type="entry.asset!.dbType" :connected="isAssetConnected(entry.asset!.id)" /><button class="db-catalog-label" :class="{ active: sidebarAssetId === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span>{{ entry.asset!.name }}</span><small>{{ isAssetConnected(entry.asset!.id) ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenuFromButton($event, entry.asset!)"><MoreHorizontal :size="15" /></button></div>
+            <template v-else><div class="db-catalog-row" :class="{ active: sidebarAssetId === entry.asset!.id }"><button class="db-tree-toggle" @click.stop="toggleAsset(entry.asset!)"><ChevronDown v-if="isSidebarAssetExpanded(entry.asset!.id)" :size="14" /><ChevronRight v-else :size="14" /></button><DatabaseBrandIcon :db-type="entry.asset!.dbType" :connected="isAssetConnected(entry.asset!.id)" /><button class="db-catalog-label" :class="{ active: sidebarAssetId === entry.asset!.id }" @click="toggleAsset(entry.asset!)"><span><i v-if="entry.asset!.options.color" class="db-connection-dot" :style="{ background: String(entry.asset!.options.color) }" />{{ entry.asset!.name }} <em v-if="entry.asset!.options.environment" class="db-connection-environment">{{ environments[String(entry.asset!.options.environment)] }}</em></span><small>{{ isAssetConnected(entry.asset!.id) ? '已连接' : '未连接' }} · {{ entry.asset!.dbType }}{{ connectionExpired(entry.asset!) ? ' · \u5df2\u5230\u671f' : entry.asset!.options.readOnly ? ' · \u53ea\u8bfb' : '' }}</small></button><button class="db-asset-more" title="资产操作" @click.stop="openTreeMenuFromButton($event, entry.asset!)"><MoreHorizontal :size="15" /></button></div>
             <div v-if="isSidebarAssetExpanded(entry.asset!.id) || (expandedAssets.includes(entry.asset!.id) && sidebarAssetId === entry.asset!.id)" class="db-asset-children">
               <template v-if="isRedisType(entry.asset!.dbType)">
                 <div v-for="db in 16" :key="db" class="db-tree-row db-redis-db-row" :class="{ active: sidebarWorkspace?.redisDb === db - 1 }" @contextmenu="openTreeMenu($event, 'database', String(db - 1))">
@@ -1643,7 +1647,7 @@ onUnmounted(() => {
             <el-table v-loading="loading" :data="rows" border stripe height="100%"><el-table-column v-for="field in tableDataColumns" :key="field" :prop="field" :label="field" min-width="150" show-overflow-tooltip /><el-table-column v-if="can('modify_data')" label="操作" width="130" fixed="right"><template #default="scope"><el-button text size="small" @click="openRow('update', scope.row)">编辑</el-button><el-button text size="small" type="danger" @click="removeRow(scope.row)"><Trash2 :size="14" /></el-button></template></el-table-column></el-table><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="total" layout="total, sizes, prev, pager, next" @current-change="loadData" @size-change="loadData" />
           </template></template>
           <template v-else-if="tab === 'sql'"><div class="db-sql-toolbar"><el-select :model-value="activeDatabase" placeholder="数据库" @change="selectDatabase"><el-option v-for="name in databases" :key="name" :label="name" :value="name" /></el-select><el-select v-if="schemas.length" :model-value="schema" placeholder="Schema" @change="selectSchema"><el-option v-for="name in schemas" :key="name" :label="name" :value="name" /></el-select></div><div class="db-sql-toolbar"><el-button type="primary" :loading="sqlRunning" :disabled="!can('execute_sql')" @click="runSql"><Play :size="15" />执行</el-button><el-button v-if="sqlRunning" @click="stopSql">取消等待</el-button><el-button @click="saveActiveQuery">{{ activeQueryId ? '保存查询' : '另存查询' }}</el-button><el-button @click="formatSql">格式化</el-button><el-button @click="compressSql">压缩</el-button><el-button :disabled="sqlRunning || !can('execute_sql')" @click="explainSql">执行计划</el-button><span>{{ sqlMessage }}</span></div><el-input v-model="sql" type="textarea" :rows="10" placeholder="输入 SQL" /><el-table v-if="sqlRows.length" :data="sqlRows" border height="100%"><el-table-column v-for="field in Object.keys(sqlRows[0])" :key="field" :prop="field" :label="field" min-width="150" /></el-table></template>
-          <template v-else><el-empty v-if="!can('import_export')" description="当前账号没有导入导出权限" /><el-empty v-else-if="!dumpSupported" description="SQL 转储目前仅支持 MySQL/MariaDB" /><div v-else class="db-transfer-panel"><h3>{{ activeDatabase }}</h3><div class="db-transfer-actions"><el-button type="primary" @click="openDatabaseAction('import', activeDatabase)"><Upload :size="15" />导入 SQL</el-button><el-button @click="openDumpExport()"><Download :size="15" />导出 SQL</el-button><el-button v-if="activeTable" @click="chooseDumpImport()"><Upload :size="15" />导入当前表</el-button></div></div></template>
+          <template v-else><el-empty v-if="!can('import_export')" description="当前账号没有导入导出权限" /><el-empty v-else-if="!dumpSupported" description="SQL 转储目前仅支持 MySQL/MariaDB" /><div v-else class="db-transfer-panel"><h3>{{ activeDatabase }}</h3><div class="db-transfer-actions"><el-button v-if="canAsset(selected || undefined, 'import_data')" type="primary" @click="openDatabaseAction('import', activeDatabase)"><Upload :size="15" />导入 SQL</el-button><el-button @click="openDumpExport()"><Download :size="15" />导出 SQL</el-button><el-button v-if="activeTable && canAsset(selected || undefined, 'import_data')" @click="chooseDumpImport()"><Upload :size="15" />导入当前表</el-button></div></div></template>
         </section>
       </template>
     </main>
@@ -1663,12 +1667,13 @@ onUnmounted(() => {
       </el-form>
       <template #footer><el-button @click="dumpDialog = false">取消</el-button><el-button type="primary" @click="submitDumpExport">提交导出</el-button></template>
     </el-dialog>
-    <DatabaseAccountDialog v-if="selected" v-model="accountDialogOpen" :asset-id="selected.id" :database="activeDatabase" :db-type="selected.dbType" :schema="schema" />
-    <DatabaseExportDialog :target="databaseExportTarget" :can-structure="can('manage_schema')" @close="databaseExportTarget = null" />
+    <DatabaseAccountDialog v-if="selected" v-model="accountDialogOpen" :read-only="!connectionCan(selected, 'write_accounts')" :asset-id="selected.id" :database="activeDatabase" :db-type="selected.dbType" :schema="schema" />
+    <DatabaseExportDialog :target="databaseExportTarget" :can-structure="canUsePageAction('databaseManagement', 'manage_schema')" @close="databaseExportTarget = null" />
     <el-dialog :close-on-click-modal="false" v-model="directoryDialog" :title="editingDirectory ? '重命名目录' : '新建目录'" width="min(420px, 94vw)"><el-input v-model="directoryName" maxlength="160" placeholder="目录名称" @keyup.enter="saveDirectory" /><template #footer><el-button @click="directoryDialog = false">取消</el-button><el-button type="primary" @click="saveDirectory">保存</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="moveDialog" title="移动到目录" width="min(420px, 94vw)"><el-select v-model="moveTarget" placeholder="选择目标目录" style="width:100%"><el-option label="根目录" :value="null" /><el-option v-for="folder in directories" :key="folder.id" :label="folder.name" :value="folder.id" /></el-select><template #footer><el-button @click="moveDialog = false">取消</el-button><el-button type="primary" @click="saveMove">移动</el-button></template></el-dialog>
     <el-dialog :close-on-click-modal="false" v-model="databaseDialog" :title="({ create: '新建数据库', delete: '删除数据库', clear: '清空数据库', import: '导入数据库' } as Record<string, string>)[databaseAction]" width="min(440px, 94vw)"><el-input v-model="databaseTarget" :placeholder="selected?.dbType === 'sqlite' ? '受限目录中的 .db 文件名' : selected?.dbType === 'redis' ? 'DB 编号 0-255' : '数据库名称'" /><template #footer><el-button @click="databaseDialog = false">取消</el-button><el-button type="primary" @click="saveDatabaseAction">确认</el-button></template></el-dialog>
-    <el-dialog v-model="dialog" :close-on-click-modal="false" :title="editing ? '编辑连接' : '新建连接'" width="min(520px, 94vw)">
+    <MysqlConnectionDialog v-if="dialog && form.dbType === 'mysql'" :asset="editing" :directory-id="form.directoryId" :credentials="applicationCredentials" :can-test="canUsePageAction('databaseManagement', 'test_connection')" :can-save="canUsePageAction('databaseManagement', editing ? 'edit' : 'create')" @close="dialog = false" @saved="dialog = false; loadAssets(); showToast('已保存', '连接资产已保存')" />
+    <el-dialog v-if="form.dbType !== 'mysql'" v-model="dialog" :close-on-click-modal="false" :title="editing ? '编辑连接' : '新建连接'" width="min(520px, 94vw)">
       <el-form label-position="top">
         <el-form-item label="数据库类型"><el-select v-model="form.dbType" :disabled="!!editing" @change="form = emptyForm(form.dbType)"><el-option v-for="kind in types" :key="kind.key" :label="kind.label" :value="kind.key" /></el-select></el-form-item>
         <el-form-item label="名称"><el-input v-model="form.name" /></el-form-item>
@@ -1866,4 +1871,8 @@ onUnmounted(() => {
 .db-sidebar{min-height:0;overflow:hidden}
 .db-asset-scroll{min-height:0;overflow-x:hidden;overflow-y:auto;scrollbar-width:thin;scrollbar-color:var(--el-border-color-darker,#b8c0c8) transparent}
 @media(max-width:720px){.db-sidebar{flex:0 0 250px}.db-asset-children{max-height:none;overflow:visible}}
+</style>
+
+<style scoped>
+.db-connection-dot{display:inline-block;width:7px;height:7px;margin-right:5px;border-radius:50%;vertical-align:middle;flex:none}.db-connection-environment{display:inline-block;padding:0 4px;margin-left:4px;border:1px solid var(--el-border-color);border-radius:3px;color:var(--el-text-color-secondary);font-size:10px;font-style:normal;line-height:16px;font-weight:400}
 </style>

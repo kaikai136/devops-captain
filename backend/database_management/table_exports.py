@@ -195,9 +195,8 @@ def export_bundle(task, output_path, report):
         with adapters.connection(task.asset, task.database) as conn:
             if task.asset.db_type in {"mysql", "mariadb"}:
                 from .mysql_dump import query
-                query(conn, "SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ")
-                query(conn, "START TRANSACTION WITH CONSISTENT SNAPSHOT")
-                query(conn, "SET SESSION sql_mode='NO_AUTO_VALUE_ON_ZERO'")
+                from .mysql_connection import prepare_export_snapshot
+                prepare_export_snapshot(conn)
             for index, table in enumerate(tables):
                 checkpoints.update(currentTable=table, tableRows=0, tableTotal=None)
                 log(f"开始导出：{table}")

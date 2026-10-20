@@ -130,6 +130,9 @@ def connect(asset, database=None):
     module = module_for(kind)
     common = {"host": asset.host, "port": asset.port, "user": asset.username, "password": password}
     if kind in {"mysql", "mariadb"}:
+        if kind == "mysql":
+            from .mysql_connection import connect as connect_mysql
+            return connect_mysql(asset, database, module)
         if options.get("ssl"):
             common["ssl"] = {}
         return module.connect(**common, database=database or asset.database or None,

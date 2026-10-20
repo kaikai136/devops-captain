@@ -8,6 +8,8 @@ export interface DatabaseWorkspaceTab {
   label: string;
   assetId?: number;
   dbType?: string;
+  color?: string;
+  environment?: string;
   documentType?: 'table' | 'query' | 'er' | 'accounts';
   database?: string;
   schema?: string;
@@ -94,7 +96,7 @@ onUnmounted(() => window.removeEventListener('click', closeContext));
         <ListIcon v-if="item.kind === 'list'" :size="14" aria-hidden="true" />
         <DatabaseZap v-else-if="item.dbType === 'redis'" :size="14" aria-hidden="true" />
         <Database v-else :size="14" aria-hidden="true" />
-        <span>{{ item.label }}</span>
+        <i v-if="item.color" class="db-tab-color" :style="{ background: item.color }" /><span>{{ item.label }}</span><small v-if="item.environment" class="db-tab-environment">{{ item.environment }}</small>
         <span
           v-if="!item.sticky"
           class="db-workspace-tab-close"
@@ -138,4 +140,5 @@ onUnmounted(() => window.removeEventListener('click', closeContext));
 .db-workspace-tab-menu button{display:block;width:100%;padding:7px 10px;border:0;border-radius:3px;background:none;color:inherit;text-align:left;font-size:12px;cursor:pointer}
 .db-workspace-tab-menu button:hover{background:var(--el-fill-color-light,#f5f7fa)}
 @media(max-width:720px){.db-workspace-tabs{height:30px}.db-workspace-tab{height:29px;min-width:78px}.db-workspace-tab.sticky{min-width:62px}}
+.db-tab-color{width:7px;height:7px;border-radius:50%;flex:none}.db-tab-environment{font-size:10px;line-height:15px;padding:0 3px;border:1px solid var(--el-border-color);border-radius:3px;font-weight:400}
 </style>

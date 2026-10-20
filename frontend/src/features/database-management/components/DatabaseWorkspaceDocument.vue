@@ -8,6 +8,7 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { useAppContext } from '@app/context';
 import { errorMessage } from '@shared/utils/errors';
+import { connectionCan } from '../utils/mysqlConnection';
 import { formatSqlText, compressSqlText } from '../utils/sqlText';
 import DatabaseAccountDialog from './DatabaseAccountDialog.vue';
 import DatabaseObjectEditor, { type DatabaseObjectEditorContext } from './DatabaseObjectEditor.vue';
@@ -18,7 +19,7 @@ import type { DatabaseWorkspaceTab } from './DatabaseWorkspaceTabs.vue';
 const props = defineProps<{ document: DatabaseWorkspaceTab; asset: DatabaseAsset }>();
 const emit = defineEmits<{ saved: []; dirty: [value: boolean] }>();
 const { canUsePageAction } = useAppContext();
-const can = (action: string) => canUsePageAction('databaseManagement', action);
+const can = (action: string) => canUsePageAction('databaseManagement', action) && connectionCan(props.asset, action);
 const editorHost = ref<HTMLElement | null>(null);
 const sqlText = ref('');
 const resultRows = ref<Record<string, unknown>[]>([]);
@@ -87,7 +88,7 @@ onUnmounted(() => { disposed = true; controller?.abort(); view?.destroy(); });
   </section>
   <DatabaseDiagram v-else-if="document.documentType === 'er'" :asset-id="asset.id" :database="database" />
   <DatabaseObjectEditor v-else-if="document.documentType === 'table'" embedded :model-value="true" :readonly="!can('manage_schema')" :context="editorContext" @saved="emit('dirty', false); emit('saved')" />
-  <DatabaseAccountDialog v-else-if="can('manage_accounts')" embedded :model-value="true" :asset-id="asset.id" :database="database" :db-type="asset.dbType" :schema="schema" />
+  <DatabaseAccountDialog v-else-if="can('manage_accounts')" embedded :read-only="!connectionCan(asset, 'write_accounts')" :model-value="true" :asset-id="asset.id" :database="database" :db-type="asset.dbType" :schema="schema" />
   <el-empty v-else description="当前账号没有账号管理权限" />
 </template>
 

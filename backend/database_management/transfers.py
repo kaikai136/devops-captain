@@ -163,6 +163,9 @@ def export_response(user, data):
         if direction != "export" or scope not in {"table", "database", "redis", "connections", "queries"}:
             raise ValueError("导出任务类型无效")
         asset = configure_asset(None, data)
+        if asset and scope in {"table", "database", "redis"}:
+            from .connection_config import enforce_policy
+            enforce_policy(asset)
         multi_format = data.get("exportVersion") == 2
         validate_dump_target(asset, scope, fmt, multi_format=multi_format)
         if scope in {"table", "database", "redis", "queries"} and asset is None: raise ValueError("此导出任务需要数据库资产")
@@ -250,6 +253,9 @@ def upload_init(request):
         scope, fmt = str(data.get("scope", "")), str(data.get("format", ""))
         if scope not in {"table", "database", "redis", "connections", "queries"}: raise ValueError("导入任务类型无效")
         asset = configure_asset(request, data)
+        if asset and scope in {"table", "database", "redis"}:
+            from .connection_config import enforce_policy
+            enforce_policy(asset, write=True)
         validate_dump_target(asset, scope, fmt)
         if scope in {"table", "database", "redis"} and asset is None: raise ValueError("导入任务需要数据库资产")
         if scope == "redis" and asset.db_type != "redis": raise ValueError("Redis 导入任务需要 Redis 资产")
@@ -358,6 +364,8 @@ def inspect_input(task):
             preview["rows"] = sum(len(item.get("rows", [])) for item in payload["tables"] if isinstance(item, dict))
         elif "assets" in payload:
             preview["assets"] = len(payload.get("assets", [])); preview["directories"] = len(payload.get("directories", []))
+            if task.scope == "connections":
+                preview["warnings"].append("连接配置不含密码和证书；导入后请编辑连接补全所需认证材料")
         else:
             preview["records"] = len(payload) if isinstance(payload, list) else 1
     elif task.format == "csv":
@@ -399,6 +407,10 @@ def task_confirm(request, task_id):
     task, error = fetch_task(request, task_id)
     if error: return error
     if not require_task_permissions(request.user, task): return bad_request("permission revoked")
+    if task.asset and task.scope in {"table", "database", "redis"}:
+        from .connection_config import enforce_policy
+        try: enforce_policy(task.asset, write=task.direction == "import")
+        except ValueError as exc: return bad_request(str(exc))
     if task.status != "awaiting_confirmation": return bad_request("任务未等待确认")
     policy = str(request.data.get("conflictPolicy", "append"))
     if policy not in {"append", "overwrite", "skip", "rename"}: return bad_request("冲突处理策略无效")
@@ -441,6 +453,10 @@ def task_retry(request, task_id):
     except ValueError as exc: return bad_request(str(exc))
     if source.direction == "import" and source.format == "sql" and request.data.get("confirmed") is not True: return bad_request("SQL 重试需再次确认可能重复执行")
     if not require_task_permissions(request.user, source): return bad_request("当前账号已不具备任务所需权限")
+    if source.asset and source.scope in {"table", "database", "redis"}:
+        from .connection_config import enforce_policy
+        try: enforce_policy(source.asset, write=source.direction == "import")
+        except ValueError as exc: return bad_request(str(exc))
     source_input = Path(source.input_path) if source.input_path and Path(source.input_path).is_file() else None
     task = create_task(owner=request.user, asset=source.asset, direction=source.direction, scope=source.scope,
                        format=source.format, database=source.database, schema=source.schema,
@@ -506,6 +522,9 @@ def task_cancelled(task_id):
 def progress(task, *, stage=None, rows=None, byte_count=None, total=None):
     task.refresh_from_db()
     if task.cancel_requested: raise InterruptedError("用户取消任务")
+    if task.asset_id and task.scope in {"table", "database", "redis"}:
+        from .connection_config import enforce_policy
+        enforce_policy(task.asset, write=task.direction == "import")
     values = {}
     if stage is not None: values["stage"] = stage
     if rows is not None: values["processed_rows"] = rows
@@ -591,6 +610,9 @@ def import_task(task):
 
 
 def run_task(task):
+    if task.asset_id and task.scope in {"table", "database", "redis"}:
+        from .connection_config import enforce_policy
+        enforce_policy(task.asset, write=task.direction == "import")
     validate_dump_target(task.asset, task.scope, task.format, multi_format=task.direction == "export" and task.parameters.get("exportVersion") == 2)
     if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
     if task.stage == "inspection_running":
