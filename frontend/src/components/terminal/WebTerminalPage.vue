@@ -2972,9 +2972,7 @@ function fitActiveTerminalSoon() {
 }
 
 function fitVisibleTerminalsSoon() {
-  window.requestAnimationFrame(() => {
-    for (const tab of visibleTerminalTabs.value) fitTerminal(tab);
-  });
+  for (const tab of visibleTerminalTabs.value) terminalResize.scheduleFit(tab);
 }
 
 function setTerminalFontSize(nextSize: number) {

@@ -14,8 +14,24 @@ interface UseTerminalResizeOptions<T extends ResizableTerminalTab> {
 
 export function useTerminalResize<T extends ResizableTerminalTab>({ isVisible, fitRdp }: UseTerminalResizeOptions<T>) {
   const observers = new Map<string, ResizeObserver>();
+  const pendingFrames = new Map<string, number>();
+
+  function cancelScheduledFit(tabId: string) {
+    const frame = pendingFrames.get(tabId);
+    if (frame !== undefined) window.cancelAnimationFrame(frame);
+    pendingFrames.delete(tabId);
+  }
+
+  function scheduleFit(tab: T) {
+    if (pendingFrames.has(tab.id) || !tab.mounted || !isVisible(tab)) return;
+    pendingFrames.set(tab.id, window.requestAnimationFrame(() => {
+      pendingFrames.delete(tab.id);
+      fit(tab);
+    }));
+  }
 
   function fit(tab: T) {
+    cancelScheduledFit(tab.id);
     if (!tab.mounted || !isVisible(tab)) return;
     if (tab.kind === 'rdp') {
       fitRdp(tab);
@@ -33,7 +49,7 @@ export function useTerminalResize<T extends ResizableTerminalTab>({ isVisible, f
 
   function observe(tab: T, container: HTMLElement) {
     dispose(tab.id);
-    const observer = new ResizeObserver(() => fit(tab));
+    const observer = new ResizeObserver(() => scheduleFit(tab));
     observers.set(tab.id, observer);
     observer.observe(container);
     fit(tab);
@@ -41,14 +57,16 @@ export function useTerminalResize<T extends ResizableTerminalTab>({ isVisible, f
   }
 
   function dispose(tabId: string) {
+    cancelScheduledFit(tabId);
     observers.get(tabId)?.disconnect();
     observers.delete(tabId);
   }
 
   function disposeAll() {
+    for (const tabId of pendingFrames.keys()) cancelScheduledFit(tabId);
     for (const observer of observers.values()) observer.disconnect();
     observers.clear();
   }
 
-  return { fit, observe, dispose, disposeAll };
+  return { fit, scheduleFit, observe, dispose, disposeAll };
 }

@@ -20,6 +20,7 @@ const summary = ref<DashboardSummary | null>(null);
 const isLoading = ref(false);
 const message = ref('');
 const now = ref(new Date());
+const numberFormatter = new Intl.NumberFormat('zh-CN');
 let clockTimer: number | undefined;
 
 const heroClockDate = computed(() => formatHeroDate(now.value));
@@ -457,7 +458,7 @@ function clampPercent(value: number) {
 }
 
 function formatNumber(value: number) {
-  return new Intl.NumberFormat('zh-CN').format(value);
+  return numberFormatter.format(value);
 }
 
 function padTimeUnit(value: number) {
