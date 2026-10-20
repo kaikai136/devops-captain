@@ -17,7 +17,7 @@ describe('SystemSettingsPanel terminal settings structure', () => {
     expect(script).toContain("const TERMINAL_SETTINGS_SETTING_KEY = 'terminal_settings'");
     expect(script).toContain('terminalSettingsDraft');
     expect(template).toContain("activeTab === 'terminal'");
-    expect(template).toContain('终端设置');
+    expect(script).toContain("title: '终端设置'");
     expect(template).toContain('sshConnectTimeoutSeconds');
     expect(template).toContain('sshBannerTimeoutSeconds');
     expect(template).toContain('sshAuthTimeoutSeconds');
