@@ -37,6 +37,10 @@ def config_file_path() -> Path:
     if container_path.is_file():
         return container_path
 
+    local_path = BASE_DIR.parent / "config" / "local.app.conf"
+    if local_path.is_file():
+        return local_path
+
     return container_path
 
 

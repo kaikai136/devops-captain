@@ -15,7 +15,8 @@ from .services import decrypt_password, encrypt_password
 COLORS = {"#ff4d4f", "#fa8c16", "#fadb14", "#52c41a", "#36cfc9", "#1890ff", "#9254de", "#8c8c8c"}
 SECRET_KEYS = {"sshPassword", "sshPrivateKey", "sshKeyPassword", "sslCa", "sslCert", "sslKey", "sslKeyPassword"}
 FILE_KEYS = {"sshPrivateKey", "sslCa", "sslCert", "sslKey"}
-MYSQL_KEYS = {"color", "environment", "readOnly", "expiresAt", "connectTimeout", "charset", "authMethod", "parameters", "ssh", "tls"}
+COMMON_KEYS = {"color", "environment", "readOnly", "connectTimeout", "authMethod"}
+MYSQL_KEYS = COMMON_KEYS | {"expiresAt", "charset", "parameters", "ssh", "tls"}
 LEGACY_KEYS = {"ssl", "https", "instance", "service", "sid", "file", "db", "schema"}
 SQL_MODES = set("ALLOW_INVALID_DATES ANSI ANSI_QUOTES ERROR_FOR_DIVISION_BY_ZERO HIGH_NOT_PRECEDENCE IGNORE_SPACE NO_AUTO_VALUE_ON_ZERO NO_BACKSLASH_ESCAPES NO_DIR_IN_CREATE NO_ENGINE_SUBSTITUTION NO_UNSIGNED_SUBTRACTION NO_ZERO_DATE NO_ZERO_IN_DATE ONLY_FULL_GROUP_BY PAD_CHAR_TO_FULL_LENGTH PIPES_AS_CONCAT REAL_AS_FLOAT STRICT_ALL_TABLES STRICT_TRANS_TABLES TRADITIONAL TIME_TRUNCATE_FRACTIONAL NO_AUTO_CREATE_USER".split())
 
@@ -35,7 +36,7 @@ def hostname(value):
 
 
 def validate_options(options, kind):
-    if not isinstance(options, dict) or set(options) - LEGACY_KEYS - {"authMethod"} - (MYSQL_KEYS if kind == "mysql" else set()):
+    if not isinstance(options, dict) or set(options) - LEGACY_KEYS - {"authMethod"} - (MYSQL_KEYS if kind == "mysql" else COMMON_KEYS):
         raise ValueError("包含不支持的连接选项")
     if options.get("authMethod", "password") not in {"password", "none", "applicationKey"}:
         raise ValueError("验证方式无效")

@@ -36,7 +36,8 @@ class ConnectionValidationTests(SimpleTestCase):
         validate_options({"connectTimeout": 120, "charset": "gb18030", "parameters": {"readTimeout": 600, "writeTimeout": 1, "autocommit": False, "sqlMode": "STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION", "timeZone": "Asia/Shanghai"}, "expiresAt": "2030-01-01T12:00:00+08:00"}, "mysql")
         for options in ({"connectTimeout": 0}, {"connectTimeout": True}, {"parameters": {"host": "other"}}, {"parameters": {"readTimeout": 601}}, {"parameters": {"autocommit": 1}}, {"parameters": {"sqlMode": "BAD_MODE"}}, {"parameters": {"timeZone": "bad zone"}}, {"expiresAt": "2030-01-01T12:00:00"}, {"readOnly": "yes"}, {"tls": {"mode": "bad"}}, {"ssh": {"enabled": True}}):
             with self.subTest(options=options), self.assertRaises(ValueError): validate_options(options, "mysql")
-        with self.assertRaises(ValueError): validate_options({"readOnly": True}, "postgresql")
+        self.assertEqual(validate_options({"color": "#1890ff", "environment": "production", "readOnly": True, "connectTimeout": 10}, "postgresql"), {"color": "#1890ff", "environment": "production", "readOnly": True, "connectTimeout": 10})
+        self.assertEqual(validate_options({"color": "#1890ff", "authMethod": "password"}, "redis"), {"color": "#1890ff", "authMethod": "password"})
 
     def test_secrets_are_allowlisted_and_size_limited(self):
         for updates in ({"password": "secret"}, {"sshPrivateKey": {"name": "../id", "content": "x"}}, {"sslCa": {"name": "ca.pem", "content": "x" * (256 * 1024 + 1)}}):
