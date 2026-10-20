@@ -96,6 +96,18 @@ describe('system pages use Element Plus widgets', () => {
     expect(securityScan).not.toMatch(/<input(?![^>]*hidden)/);
   });
 
+  it('uses responsive, labelled Element Plus forms in the profile center', () => {
+    const profileCenter = template('components/tools/ProfileCenter.vue');
+
+    expect(profileCenter).toContain('class="profile-page-title"');
+    expect(profileCenter).toContain('class="profile-form-grid profile-edit-form"');
+    expect(profileCenter).toContain('class="profile-form-grid profile-password-form"');
+    expect(profileCenter).toContain('<el-form-item label="用户名">');
+    expect(profileCenter).toContain('<el-form-item label="当前密码">');
+    expect(profileCenter).toContain('<el-form-item label="认证器验证码">');
+    expect(profileCenter).not.toMatch(/<form\b/);
+  });
+
   it('renders the application market with Element Plus controls', () => {
     const applicationMarket = template('features/application-market/components/ApplicationMarketPanel.vue');
 

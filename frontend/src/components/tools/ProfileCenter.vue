@@ -198,6 +198,11 @@ async function readProfileResponse(response: Response): Promise<ProfilePayload> 
 
 <template>
   <section v-if="activeTool === 'profile'" class="profile-center-page">
+    <header class="profile-page-title">
+      <span>系统管理</span>
+      <h1>个人中心</h1>
+      <p>管理个人资料、头像和账户安全。</p>
+    </header>
     <el-alert v-if="message" class="profile-message" type="error" :closable="false" :title="message" />
     <el-alert v-if="isLoading" class="profile-message info" type="info" :closable="false" title="正在加载个人资料..." />
 
@@ -272,25 +277,22 @@ async function readProfileResponse(response: Response): Promise<ProfilePayload> 
               <input ref="avatarInput" hidden type="file" accept="image/png,image/jpeg,image/webp" @change="uploadAvatar" />
             </div>
           </section>
-          <form v-if="canEditProfile" class="profile-form-grid" @submit.prevent="saveProfile">
-            <label>
-              <span>用户名</span>
+          <el-form v-if="canEditProfile" label-position="top" class="profile-form-grid profile-edit-form" :disabled="isLoading || isSavingProfile" @submit.prevent="saveProfile">
+            <el-form-item label="用户名">
               <el-input v-model.trim="profileForm.username" autocomplete="username" />
-            </label>
-            <label>
-              <span>显示名</span>
+            </el-form-item>
+            <el-form-item label="显示名">
               <el-input v-model.trim="profileForm.first_name" placeholder="例如：运维船长" />
-            </label>
-            <label>
-              <span>邮箱</span>
+            </el-form-item>
+            <el-form-item class="profile-email-field" label="邮箱">
               <el-input v-model.trim="profileForm.email" type="email" autocomplete="email" placeholder="name@example.com" />
-            </label>
+            </el-form-item>
             <div class="profile-actions">
               <el-button class="profile-primary-button" native-type="submit" type="primary" :loading="isSavingProfile">
                 {{ isSavingProfile ? '保存中...' : '保存资料' }}
               </el-button>
             </div>
-          </form>
+          </el-form>
         </div>
       </section>
 
@@ -302,19 +304,16 @@ async function readProfileResponse(response: Response): Promise<ProfilePayload> 
           </div>
           <AppIcon name="lock" :size="20" />
         </header>
-        <form class="profile-form-grid" @submit.prevent="changePassword">
-          <label>
-            <span>当前密码</span>
+        <el-form label-position="top" class="profile-form-grid profile-password-form" :disabled="isChangingPassword" @submit.prevent="changePassword">
+          <el-form-item label="当前密码">
             <el-input v-model="passwordForm.currentPassword" type="password" autocomplete="current-password" show-password />
-          </label>
-          <label>
-            <span>新密码</span>
+          </el-form-item>
+          <el-form-item label="新密码">
             <el-input v-model="passwordForm.newPassword" type="password" autocomplete="new-password" show-password />
-          </label>
-          <label>
-            <span>确认新密码</span>
+          </el-form-item>
+          <el-form-item label="确认新密码">
             <el-input v-model="passwordForm.confirmPassword" type="password" autocomplete="new-password" show-password />
-          </label>
+          </el-form-item>
           <div class="profile-password-meter" :class="passwordStrength.className.value">
             <div>
               <span>{{ passwordStrength.hint.value }}</span>
@@ -328,7 +327,7 @@ async function readProfileResponse(response: Response): Promise<ProfilePayload> 
               {{ isChangingPassword ? '更新中...' : '更新密码' }}
             </el-button>
           </div>
-        </form>
+        </el-form>
       </section>
 
       <section v-if="(twoFactorEnabled && canDisableTwoFactor) || (!twoFactorEnabled && canEnableTwoFactor)" class="profile-panel profile-security-panel">
@@ -356,21 +355,27 @@ async function readProfileResponse(response: Response): Promise<ProfilePayload> 
             </div>
           </div>
 
-          <form v-if="setupPayload" class="profile-2fa-form" @submit.prevent="confirmTwoFactor">
-            <el-input v-model.trim="twoFactorCode" inputmode="numeric" maxlength="6" placeholder="输入 6 位验证码" />
+          <el-form v-if="setupPayload" label-position="top" class="profile-2fa-form" :disabled="isConfirmingTwoFactor" @submit.prevent="confirmTwoFactor">
+            <el-form-item label="认证器验证码">
+              <el-input v-model.trim="twoFactorCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="输入 6 位验证码" />
+            </el-form-item>
             <el-button class="profile-primary-button" native-type="submit" type="primary" :disabled="twoFactorCode.length !== 6" :loading="isConfirmingTwoFactor">
               {{ isConfirmingTwoFactor ? '验证中...' : '启用 2FA' }}
             </el-button>
-          </form>
+          </el-form>
         </div>
 
-        <form v-else class="profile-2fa-form danger-zone" @submit.prevent="disableTwoFactor">
-          <el-input v-model="disablePassword" type="password" autocomplete="current-password" placeholder="当前密码" show-password />
-          <el-input v-model.trim="disableCode" inputmode="numeric" maxlength="6" placeholder="6 位验证码" />
+        <el-form v-else label-position="top" class="profile-2fa-form danger-zone" :disabled="isDisablingTwoFactor" @submit.prevent="disableTwoFactor">
+          <el-form-item label="当前密码">
+            <el-input v-model="disablePassword" type="password" autocomplete="current-password" placeholder="当前密码" show-password />
+          </el-form-item>
+          <el-form-item label="认证器验证码">
+            <el-input v-model.trim="disableCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="6 位验证码" />
+          </el-form-item>
           <el-button class="profile-danger-button" native-type="submit" type="danger" :disabled="!disablePassword || disableCode.length !== 6" :loading="isDisablingTwoFactor">
             {{ isDisablingTwoFactor ? '关闭中...' : '关闭 2FA' }}
           </el-button>
-        </form>
+        </el-form>
       </section>
     </div>
     <div v-else class="permission-empty">暂无可用功能</div>
