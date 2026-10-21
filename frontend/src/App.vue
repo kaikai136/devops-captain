@@ -392,7 +392,7 @@ function handleFloatAction(command: 'theme' | 'refresh' | 'top') {
           >
             <AppIcon :name="isWorkspaceDark ? 'sun' : 'moon'" :size="18" />
           </el-button>
-          <DatabaseTransferCenter v-if="isAuthenticated && canUsePageAction('databaseManagement', 'import_export')" v-model:open="databaseTransferCenterOpen" />
+          <DatabaseTransferCenter v-if="isAuthenticated && (canUsePageAction('databaseManagement', 'import_export') || (canUsePageAction('databaseManagement', 'view_data') && (canUsePageAction('databaseManagement', 'manage_schema') || canUsePageAction('databaseManagement', 'modify_data'))))" v-model:open="databaseTransferCenterOpen" />
           <el-button class="workspace-icon-button workspace-lock-button" circle title="锁定屏幕" aria-label="锁定屏幕" @click="lockCurrentSession">
             <AppIcon name="lock" :size="18" />
           </el-button>

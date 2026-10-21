@@ -4,6 +4,7 @@ from .credentials import resolve_credentials
 import csv
 import json
 import re
+import shutil
 import tempfile
 import zipfile
 from contextlib import contextmanager
@@ -263,13 +264,18 @@ def export_bundle(task, output_path, report):
         log("正在生成文件")
         heartbeat("packaging")
         files = assemble(task, root, completed, lambda: heartbeat("packaging", sum(p.stat().st_size for p in root.iterdir() if p.is_file())))
-        with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
-            for path in files:
-                heartbeat("packaging", output_path.stat().st_size)
-                with path.open("rb") as source, archive.open(path.name, "w", force_zip64=True) as destination:
-                    while chunk := source.read(1024 * 1024):
-                        destination.write(chunk)
-                        heartbeat("packaging", output_path.stat().st_size)
+        if task.scope == "table":
+            if len(files) != 1: raise DumpError("单表导出结果数量无效")
+            shutil.copyfile(files[0], output_path)
+            heartbeat("packaging", output_path.stat().st_size)
+        else:
+            with zipfile.ZipFile(output_path, "w", compression=zipfile.ZIP_DEFLATED, allowZip64=True) as archive:
+                for path in files:
+                    heartbeat("packaging", output_path.stat().st_size)
+                    with path.open("rb") as source, archive.open(path.name, "w", force_zip64=True) as destination:
+                        while chunk := source.read(1024 * 1024):
+                            destination.write(chunk)
+                            heartbeat("packaging", output_path.stat().st_size)
         log("部分表导出失败，请查看结果" if checkpoints["failedTables"] else "全部导出完成", "warning" if checkpoints["failedTables"] else "success")
         update(task, checkpoints=checkpoints.copy(), preview={**task.preview, "files": [{"name": p.name, "size": p.stat().st_size} for p in files], "warnings": [f"未导出：{t}" for t in checkpoints["failedTables"]]})
 
@@ -299,7 +305,7 @@ def write_insert(output, task, table, fields, rows, options):
 
 def assemble(task, root, tables, heartbeat):
     fmt = task.format
-    base = safe_name(task.database or task.schema or task.asset.name)
+    base = safe_name(tables[0][0] if getattr(task, "scope", "") == "table" else task.database or task.schema or task.asset.name)
     if fmt in {"xlsx", "dictionary"}:
         return [assemble_workbook(task, root, tables, heartbeat)]
     paths, used = [], set()
@@ -331,12 +337,16 @@ def assemble(task, root, tables, heartbeat):
             with part.open(encoding="utf-8") as source:
                 fields = json.loads(next(source))
                 if fmt == "csv": writer = csv.writer(output, lineterminator="\r\n"); writer.writerow(fields)
-                if fmt == "txt": output.write(f"-----------\r\n{table}\r\n-----------\r\n")
+                if fmt == "txt":
+                    if getattr(task, "scope", "") == "table":
+                        writer = csv.writer(output, delimiter="\t", lineterminator="\r\n"); writer.writerow(fields)
+                    else: output.write(f"-----------\r\n{table}\r\n-----------\r\n")
                 if fmt == "json": output.write((",\n" if json_index else "") + json.dumps(table, ensure_ascii=False) + ": [")
                 for row_index, line in enumerate(source):
                     values = json.loads(line)
                     if fmt == "json": output.write((",\n" if row_index else "") + json.dumps(dict(zip(fields, values)), ensure_ascii=False))
                     elif fmt == "csv": writer.writerow([text_value(v) for v in values])
+                    elif fmt == "txt" and getattr(task, "scope", "") == "table": writer.writerow([text_value(v) for v in values])
                     else: output.write("\t".join(text_value(v).replace("\\", "\\\\").replace("\t", "\\t").replace("\r", "\\r").replace("\n", "\\n") for v in values) + "\r\n")
                     if row_index % 500 == 0: output.flush(); heartbeat()
                 if fmt == "json": output.write("]"); json_index += 1

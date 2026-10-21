@@ -10,7 +10,8 @@ export interface DatabaseWorkspaceTab {
   dbType?: string;
   color?: string;
   environment?: string;
-  documentType?: 'table' | 'query' | 'er' | 'accounts';
+  documentType?: 'table' | 'table-data' | 'table-structure' | 'table-create' | 'query' | 'er' | 'accounts';
+  table?: string;
   database?: string;
   schema?: string;
   sticky?: boolean;

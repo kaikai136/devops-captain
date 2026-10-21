@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { buildDatabaseTreeMenu, type DatabaseTreeMenuTarget } from '../components/databaseTreeMenu';
 
-const permissions = new Set(['create', 'edit', 'delete', 'manage_schema', 'execute_sql', 'view_data', 'import_export', 'database_admin', 'manage_accounts', 'test_connection']);
+const permissions = new Set(['create', 'edit', 'delete', 'manage_schema', 'modify_data', 'import_data', 'execute_sql', 'view_data', 'import_export', 'database_admin', 'manage_accounts', 'test_connection']);
 
 function menu(target: DatabaseTreeMenuTarget, options: { dbType?: string; capabilities?: string[]; selectedCount?: number } = {}) {
   return buildDatabaseTreeMenu(target, {
@@ -67,21 +67,24 @@ describe('HexHub database tree menus', () => {
     expect(byId(items, 'more').children?.map(item => item.label)).toEqual(['测试连接', '移动', '导出连接', '断开']);
   });
 
-  it('keeps unfinished table-category features visible and disabled', () => {
+  it('enables virtual table folders and keeps table operations scoped to objects', () => {
     const items = menu({ kind: 'category', name: 'table', category: 'table' }, { selectedCount: 2 });
     expect(byId(items, 'new-table').shortcut).toBe('Ctrl+Shift+T');
     expect(byId(items, 'new-query').shortcut).toBe('Ctrl+Shift+Q');
-    for (const id of ['new-object-folder', 'data-transfer', 'sync', 'sql-history']) expect(byId(items, id).enabled).toBe(false);
+    expect(byId(items, 'new-object-folder').enabled).toBe(true);
+    for (const id of ['data-transfer', 'sync', 'sql-history']) expect(byId(items, id).enabled).toBe(false);
     expect(byId(items, 'delete-selected').enabled).toBe(true);
   });
 
-  it('builds destructive actions and SQL-only transfers for an actual table', () => {
+  it('builds table operations and six export formats for MySQL tables', () => {
     const items = menu({ kind: 'object', name: 'orders', category: 'table' });
     expect(byId(items, 'open-data').shortcut).toBe('Enter');
     expect(byId(items, 'rename-object').shortcut).toBe('F2');
     expect(byId(items, 'delete-object-menu').children?.map(item => item.id)).toEqual(['drop-object', 'delete-rows', 'truncate-table']);
-    expect(byId(items, 'export-sql').enabled).toBe(true);
-    expect(items.some(item => item.id === 'export-csv')).toBe(false);
+    expect(byId(items, 'table-export').children?.map(item => item.id)).toEqual(['export-format-sql', 'export-format-xlsx', 'export-format-dictionary', 'export-format-txt', 'export-format-csv', 'export-format-json']);
+    expect(byId(items, 'data-transfer').children?.map(item => item.id)).toEqual(['copy-data', 'paste-data']);
+    expect(byId(items, 'sync').children?.map(item => item.id)).toEqual(['sync-structure', 'sync-data']);
+    expect(byId(items, 'new-object-folder').enabled).toBe(true);
     for (const dbType of ['sqlite', 'postgresql', 'clickhouse']) {
       const unsupported = menu({ kind: 'object', name: 'orders', category: 'table' }, { dbType });
       expect(byId(unsupported, 'export-sql').enabled).toBe(false);

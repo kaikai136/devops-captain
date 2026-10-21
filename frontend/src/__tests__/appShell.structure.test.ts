@@ -17,6 +17,7 @@ describe('app shell upgrade contract', () => {
     const lockIndex = app.indexOf('workspace-lock-button');
     const avatarIndex = app.indexOf('workspace-user-dropdown-shell');
     expect(messageIndex).toBeGreaterThan(-1);
+    expect(app).toContain("canUsePageAction('databaseManagement', 'view_data') && (canUsePageAction('databaseManagement', 'manage_schema') || canUsePageAction('databaseManagement', 'modify_data'))");
     expect(lockIndex).toBeGreaterThan(messageIndex);
     expect(avatarIndex).toBeGreaterThan(lockIndex);
     expect(app).not.toContain('workspace-dashboard-refresh');

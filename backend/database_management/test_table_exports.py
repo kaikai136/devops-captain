@@ -149,6 +149,29 @@ class TableExportTaskTests(TestCase):
                     else:
                         self.assertIn('中文', archive.read('main.txt').decode('utf-8'))
 
+    def test_single_table_exports_are_downloadable_in_the_selected_format(self):
+        for fmt, extension in [('json', 'json'), ('csv', 'csv'), ('txt', 'txt'), ('xlsx', 'xlsx'), ('dictionary', 'xlsx')]:
+            with self.subTest(format=fmt):
+                task = self.run_task(self.task(fmt, scope='table', objectName='users', tables=['users'], fileName=f'users.{extension}'))
+                self.assertEqual(task.status, 'succeeded', task.error)
+                self.assertEqual(task.source_name, f'users.{extension}')
+                self.assertEqual(Path(task.output_path).suffix, f'.{extension}')
+                if fmt == 'json':
+                    self.assertEqual(len(json.loads(Path(task.output_path).read_text(encoding='utf-8'))['users']), 3)
+                elif fmt == 'csv':
+                    with Path(task.output_path).open(encoding='utf-8', newline='') as source:
+                        self.assertEqual(len(list(csv.reader(source))), 4)
+                elif fmt == 'xlsx':
+                    book = load_workbook(task.output_path, read_only=True, data_only=True)
+                    self.addCleanup(book.close)
+                    self.assertEqual(len(list(book['users'].values)), 4)
+                elif fmt == 'dictionary':
+                    book = load_workbook(task.output_path, read_only=True, data_only=True)
+                    self.addCleanup(book.close)
+                    self.assertEqual(book['Sheet1']['B3'].value, 'id')
+                else:
+                    self.assertIn('id\tname', Path(task.output_path).read_text(encoding='utf-8'))
+
     def test_cancel_and_permission_revocation_stop_export(self):
         task = self.task('json')
         task.cancel_requested = True; task.save(update_fields=['cancel_requested'])

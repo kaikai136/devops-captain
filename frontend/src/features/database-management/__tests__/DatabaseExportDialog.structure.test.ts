@@ -24,7 +24,7 @@ describe('database export configuration', () => {
   });
 
   it('preserves schema selection, permissions, validation, and user cancellation', () => {
-    expect(script).toContain("props.target?.format !== 'sql' || structure.value || data.value");
+    expect(script).toContain("format.value !== 'sql' || structure.value || data.value");
     expect(script).toContain("canStructure");
     expect(script).toContain("if ((error as DOMException).name !== 'AbortError')");
     expect(template).toContain('重新读取表清单');

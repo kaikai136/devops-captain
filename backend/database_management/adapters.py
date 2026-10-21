@@ -468,7 +468,7 @@ def columns(asset, database, table, schema=None):
     if kind == "sqlite":
         sql, params = f"PRAGMA table_info({quote(table, kind)})", ()
     elif kind in {"mysql", "mariadb"}:
-        sql, params = f"SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_KEY AS column_key, COLUMN_DEFAULT AS default_value FROM information_schema.COLUMNS WHERE TABLE_SCHEMA={marker(kind, 1)} AND TABLE_NAME={marker(kind, 2)} ORDER BY ORDINAL_POSITION", (database or asset.database, table)
+        sql, params = f"SELECT COLUMN_NAME AS name, COLUMN_TYPE AS type, IS_NULLABLE AS nullable, COLUMN_KEY AS column_key, COLUMN_DEFAULT AS default_value, COLUMN_COMMENT AS comment, EXTRA AS extra FROM information_schema.COLUMNS WHERE TABLE_SCHEMA={marker(kind, 1)} AND TABLE_NAME={marker(kind, 2)} ORDER BY ORDINAL_POSITION", (database or asset.database, table)
     elif kind == "clickhouse":
         sql = "SELECT name, type, if(startsWith(type, 'Nullable('), 'YES', 'NO') AS nullable, if(is_in_primary_key, 'PRI', '') AS column_key, default_expression AS default_value FROM system.columns WHERE database={db:String} AND table={table:String} ORDER BY position"
         params = {"db": database or asset.database or "default", "table": table}
@@ -488,7 +488,7 @@ def columns(asset, database, table, schema=None):
     return [{"name": row.get("name"), "type": row.get("type"),
              "nullable": row.get("nullable", "") if kind != "sqlite" else ("NO" if row.get("notnull") else "YES"),
              "column_key": row.get("column_key") or ("PRI" if row.get("pk") else ""),
-             "comment": "", "default": row.get("default_value", row.get("dflt_value"))}
+             "comment": row.get("comment", ""), "extra": row.get("extra", ""), "default": row.get("default_value", row.get("dflt_value"))}
             for row in rows]
 
 

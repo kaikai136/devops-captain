@@ -20,6 +20,8 @@ import { useApplicationKeyChoices } from '../composables/useApplicationKeyChoice
 import { connectionCan, connectionExpired, environments } from '../utils/mysqlConnection';
 import DatabaseImportDialog from './DatabaseImportDialog.vue';
 import DatabaseExportDialog, { type ExportTarget } from './DatabaseExportDialog.vue';
+import DatabaseTableOperationDialog from './DatabaseTableOperationDialog.vue';
+import DatabaseTableDeleteDialog from './DatabaseTableDeleteDialog.vue';
 import { buildDatabaseTreeMenu, type DatabaseObjectCategory, type DatabaseTreeMenuTarget } from './databaseTreeMenu';
 import {
   commitDatabaseRows, createDatabaseAsset, deleteDatabaseAsset, deleteRedisKey, executeDatabaseSql, exportDatabaseUrl, getDatabaseColumns,
@@ -192,13 +194,56 @@ const objectEditorOpen = ref(false);
 const objectEditorContext = ref<DatabaseObjectEditorContext | null>(null);
 const accountDialogOpen = ref(false);
 const mysqlEditDatabase = ref<{ assetId: number; database: string } | null>(null);
-const mysqlImportDatabase = ref<{ assetId: number; database: string; schema: string } | null>(null);
+const mysqlImportDatabase = ref<{ assetId: number; database: string; schema: string; table?: string } | null>(null);
+const tableOperation = ref<{ source: { assetId: number; database: string; schema: string; table: string }; mode: 'copy' | 'structure' | 'data'; initialTarget?: { assetId: number; database: string; schema: string; table: string } } | null>(null);
+const tableClipboard = ref<{ assetId: number; database: string; schema: string; table: string } | null>(null);
+const tableDelete = ref<{ target: { assetId: number; database: string; schema: string; table: string }; action: 'drop' | 'delete_rows' | 'truncate' } | null>(null);
 const pinStorageKey = `database-pinned-objects:${currentUser.value?.username || 'anonymous'}`;
 function readPins(): string[] {
   try { const value: unknown = JSON.parse(localStorage.getItem(pinStorageKey) || '[]'); return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : []; }
   catch { return []; }
 }
 const pinnedObjects = ref<string[]>(readPins());
+type TableFolderConfig = { folders: string[]; tables: Record<string, string> };
+const folderStorageKey = `database-table-folders:${currentUser.value?.username || 'anonymous'}`;
+const tableFolders = ref<Record<string, TableFolderConfig>>({});
+try { const stored = JSON.parse(localStorage.getItem(folderStorageKey) || '{}'); if (stored && typeof stored === 'object' && !Array.isArray(stored)) tableFolders.value = stored; } catch {}
+const tableFolderTarget = ref<{ assetId: number; database: string; schema: string; table: string } | null>(null);
+const tableFolderName = ref('');
+function folderScope(target: { assetId: number; database: string; schema: string }) { return JSON.stringify([target.assetId, target.database, target.schema]); }
+function folderConfig(target: { assetId: number; database: string; schema: string }): TableFolderConfig {
+  const stored = tableFolders.value[folderScope(target)];
+  return stored && Array.isArray(stored.folders) && stored.tables && typeof stored.tables === 'object' ? stored : { folders: [], tables: {} };
+}
+function persistTableFolders() { try { localStorage.setItem(folderStorageKey, JSON.stringify(tableFolders.value)); } catch { showToast('目录保存失败', '浏览器本地存储不可用'); } }
+async function createTableFolder(target: { assetId: number; database: string; schema: string; table: string }, assign: boolean) {
+  try {
+    const result = await ElMessageBox.prompt('目录仅用于本地表分类，不创建数据库对象', '新建目录', { inputPlaceholder: '目录名称', inputValidator: value => Boolean(value?.trim()) && value.trim().length <= 80 || '请输入 1–80 字目录名称', confirmButtonText: '创建', cancelButtonText: '取消' });
+    const name = result.value.trim();
+    const config = folderConfig(target);
+    if (config.folders.includes(name)) { showToast('目录已存在', name); return; }
+    tableFolders.value[folderScope(target)] = { folders: [...config.folders, name], tables: { ...config.tables, ...(assign ? { [target.table]: name } : {}) } };
+    persistTableFolders();
+  } catch {}
+}
+function moveTableFolder() {
+  const target = tableFolderTarget.value;
+  if (!target) return;
+  const config = folderConfig(target);
+  const mapping = { ...config.tables };
+  if (tableFolderName.value && config.folders.includes(tableFolderName.value)) mapping[target.table] = tableFolderName.value;
+  else delete mapping[target.table];
+  tableFolders.value[folderScope(target)] = { ...config, tables: mapping };
+  persistTableFolders(); tableFolderTarget.value = null;
+}
+const sidebarObjectGroups = computed(() => {
+  const workspace = sidebarWorkspace.value;
+  const objects = sortSidebarObjects(workspace?.tables || []);
+  const asset = assets.value.find(item => item.id === sidebarAssetId.value);
+  if (asset?.dbType !== 'mysql' || workspace?.category !== 'table') return [{ name: '', objects }];
+  const config = folderConfig({ assetId: asset.id, database: workspace.database, schema: workspace.schema });
+  return ['', ...config.folders].map(name => ({ name, objects: objects.filter(item => (config.folders.includes(config.tables[item.name]) ? config.tables[item.name] : '') === name) }));
+});
 function objectPinKey(assetId: number | undefined, database: string, owner: string, category: string, name: string) {
   return JSON.stringify([assetId, database, owner, category, name]);
 }
@@ -968,8 +1013,9 @@ async function loadObjects() {
   catch (error) { showToast('加载对象失败', errorMessage(error)); }
 }
 function onTableSelectionChange(selection: DatabaseTable[]) { selectedTables.value = selection; }
-function newQuery() { tab.value = 'sql'; sql.value = ''; sqlMessage.value = ''; }
+function newQuery() { if (selected.value?.dbType === 'mysql') { if (can('execute_sql')) openDatabaseDocument(selected.value, activeDatabase.value, schema.value, 'query'); return; } tab.value = 'sql'; sql.value = ''; sqlMessage.value = ''; }
 function newTableQuery() {
+  if (selected.value?.dbType === 'mysql') { if (can('manage_schema')) openDatabaseDocument(selected.value, activeDatabase.value, schema.value, 'table-create'); return; }
   const tableName = 'new_table';
   const quoted = ['mysql', 'mariadb', 'clickhouse'].includes(selected.value?.dbType || '') ? `\`${tableName}\`` :
     selected.value?.dbType === 'sqlserver' ? `[${tableName}]` : `"${tableName}"`;
@@ -987,6 +1033,11 @@ async function showSelectedDdl() {
   } catch (error) { showToast('读取 DDL 失败', errorMessage(error)); }
 }
 async function selectTable(name: string) {
+  const sidebarAsset = assets.value.find(item => item.id === sidebarAssetId.value);
+  if (sidebarAsset?.dbType === 'mysql' && sidebarWorkspace.value?.category === 'table') {
+    if (canAsset(sidebarAsset, 'view_data')) openDatabaseDocument(sidebarAsset, sidebarWorkspace.value.database, sidebarWorkspace.value.schema, 'table-data', name);
+    return;
+  }
   if (!ensureSidebarAssetSelected()) return;
   if (!selected.value) return;
   if (activeTable.value !== name && stagedChanges.value.length) {
@@ -1142,13 +1193,17 @@ const dirtyDocuments = ref<Record<string, boolean>>({});
 const recentWorkspaceTabs: string[] = [];
 watch(activeWorkspaceTabId, id => { const index = recentWorkspaceTabs.indexOf(id); if (index >= 0) recentWorkspaceTabs.splice(index, 1); recentWorkspaceTabs.push(id); }, { flush: 'sync' });
 let documentSequence = 0;
-function openDatabaseDocument(asset: DatabaseAsset, database: string, owner: string, documentType: NonNullable<DatabaseWorkspaceTab['documentType']>) {
+function openDatabaseDocument(asset: DatabaseAsset, database: string, owner: string, documentType: NonNullable<DatabaseWorkspaceTab['documentType']>, table = '') {
+  if (table) {
+    const existing = workspaceTabs.value.find(item => item.kind === 'document' && item.assetId === asset.id && item.database === database && (item.schema || '') === owner && item.table === table && item.documentType === documentType);
+    if (existing) { activeWorkspaceTabId.value = existing.id; return; }
+  }
   saveWorkspaceSnapshot();
   const number = ++documentSequence;
   const id = `document-${number}`;
-  const labels = { table: '新建表', query: '查询', er: 'ER 图', accounts: '账号管理' };
-  workspaceTabs.value.push({ id, kind: 'document', assetId: asset.id, database, schema: owner, documentType, dbType: asset.dbType, color: String(asset.options.color || ''), environment: environments[String(asset.options.environment || '')] || '', label: `${database} · ${labels[documentType]} ${number}` });
-  dirtyDocuments.value[id] = documentType === 'table';
+  const labels = { table: '新建表', 'table-data': '打开数据', 'table-structure': '编辑结构', 'table-create': '新建表', query: '查询', er: 'ER 图', accounts: '账号管理' };
+  workspaceTabs.value.push({ id, kind: 'document', assetId: asset.id, database, schema: owner, table, documentType, dbType: asset.dbType, color: String(asset.options.color || ''), environment: environments[String(asset.options.environment || '')] || '', label: `${table ? `${table} · ` : ''}${labels[documentType]}${number}` });
+  dirtyDocuments.value[id] = documentType === 'table' || documentType === 'table-create';
   activeWorkspaceTabId.value = id;
 }
 function closeDatabaseDocuments(assetId: number, database: string) {
@@ -1185,9 +1240,23 @@ async function runMenuAction(action: string) {
   if (!item) return;
   if (action === 'refresh' && (item.kind === 'root' || item.kind === 'directory')) { await refreshCatalog(); return; }
   const asset = assets.value.find(value => value.id === item.assetId);
+  if (asset?.dbType === 'mysql' && item.category === 'table' && (item.kind === 'object' || item.kind === 'category')) {
+    const target = { assetId: asset.id, database: item.database || asset.databaseName, schema: item.schema || '', table: item.name };
+    const documents: Record<string, { type: NonNullable<DatabaseWorkspaceTab['documentType']>; permission: string }> = { 'open-data': { type: 'table-data', permission: 'view_data' }, 'edit-structure': { type: 'table-structure', permission: 'view_data' }, 'new-table': { type: 'table-create', permission: 'manage_schema' }, 'new-query': { type: 'query', permission: 'execute_sql' } };
+    const document = documents[action];
+    if (document) { if (canAsset(asset, document.permission)) openDatabaseDocument(asset, target.database, target.schema, document.type, action === 'open-data' || action === 'edit-structure' ? target.table : ''); return; }
+    if (action === 'new-object-folder') { await createTableFolder(target, item.kind === 'object'); return; }
+    if (action === 'move-table-folder') { tableFolderTarget.value = target; tableFolderName.value = folderConfig(target).tables[target.table] || ''; return; }
+    if (action === 'copy-data') { if (canAsset(asset, 'view_data')) { tableClipboard.value = { ...target }; showToast('已复制来源表', `${target.database}.${target.table}，在目标表右键选择数据粘贴`); } return; }
+    if (action === 'paste-data') { if (tableClipboard.value && canAsset(asset, 'modify_data') && canAsset(asset, 'import_export')) tableOperation.value = { source: { ...tableClipboard.value }, initialTarget: target, mode: 'copy' }; else showToast('数据粘贴', '请先复制来源表，并确认目标有写入权限'); return; }
+    if (action === 'sync-structure' || action === 'sync-data') { if (canUsePageAction('databaseManagement', action === 'sync-structure' ? 'manage_schema' : 'modify_data')) tableOperation.value = { source: target, mode: action === 'sync-structure' ? 'structure' : 'data' }; return; }
+    if (action === 'drop-object' || action === 'delete-rows' || action === 'truncate-table') { if (canAsset(asset, action === 'delete-rows' ? 'modify_data' : 'manage_schema')) tableDelete.value = { target, action: action === 'drop-object' ? 'drop' : action === 'delete-rows' ? 'delete_rows' : 'truncate' }; return; }
+    if (action === 'import-table') { if (canAsset(asset, 'import_data')) mysqlImportDatabase.value = target; return; }
+    if (action === 'copy-ddl') { if (canAsset(asset, 'view_data')) { try { const result = await getDatabaseDdl(target.assetId, target.database, target.table, target.schema); await navigator.clipboard.writeText(result.ddl); showToast('已复制完整 DDL', target.table); } catch (error) { showToast('复制 DDL 失败', errorMessage(error)); } } return; }
+  }
   if (asset?.dbType === 'mysql' && item.kind === 'database') {
     const database = item.database || item.name;
-    const documentActions: Record<string, { type: NonNullable<DatabaseWorkspaceTab['documentType']>; permission: string }> = { 'new-table': { type: 'table', permission: 'manage_schema' }, 'new-query': { type: 'query', permission: 'execute_sql' }, 'new-er-diagram': { type: 'er', permission: 'view_data' }, accounts: { type: 'accounts', permission: 'manage_accounts' } };
+    const documentActions: Record<string, { type: NonNullable<DatabaseWorkspaceTab['documentType']>; permission: string }> = { 'new-table': { type: 'table-create', permission: 'manage_schema' }, 'new-query': { type: 'query', permission: 'execute_sql' }, 'new-er-diagram': { type: 'er', permission: 'view_data' }, accounts: { type: 'accounts', permission: 'manage_accounts' } };
     const documentAction = documentActions[action];
     if (documentAction) { if (canAsset(asset, documentAction.permission)) openDatabaseDocument(asset, database, '', documentAction.type); return; }
     if (action === 'close-database') {
@@ -1245,7 +1314,7 @@ async function runMenuAction(action: string) {
   if (item.kind === 'asset' && (action === 'open' || action === 'refresh')) { if (asset) await openAssetWorkspace(asset); return; }
   if (action.startsWith('export-format-') && asset && canAsset(asset, 'import_export') && canAsset(asset, 'view_data')) {
     const format = action.slice('export-format-'.length) as ExportTarget['format'];
-    databaseExportTarget.value = { assetId: asset.id, database: item.database || item.name, schema: item.schema || '', dbType: asset.dbType, format };
+    databaseExportTarget.value = { assetId: asset.id, database: item.database || item.name, schema: item.schema || '', dbType: asset.dbType, format, ...(item.kind === 'object' && item.category === 'table' ? { table: item.name } : {}) };
     return;
   }
   if (!(await activateMenuTarget(item, action))) return;
@@ -1259,7 +1328,7 @@ async function runMenuAction(action: string) {
   if (action === 'open-data' || action === 'edit-structure') { await selectTable(item.name); if (action === 'edit-structure') tab.value = 'structure'; return; }
   if (action === 'open-object' || action === 'edit-object-definition') { await openObjectDefinition(action === 'open-object' ? 'view' : 'edit'); return; }
   if (action === 'rename-object') { objectContext('rename', (item.category || 'table') as DatabaseObjectCategory, item.name); return; }
-  if (action === 'copy-ddl') { const ddl = await openObjectDefinition('view'); if (ddl) { await navigator.clipboard.writeText(ddl); showToast('已复制 DDL', item.name); } return; }
+  if (action === 'copy-ddl') { try { const result = await getDatabaseDdl(item.assetId!, item.database || activeDatabase.value, item.name, item.schema || schema.value, item.category === 'query' ? 'table' : item.category, item.signature); await navigator.clipboard.writeText(result.ddl); showToast('已复制完整 DDL', item.name); } catch (error) { showToast('复制 DDL 失败', errorMessage(error)); } return; }
   if (action === 'drop-object') { await executeObjectAction('drop'); return; }
   if (action === 'delete-rows') { await executeObjectAction('delete_rows'); return; }
   if (action === 'truncate-table') { await executeObjectAction('truncate'); return; }
@@ -1269,7 +1338,10 @@ async function runMenuAction(action: string) {
     const assetId = selected.value.id, database = activeDatabase.value, owner = schema.value, targets = selectedTables.value.map(value => value.name);
     if (!targets.length || !can('manage_schema')) return;
     requestConfirm('删除所选表', `确定删除 ${targets.length} 张表吗？此操作无法撤销。`, '删除', async () => {
-      try { for (const name of targets) await runDatabaseObjectAction(assetId, { action: 'drop', database, schema: owner, objectType: 'table', name }); }
+      try {
+        if (selected.value?.dbType === 'mysql') await ElMessageBox.prompt(`输入所选表名确认：${targets.join(', ')}`, '删除所选表', { inputValidator: value => value === targets.join(', ') || '请输入完整表名列表，使用逗号和空格分隔', confirmButtonText: '确认删除', cancelButtonText: '取消' });
+        for (const name of targets) await runDatabaseObjectAction(assetId, { action: 'drop', database, schema: owner, objectType: 'table', name, confirmed: true, confirmName: name });
+      }
       catch (error) { showToast('删除表失败', errorMessage(error)); }
       finally { if (selected.value?.id === assetId && activeDatabase.value === database && schema.value === owner) { selectedTables.value = []; await loadObjects(); } }
     });
@@ -1597,7 +1669,10 @@ onUnmounted(() => {
                               <button class="db-tree-label" @click="toggleCategory(category.key as ObjectCategory)"><span>{{ category.label }}</span><small class="db-tree-count">{{ (sidebarWorkspace?.counts || objectCounts)[category.key as ObjectCategory] ?? '-' }}</small></button>
                             </div>
                             <div v-if="sidebarWorkspace?.category === category.key" class="db-tree-children db-object-items">
-                              <button v-for="object in sortSidebarObjects(sidebarWorkspace?.tables || [])" :key="object.name" class="db-tree-object-row" :class="{ active: sidebarWorkspace?.table === object.name }" @click="selectTable(object.name)" @contextmenu="openTreeMenu($event, 'object', object.name, undefined, undefined, category.key as DatabaseObjectCategory, undefined, object.signature)"><Table2 :size="13" /><span>{{ object.name }}</span></button>
+                              <div v-for="group in sidebarObjectGroups" :key="group.name">
+                                <div v-if="group.name" class="db-tree-row"><Folder :size="13" /><span>{{ group.name }}</span></div>
+                                <button v-for="object in group.objects" :key="object.name" class="db-tree-object-row" :class="{ active: sidebarWorkspace?.table === object.name }" :style="group.name ? { paddingLeft: '22px' } : undefined" @click="selectTable(object.name)" @contextmenu="openTreeMenu($event, 'object', object.name, undefined, undefined, category.key as DatabaseObjectCategory, undefined, object.signature)"><Table2 :size="13" /><span>{{ object.name }}</span></button>
+                              </div>
                               <span v-if="!sidebarWorkspace?.tables?.length" class="db-tree-empty">暂无{{ category.label }}</span>
                             </div>
                           </div>
@@ -1684,7 +1759,10 @@ onUnmounted(() => {
     <input ref="queryInput" class="db-hidden" type="file" accept=".sql,text/plain" @change="onQueryImport" />
     <DatabaseObjectEditor v-model="objectEditorOpen" :context="objectEditorContext" @saved="loadObjects" />
     <MysqlDatabaseDialog v-if="mysqlEditDatabase" :key="`${mysqlEditDatabase.assetId}:${mysqlEditDatabase.database}`" v-bind="mysqlEditDatabase" @close="mysqlEditDatabase = null" @saved="refreshMysqlDatabase(mysqlEditDatabase.assetId, mysqlEditDatabase.database)" />
-    <DatabaseImportDialog v-if="mysqlImportDatabase" :key="`${mysqlImportDatabase.assetId}:${mysqlImportDatabase.database}`" v-bind="mysqlImportDatabase" @close="mysqlImportDatabase = null" />
+    <DatabaseImportDialog v-if="mysqlImportDatabase" :key="`${mysqlImportDatabase.assetId}:${mysqlImportDatabase.database}:${mysqlImportDatabase.table || ''}`" v-bind="mysqlImportDatabase" @close="mysqlImportDatabase = null" />
+    <DatabaseTableOperationDialog v-if="tableOperation" v-bind="tableOperation" :assets="assets" @close="tableOperation = null" />
+    <DatabaseTableDeleteDialog v-if="tableDelete" v-bind="tableDelete" @close="tableDelete = null" @saved="refreshMysqlDatabase(tableDelete!.target.assetId, tableDelete!.target.database)" />
+    <el-dialog :model-value="Boolean(tableFolderTarget)" title="移动到目录" width="min(420px,94vw)" align-center :close-on-click-modal="false" @close="tableFolderTarget = null"><el-select v-model="tableFolderName" style="width:100%"><el-option label="未分类" value="" /><el-option v-for="name in tableFolderTarget ? folderConfig(tableFolderTarget).folders : []" :key="name" :label="name" :value="name" /></el-select><template #footer><el-button @click="tableFolderTarget = null">取消</el-button><el-button type="primary" @click="moveTableFolder">保存</el-button></template></el-dialog>
     <el-dialog v-model="dumpDialog" title="导出 SQL" width="min(480px, 94vw)" :close-on-click-modal="false">
       <el-form label-position="top">
         <el-form-item label="数据库"><el-input :model-value="dumpTarget?.database" disabled /></el-form-item>

@@ -151,7 +151,7 @@ describe('MySQL workspace behavior', () => {
     const { state, api } = setup('DatabaseImportProgress', { tasks: [task] });
     state.taskId.value = task.id; await state.confirm(); expect(api.confirmDatabaseTransfer).not.toHaveBeenCalled();
     state.confirmed.value = true; state.policy.value = 'skip'; await state.confirm();
-    expect(api.confirmDatabaseTransfer).toHaveBeenCalledWith(task.id, 'skip', true);
+    expect(api.confirmDatabaseTransfer).toHaveBeenCalledWith(task.id, 'skip', true, undefined);
     await state.cancel(); expect(api.cancelDatabaseTransfer).toHaveBeenCalledWith(task.id);
   });
   it('filters collations and saves the selected charset pair to the captured target', async () => {
@@ -171,6 +171,132 @@ describe('MySQL workspace behavior', () => {
     expect(state.tableDefinition.value).toContain("ENGINE=InnoDB COMMENT='owner''s table'");
     await state.save(); expect(api.runDatabaseObjectAction).toHaveBeenCalledWith(7, expect.objectContaining({ database: 'tele', name: 'sample' }));
     expect(emit).toHaveBeenCalledWith('saved'); expect(emit).not.toHaveBeenCalledWith('update:modelValue', false);
+  });
+  it('commits each table data transaction change with its table reference', async () => {
+    const { state, api } = setup('DatabaseTableData', {
+      asset,
+      target: { assetId: 7, database: 'tele', schema: '', table: 'sample' },
+    });
+    state.transaction.value = true;
+    state.changes.value = [{ action: 'insert', values: { name: 'new' }, key: {} }];
+
+    await state.save();
+
+    expect(api.commitDatabaseRows).toHaveBeenCalledWith(7, {
+      changes: [{
+        assetId: 7, database: 'tele', schema: '', table: 'sample',
+        action: 'insert', values: { name: 'new' }, key: {},
+      }],
+    });
+  });
+  it('opens table data, structure, and create editors as independent workspace tabs', () => {
+    const { state } = setup('DatabaseManagementPanel');
+    state.assets.value = [asset];
+
+    state.openDatabaseDocument(asset, 'tele', '', 'table-data', 'sample');
+    state.openDatabaseDocument(asset, 'tele', '', 'table-structure', 'sample');
+    state.openDatabaseDocument(asset, 'tele', '', 'table-create');
+
+    expect(state.documentTabs.value.map((tab: any) => [tab.documentType, tab.table])).toEqual([
+      ['table-data', 'sample'], ['table-structure', 'sample'], ['table-create', ''],
+    ]);
+  });
+  it('saves normal row edits immediately and stages transaction edits until commit', async () => {
+    const { state, api } = setup('DatabaseTableData', {
+      asset,
+      target: { assetId: 7, database: 'tele', schema: '', table: 'sample' },
+    });
+    state.columns.value = [
+      { name: 'id', type: 'int', column_key: 'PRI' },
+      { name: 'name', type: 'varchar(20)', column_key: '' },
+    ];
+    state.included.value = ['name'];
+    state.draft.value = { name: '"immediate"' };
+    state.editing.value = 'insert';
+    await state.saveRow();
+    expect(api.modifyDatabaseRow).toHaveBeenCalledWith(7, expect.objectContaining({
+      database: 'tele', table: 'sample', action: 'insert', values: { name: 'immediate' },
+    }));
+
+    state.transaction.value = true;
+    state.included.value = ['name'];
+    state.draft.value = { name: '"staged"' };
+    state.editing.value = 'insert';
+    await state.saveRow();
+    expect(state.changes.value).toEqual([{ action: 'insert', values: { name: 'staged' }, key: {} }]);
+    expect(api.modifyDatabaseRow).toHaveBeenCalledOnce();
+  });
+  it('filters and sorts current-table rows and resets uncommitted edits with Return', async () => {
+    const { state, api } = setup('DatabaseTableData', {
+      asset,
+      target: { assetId: 7, database: 'tele', schema: '', table: 'sample' },
+    });
+    state.whereField.value = 'name';
+    state.whereValue.value = 'Kai';
+    state.sort.value = 'id';
+    state.direction.value = 'desc';
+    await state.filter();
+    expect(api.getDatabaseTableData).toHaveBeenCalledWith(7, expect.objectContaining({
+      database: 'tele', table: 'sample', whereField: 'name', whereValue: 'Kai', sort: 'id', direction: 'desc',
+    }));
+
+    state.changes.value = [{ action: 'delete', values: {}, key: { id: 1 } }];
+    state.editing.value = 'update';
+    await state.undo();
+    expect(state.changes.value).toEqual([]);
+    expect(state.editing.value).toBeNull();
+  });
+  it('binds exports to the current table', () => {
+    const { state } = setup('DatabaseTableData', {
+      asset,
+      target: { assetId: 7, database: 'tele', schema: '', table: 'sample' },
+    });
+    state.openExport();
+    expect(state.exportTarget.value).toMatchObject({ assetId: 7, database: 'tele', table: 'sample', format: 'sql' });
+  });
+  it('previews a table copy before execution and invalidates confirmation on target changes', async () => {
+    const source = { assetId: 7, database: 'tele', schema: '', table: 'source' };
+    const target = { assetId: 8, database: 'tele', schema: '', table: 'target' };
+    const { state, api, event } = setup('DatabaseTableOperationDialog', { source, assets: [asset], mode: 'copy', initialTarget: target });
+    await state.execute();
+    expect(api.executeTableOperation).not.toHaveBeenCalled();
+    api.previewTableOperation.mockResolvedValue({ previewId: 'preview-1', canExecute: true });
+    await state.inspect();
+    expect(api.previewTableOperation).toHaveBeenCalledWith(source, target, 'copy');
+    state.confirmed.value = true;
+    api.executeTableOperation.mockResolvedValue({ id: 'task-1', direction: 'import', scope: 'table-operation' });
+    await state.execute();
+    expect(api.executeTableOperation).toHaveBeenCalledWith('preview-1', { confirmed: true, conflictPolicy: 'append', deleteTargetExtras: false });
+    expect(event).toHaveBeenCalled();
+    state.target.value.table = 'another';
+    expect(state.preview.value).toBeNull();
+    expect(state.confirmed.value).toBe(false);
+  });
+  it('requires matching table name and an explicit checkbox before dropping a table', async () => {
+    const target = { assetId: 7, database: 'tele', schema: '', table: 'sample' };
+    const { state, api } = setup('DatabaseTableDeleteDialog', { target, action: 'drop' });
+    state.name.value = 'sample';
+    await state.execute();
+    expect(api.runDatabaseObjectAction).not.toHaveBeenCalled();
+    state.confirmed.value = true;
+    state.name.value = 'other';
+    await state.execute();
+    expect(api.runDatabaseObjectAction).not.toHaveBeenCalled();
+    state.name.value = 'sample';
+    await state.execute();
+    expect(api.runDatabaseObjectAction).toHaveBeenCalledWith(7, expect.objectContaining({
+      database: 'tele', name: 'sample', action: 'drop', confirmed: true, confirmName: 'sample',
+    }));
+  });
+  it('limits current-table imports to their table and accepts all supported file formats', () => {
+    const { state, event } = setup('DatabaseImportDialog', { assetId: 7, database: 'tele', schema: '', table: 'sample' });
+    for (const extension of ['sql', 'xlsx', 'csv', 'json', 'txt']) {
+      state.selectFile({ target: { files: [{ name: `rows.${extension}`, size: 100 }], value: '' } });
+      state.upload();
+      expect(event.mock.calls.at(-1)?.[0].init.detail.target).toMatchObject({
+        assetId: 7, database: 'tele', objectName: 'sample', scope: 'table', format: extension, importVersion: 2,
+      });
+    }
   });
   it('draws actual field relationships and changes only local diagram positions', async () => {
     const { state, api, mounted } = setup('DatabaseDiagram', { assetId: 7, database: 'tele' });

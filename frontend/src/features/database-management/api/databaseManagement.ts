@@ -18,12 +18,32 @@ export interface DatabaseType { key: string; label: string; defaultPort: number;
 export interface DatabaseTable { name: string; type: string; signature?: string; capabilities?: string[]; rows_count: number | null; data_length?: number | null; index_length?: number | null; auto_increment?: number | null; engine?: string | null; charset?: string | null; update_time?: string | null; create_time?: string | null; comment: string; }
 export interface SavedDatabaseQuery { id: number; assetId: number; database: string; schema: string; name: string; sql: string; pinned: boolean; createdAt: string; updatedAt: string; }
 export interface DatabaseAccount { name: string; host?: string; roles: string[]; permissions: string[]; availableRoles?: { name: string; host: string }[]; current?: boolean; builtIn?: boolean; protected?: boolean; capabilities?: { passwordReset: boolean; delete: boolean; grants: string[]; roles?: boolean }; }
-export interface DatabaseColumn { name: string; type: string; nullable: string; column_key: string; comment: string; default?: unknown; }
+export interface DatabaseColumn { name: string; type: string; nullable: string; column_key: string; comment: string; extra?: string; default?: unknown; }
 export interface DatabaseIndex { name: string; columns: string[]; unique: boolean; definition?: string; }
 export interface DatabaseDataResult { rows: Record<string, unknown>[]; total: number; page: number; pageSize: number; hasNext: boolean; }
-export interface DatabaseTransferTask { id: string; assetId: number | null; assetName: string; direction: 'import' | 'export'; scope: string; format: string; database: string; schema: string; objectName: string; status: string; stage: string; progress: number; processedRows: number; processedBytes: number; totalRows: number | null; totalBytes: number | null; preview: Record<string, unknown>; checkpoints?: { totalSteps?: number; completedSteps?: number; failedTables?: string[]; tableRows?: number; tableTotal?: number | null; logs?: { time: string; level: string; message: string }[]; completedTables?: string[]; currentTable?: string; ddlMayBeCommitted?: boolean }; sourceName: string; error: string; conflictPolicy: string; cancelRequested: boolean; createdAt: string; startedAt: string | null; finishedAt: string | null; expiresAt: string; canDownload: boolean; chunkBytes?: number; }
+export interface DatabaseTransferTask { id: string; assetId: number | null; assetName: string; direction: 'import' | 'export'; scope: string; format: string; operationMode?: 'structure' | 'data' | 'copy' | ''; database: string; schema: string; objectName: string; status: string; stage: string; progress: number; processedRows: number; processedBytes: number; totalRows: number | null; totalBytes: number | null; preview: Record<string, unknown>; checkpoints?: { totalSteps?: number; completedSteps?: number; failedTables?: string[]; tableRows?: number; tableTotal?: number | null; logs?: { time: string; level: string; message: string }[]; completedTables?: string[]; currentTable?: string; ddlMayBeCommitted?: boolean }; sourceName: string; error: string; conflictPolicy: string; cancelRequested: boolean; createdAt: string; startedAt: string | null; finishedAt: string | null; expiresAt: string; canDownload: boolean; chunkBytes?: number; }
 
 const base = '/api/database-management';
+export interface TableReference { assetId: number; database: string; schema: string; table: string; }
+export type TableOperationMode = 'copy' | 'structure' | 'data';
+export interface TableOperationPreview {
+  previewId: string;
+  fields: { name: string; change: string; source: string; target: string }[];
+  indexes: { name: string; change: string; source: string; target: string }[];
+  primaryKey: string[];
+  matchingPrimaryKey: boolean;
+  sourceRows: number;
+  targetRows: number;
+  estimatedRows: number;
+  dataDifference?: { sampledRows: number; insertRows: number; updateRows: number; unchangedRows: number; keyConflicts: number; exact: boolean } | null;
+  warnings: string[];
+  conflicts: string[];
+  sql: string[];
+  sqlDeleteExtras?: string[];
+  canExecute: boolean;
+}
+export const previewTableOperation = (source: TableReference, target: TableReference, mode: TableOperationMode) => apiPost<TableOperationPreview>(`${base}/table-operations/preview/`, { source, target, mode });
+export const executeTableOperation = (previewId: string, options: { confirmed: boolean; conflictPolicy: string; deleteTargetExtras: boolean }) => apiPost<DatabaseTransferTask>(`${base}/table-operations/execute/`, { previewId, ...options });
 export interface MysqlDatabaseMetadata { name: string; charset: string; collation: string; choices: { charset: string; collation: string }[]; }
 export interface MysqlDiagram { columns: { table_name: string; name: string; type: string; column_key: string; comment: string }[]; relations: { name: string; source: string; target: string; source_column: string; target_column: string }[]; }
 export const getMysqlMetadata = (id: number, name: string) => apiGet<MysqlDatabaseMetadata>(`${base}/assets/${id}/mysql-metadata/${query({ name })}`);
@@ -80,7 +100,7 @@ export const createDatabaseTransfer = (data: Record<string, unknown>) => apiPost
 export const beginDatabaseTransferUpload = (data: Record<string, unknown>) => apiPost<DatabaseTransferTask>(`${transfers}uploads/`, data);
 export const uploadDatabaseTransferChunk = (id: string, index: number, chunk: Blob) => apiRequestTransfer<void>(`${transfers}${id}/chunks/${index}/`, 'PUT', chunk);
 export const completeDatabaseTransferUpload = (id: string, chunks: number, sha256: string) => apiPost<DatabaseTransferTask>(`${transfers}${id}/complete/`, { chunks, sha256 });
-export const confirmDatabaseTransfer = (id: string, conflictPolicy: string, confirmed: boolean) => apiPost<DatabaseTransferTask>(`${transfers}${id}/confirm/`, { conflictPolicy, confirmed });
+export const confirmDatabaseTransfer = (id: string, conflictPolicy: string, confirmed: boolean, fieldMapping?: Record<string, string>) => apiPost<DatabaseTransferTask>(`${transfers}${id}/confirm/`, { conflictPolicy, confirmed, ...(fieldMapping ? { fieldMapping } : {}) });
 export const cancelDatabaseTransfer = (id: string) => apiPost<DatabaseTransferTask>(`${transfers}${id}/cancel/`, {});
 export const retryDatabaseTransfer = (id: string, confirmed: boolean) => apiPost<DatabaseTransferTask>(`${transfers}${id}/retry/`, { confirmed });
 export const deleteDatabaseTransfer = (id: string) => apiDelete<{ deleted: boolean }>(`${transfers}${id}/delete/`);

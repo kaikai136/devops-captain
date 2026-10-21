@@ -10,7 +10,7 @@ export interface LocalDirectory {
   name: string;
   getFileHandle(name: string, options?: { create?: boolean }): Promise<LocalFile>;
 }
-export type ExportDestination = { kind: 'directory'; handle: LocalDirectory } | { kind: 'zip'; handle: LocalFile } | { kind: 'download'; name: string };
+export type ExportDestination = { kind: 'directory'; handle: LocalDirectory; fileName?: string } | { kind: 'zip' | 'file'; handle: LocalFile } | { kind: 'download'; name: string };
 type PickerWindow = Window & {
   showDirectoryPicker?: (options: { mode: string }) => Promise<LocalDirectory>;
   showSaveFilePicker?: (options: unknown) => Promise<LocalFile>;
@@ -23,8 +23,9 @@ export function destinationMode() {
 
 export async function chooseExportDestination(name: string): Promise<ExportDestination> {
   const host = window as PickerWindow;
-  if (host.showDirectoryPicker) return { kind: 'directory', handle: await host.showDirectoryPicker({ mode: 'readwrite' }) };
-  if (host.showSaveFilePicker) return { kind: 'zip', handle: await host.showSaveFilePicker({ suggestedName: name, types: [{ description: 'ZIP 压缩文件', accept: { 'application/zip': ['.zip'] } }] }) };
+  const archive = /\.zip$/i.test(name);
+  if (host.showDirectoryPicker) return { kind: 'directory', handle: await host.showDirectoryPicker({ mode: 'readwrite' }), ...(!archive ? { fileName: name } : {}) };
+  if (host.showSaveFilePicker) return { kind: archive ? 'zip' : 'file', handle: await host.showSaveFilePicker({ suggestedName: name }) };
   // Browsers without File System Access cannot choose a path before download.
   return { kind: 'download', name };
 }
@@ -88,6 +89,15 @@ export async function saveExport(response: Response, destination: ExportDestinat
     const link = document.createElement('a'); link.href = url; link.download = destination.name; link.click();
     setTimeout(() => URL.revokeObjectURL(url), 60000);
     return [];
+  }
+  if (destination.kind === 'file' || destination.kind === 'directory' && destination.fileName) {
+    if (destination.kind === 'directory' && !validExportFileName(destination.fileName!)) throw new Error('导出文件名不安全');
+    const handle = destination.kind === 'file' ? destination.handle : await unusedFile(destination.handle, destination.fileName!);
+    let size = 0;
+    await response.body.pipeThrough(new TransformStream<Uint8Array, Uint8Array>({ transform(chunk, controller) { size += chunk.length; controller.enqueue(chunk); } })).pipeTo(await handle.createWritable(), { signal });
+    if (!size || (await handle.getFile()).size !== size) throw new Error('本地文件大小校验失败，请重新保存');
+    onFile(handle.name);
+    return [{ name: handle.name, size }];
   }
   const body = response.body.pipeThrough(zipValidator());
   if (destination.kind === 'zip') {

@@ -23,8 +23,8 @@ def qualified(database, schema, name, kind):
     return ".".join(adapters.quote(value, kind) for value in parts)
 
 
-def checked(request, asset_id):
-    denied = require_feature_permission(request, "databaseManagement", "manage_schema")
+def checked(request, asset_id, permission="manage_schema"):
+    denied = require_feature_permission(request, "databaseManagement", permission)
     if denied:
         return None, denied
     asset, error = get_object_or_error(DatabaseAsset, pk=asset_id, error_message="数据库资产不存在")
@@ -151,9 +151,17 @@ def statement(asset, payload):
 
 @api_view(["POST"])
 def object_action(request, asset_id):
-    asset, denied = checked(request, asset_id)
+    action = str(request.data.get("action", ""))
+    object_type = str(request.data.get("objectType", "table"))
+    permission = "modify_data" if action == "delete_rows" and object_type == "table" else "manage_schema"
+    asset, denied = checked(request, asset_id, permission)
     if denied: return denied
     try:
+        if asset.db_type == "mysql" and object_type == "table" and action in {"drop", "delete_rows", "truncate"}:
+            if request.data.get("confirmed") is not True:
+                raise ValueError("危险操作需要明确确认")
+            if action == "drop" and request.data.get("confirmName") != request.data.get("name"):
+                raise ValueError("输入表名与目标表不一致")
         sql = statement(asset, request.data)
         with adapters.connection(asset, request.data.get("database")) as conn:
             try:

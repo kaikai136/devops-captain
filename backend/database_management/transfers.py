@@ -17,7 +17,7 @@ from django.utils import timezone
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 
-from accounts.permissions import has_feature_permission, require_feature_permission
+from accounts.permissions import has_feature_permission, require_feature_permission, require_login
 from operations.responses import bad_request, get_object_or_error
 from system_management.services import record_operation_log
 
@@ -45,6 +45,7 @@ def serialize(task):
     return {
         "id": str(task.pk), "assetId": task.asset_id, "assetName": task.asset.name if task.asset_id else "",
         "direction": task.direction, "scope": task.scope, "format": task.format,
+        "operationMode": task.parameters.get("mode", "") if task.scope == "table-operation" else "",
         "database": task.database, "schema": task.schema, "objectName": task.object_name,
         "status": task.status, "stage": task.stage, "progress": task.progress,
         "processedRows": task.processed_rows, "processedBytes": task.processed_bytes,
@@ -99,6 +100,11 @@ def effective_permission(scope, direction, fmt):
 
 
 def require_task_permissions(user, task):
+    if task.scope == "table-operation":
+        from .table_operations import require_permissions
+        try: require_permissions(user, task.parameters.get("mode"))
+        except PermissionError: return False
+        return True
     required = effective_permission(task.scope, task.direction, task.format)
     if task.scope in {"table", "database"}:
         if task.direction == "export":
@@ -117,9 +123,12 @@ def require_task_permissions(user, task):
     return True
 
 
-def validate_dump_target(asset, scope, fmt, *, multi_format=False):
+def validate_dump_target(asset, scope, fmt, *, multi_format=False, row_import=False):
     scope = str(scope or "").strip().lower()
     fmt = str(fmt or "").strip().lower().lstrip(".")
+    if row_import and scope == "table" and fmt in {"xlsx", "csv", "json", "txt"}:
+        if not asset or asset.db_type not in {"mysql", "mariadb"}: raise ValueError("表数据导入目前仅支持 MySQL/MariaDB")
+        return
     if multi_format and scope in {"table", "database"}:
         from .table_exports import FORMATS
         from .mysql_dump import DumpError
@@ -147,11 +156,20 @@ def configure_asset(request, data):
 
 @api_view(["GET", "POST"])
 def task_collection(request):
+    if request.method == "GET":
+        denied = require_login(request)
+        if denied: return denied
+        from .task_permissions import can_monitor_transfer_tasks
+        if not can_monitor_transfer_tasks(request.user):
+            return Response({"error": "没有查看后台任务的权限"}, status=403)
+        items = DatabaseTransferTask.objects.filter(owner=request.user).select_related("asset")
+        if not has_feature_permission(request.user, "databaseManagement", "import_export"):
+            items = [task for task in items.filter(scope="table-operation")[:200] if require_task_permissions(request.user, task)]
+        else:
+            items = items[:200]
+        return Response([serialize(item) for item in items])
     denied = require_feature_permission(request, "databaseManagement", "import_export")
     if denied: return denied
-    if request.method == "GET":
-        items = DatabaseTransferTask.objects.filter(owner=request.user).select_related("asset")[:200]
-        return Response([serialize(item) for item in items])
     return export_response(request.user, request.data)
 
 
@@ -198,7 +216,8 @@ def export_response(user, data):
         source_name = str(data.get("fileName") or (f"{data.get('objectName') or data.get('table') or 'database-export'}.{fmt}"))
         if multi_format:
             from .table_exports import safe_name
-            source_name = safe_name(Path(str(data.get("fileName") or "database-export.zip")).stem) + ".zip"
+            extension = ("xlsx" if fmt == "dictionary" else fmt) if scope == "table" else "zip"
+            source_name = safe_name(Path(str(data.get("fileName") or "database-export")).stem) + "." + extension
         if scope in {"table", "database"} and not has_feature_permission(user, "databaseManagement", "view_data"):
             raise PermissionError("没有数据读取权限")
         if multi_format and fmt == "dictionary" and not has_feature_permission(user, "databaseManagement", "manage_schema"):
@@ -256,7 +275,11 @@ def upload_init(request):
         if asset and scope in {"table", "database", "redis"}:
             from .connection_config import enforce_policy
             enforce_policy(asset, write=True)
-        validate_dump_target(asset, scope, fmt)
+        row_import = data.get("importVersion") == 2
+        validate_dump_target(asset, scope, fmt, row_import=row_import)
+        if row_import:
+            from .mysql_dump import quote
+            quote(str(data.get("objectName") or ""))
         if scope in {"table", "database", "redis"} and asset is None: raise ValueError("导入任务需要数据库资产")
         if scope == "redis" and asset.db_type != "redis": raise ValueError("Redis 导入任务需要 Redis 资产")
         if scope in {"table", "database"} and asset.db_type == "redis": raise ValueError("Redis 资产请使用 Redis 导入范围")
@@ -286,7 +309,7 @@ def upload_init(request):
         task = create_task(owner=request.user, asset=asset, direction="import", scope=scope, format=fmt,
                            database=str(data.get("database") or (asset.database if asset else "")),
                            schema=str(data.get("schema") or ""), object_name=str(data.get("objectName") or ""),
-                           source_name=original, parameters={"directoryId": data.get("directoryId"), "chunkCount": chunk_count, "totalBytes": total_bytes, "options": options}, status="uploading", stage="uploading")
+                           source_name=original, parameters={"directoryId": data.get("directoryId"), "chunkCount": chunk_count, "totalBytes": total_bytes, "options": options, "importVersion": 2 if row_import else 1}, status="uploading", stage="uploading")
         task.input_path = str(task_path(task.pk, ".upload"))
         task.save(update_fields=["input_path"])
         return Response({**serialize(task), "chunkBytes": settings.DATABASE_TRANSFER_CHUNK_BYTES}, status=201)
@@ -352,7 +375,10 @@ def inspect_input(task):
     suffix = Path(task.source_name).suffix.lower()
     preview = {"fileBytes": path.stat().st_size, "format": task.format, "sourceName": task.source_name, "warnings": []}
     if task.scope in {"table", "database"}:
-        validate_dump_target(task.asset, task.scope, task.format)
+        validate_dump_target(task.asset, task.scope, task.format, row_import=task.parameters.get("importVersion") == 2)
+        if task.parameters.get("importVersion") == 2 and task.format != "sql":
+            from .table_imports import inspect_rows
+            return inspect_rows(task, progress, strict=False)
         from .mysql_dump import inspect_dump
         return inspect_dump(task, lambda: progress(task, stage="validating_sql"))
     if task.format == "snapshot" or suffix == ".json":
@@ -406,6 +432,7 @@ def upload_complete(request, task_id):
 def task_confirm(request, task_id):
     task, error = fetch_task(request, task_id)
     if error: return error
+    if task.scope == "table-operation": return bad_request("请从表操作预览确认执行")
     if not require_task_permissions(request.user, task): return bad_request("permission revoked")
     if task.asset and task.scope in {"table", "database", "redis"}:
         from .connection_config import enforce_policy
@@ -421,14 +448,24 @@ def task_confirm(request, task_id):
         return bad_request("SQL 导入需要明确确认")
     if task.scope in {"database", "table", "redis"} and policy in {"overwrite", "skip"} and request.data.get("confirmed") is not True:
         return bad_request("覆盖或跳过操作需要明确确认")
-    update(task, conflict_policy=policy, status="queued", stage="queued", error="")
+    parameters = task.parameters
+    if parameters.get("importVersion") == 2 and task.format != "sql":
+        from .table_imports import inspect_rows
+        mapping = request.data.get("fieldMapping", task.preview.get("fieldMapping", {}))
+        try: inspect_rows(task, progress, mapping)
+        except ValueError as exc: return bad_request(str(exc))
+        parameters = {**parameters, "fieldMapping": mapping}
+    update(task, parameters=parameters, conflict_policy=policy, status="queued", stage="queued", error="")
     return Response(serialize(task), status=202)
 
 
 @api_view(["GET"])
 def task_detail(request, task_id):
     task, error = fetch_task(request, task_id)
-    return error or Response(serialize(task))
+    if error: return error
+    if not require_task_permissions(request.user, task):
+        return Response({"error": "任务所需权限已被撤销"}, status=403)
+    return Response(serialize(task))
 
 
 @api_view(["POST"])
@@ -467,7 +504,8 @@ def task_retry(request, task_id):
     source, error = fetch_task(request, task_id)
     if error: return error
     if source.status not in {"failed", "cancelled"}: return bad_request("仅失败或已取消任务可以重试")
-    try: validate_dump_target(source.asset, source.scope, source.format)
+    if source.scope == "table-operation": return bad_request("请重新预览表操作")
+    try: validate_dump_target(source.asset, source.scope, source.format, multi_format=source.parameters.get("exportVersion") == 2, row_import=source.parameters.get("importVersion") == 2)
     except ValueError as exc: return bad_request(str(exc))
     if source.direction == "import" and source.format == "sql" and request.data.get("confirmed") is not True: return bad_request("SQL 重试需再次确认可能重复执行")
     if not require_task_permissions(request.user, source): return bad_request("当前账号已不具备任务所需权限")
@@ -605,7 +643,10 @@ def import_legacy_snapshot(task):
 def import_task(task):
     fmt = task.format
     if task.scope in {"table", "database"}:
-        validate_dump_target(task.asset, task.scope, fmt)
+        validate_dump_target(task.asset, task.scope, fmt, row_import=task.parameters.get("importVersion") == 2)
+        if task.parameters.get("importVersion") == 2 and fmt != "sql":
+            from .table_imports import import_rows
+            return import_rows(task, progress)
         from .mysql_dump import import_dump
         return import_dump(task, progress)
     if task.scope == "queries":
@@ -628,10 +669,16 @@ def import_task(task):
 
 
 def run_task(task):
+    if task.scope == "table-operation":
+        from .table_operations import execute_task
+        execute_task(task, progress)
+        update(task, status="succeeded", stage="complete", progress=100, finished_at=timezone.now())
+        audit_task(task)
+        return
     if task.asset_id and task.scope in {"table", "database", "redis"}:
         from .connection_config import enforce_policy
         enforce_policy(task.asset, write=task.direction == "import")
-    validate_dump_target(task.asset, task.scope, task.format, multi_format=task.direction == "export" and task.parameters.get("exportVersion") == 2)
+    validate_dump_target(task.asset, task.scope, task.format, multi_format=task.direction == "export" and task.parameters.get("exportVersion") == 2, row_import=task.parameters.get("importVersion") == 2)
     if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
     if task.stage == "inspection_running":
         preview = inspect_input(task)
@@ -650,7 +697,7 @@ def run_task(task):
         audit_task(task)
         return
     multi_format = task.parameters.get("exportVersion") == 2 and task.scope in {"table", "database"}
-    output_path = task_path(task.pk, ".result.zip" if multi_format else f".result.{task.format}")
+    output_path = task_path(task.pk, ".result.zip" if multi_format and task.scope != "table" else f".result.{'xlsx' if task.format == 'dictionary' else task.format}")
     update(task, output_path=str(output_path))
     if multi_format:
         from .table_exports import export_bundle
@@ -699,6 +746,7 @@ def claim_one():
     legacy = DatabaseTransferTask.objects.filter(scope__in={"table", "database"}, status__in=ACTIVE).exclude(format="sql").exclude(status__in={"running", "cancel_requested"})
     for task in legacy:
         if task.direction == "export" and task.parameters.get("exportVersion") == 2: continue
+        if task.direction == "import" and task.parameters.get("importVersion") == 2: continue
         update(task, status="failed", stage="unsupported_format", error="旧 CSV/ZIP/JSON 表转储已移除，请重新提交 SQL 任务", finished_at=timezone.now())
     cutoff = timezone.now() - timedelta(seconds=settings.DATABASE_TRANSFER_TASK_TIMEOUT_SECONDS)
     stale = DatabaseTransferTask.objects.filter(status="running", started_at__lt=cutoff)

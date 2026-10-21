@@ -131,6 +131,22 @@ def asset_schema(request, asset_id):
             sql = (f"ALTER TABLE {qualified} ADD ({clause})" if kind in {"oracle", "dameng"}
                    else f"ALTER TABLE {qualified} ADD {clause}" if kind == "sqlserver"
                    else f"ALTER TABLE {qualified} ADD COLUMN {clause}")
+        elif action in {"rename_column", "modify_column"} and kind in {"mysql", "mariadb"}:
+            from .table_operations import definitions
+            fields, _, _ = definitions(adapters.table_ddl(asset, request.data.get("database"), request.data.get("table")))
+            original = str(request.data.get("name") or "")
+            if original not in fields: raise ValueError("字段不存在，请刷新后重试")
+            definition = fields[original]
+            if action == "rename_column":
+                new_name = adapters.quote(request.data.get("newName"), kind)
+                definition = new_name + definition[len(name):]
+            else:
+                column_type = str(request.data.get("columnType", "")).strip().upper()
+                if not COLUMN_TYPE.fullmatch(column_type) or len(column_type) > 80: raise ValueError("字段类型格式不正确")
+                prefix = re.match(r"^`(?:``|[^`])+`\s+[a-zA-Z]+(?:\((?:[^'()]|'(?:''|\\.|[^'\\])*')*\))?(?:\s+unsigned)?", definition, re.I)
+                if not prefix: raise ValueError("此字段类型请在 SQL 编辑器中修改")
+                definition = name + " " + column_type + definition[prefix.end():]
+            sql = f"ALTER TABLE {qualified} CHANGE COLUMN {name} {definition}"
         elif action == "drop_column":
             sql = f"ALTER TABLE {qualified} DROP COLUMN {name}"
         elif action == "create_index":

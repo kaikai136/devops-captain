@@ -7,7 +7,10 @@ from . import object_operations
 from . import queries
 from . import transfers
 from . import application_keys
+from . import table_operations
 urlpatterns = [
+    path("database-management/table-operations/preview/", table_operations.preview),
+    path("database-management/table-operations/execute/", table_operations.execute),
     path("application-keys/", application_keys.collection),
     path("application-keys/<int:key_id>/", application_keys.detail),
     path("database-management/connection-test/", views.connection_test),

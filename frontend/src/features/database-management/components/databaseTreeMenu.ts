@@ -113,7 +113,7 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
     return [
     item(context, 'new-table', '新建表', 'database', { enabled: manageSchema, shortcut: 'Ctrl+Shift+T' }),
     item(context, 'new-query', '新建查询', 'search', { enabled: context.can('execute_sql'), shortcut: 'Ctrl+Shift+Q' }),
-    disabled(context, 'new-object-folder', '新建目录', 'folderPlus'),
+    item(context, 'new-object-folder', '新建目录', 'folderPlus', { enabled: context.dbType === 'mysql' && context.can('view_data') }),
     item(context, 'refresh', '刷新', 'refresh', { shortcut: 'F5' }),
     ...commonDisabled(context).slice(1),
     item(context, 'delete-selected', '删除', 'trash', { enabled: manageSchema && context.selectedCount > 0, danger: true }),
@@ -134,19 +134,29 @@ export function buildDatabaseTreeMenu(target: DatabaseTreeMenuTarget, context: D
     item(context, 'toggle-pin', context.pinned ? '取消置顶' : '点击置顶', 'pin'),
     item(context, 'new-table', '新建表', 'database', { enabled: manageSchema, shortcut: 'Ctrl+Shift+T' }),
     item(context, 'new-query', '新建查询', 'search', { enabled: context.can('execute_sql'), shortcut: 'Ctrl+Shift+Q' }),
-    disabled(context, 'new-object-folder', '新建目录', 'folderPlus'),
+    item(context, 'new-object-folder', '新建目录', 'folderPlus', { enabled: context.dbType === 'mysql' && context.can('view_data') }),
+    ...(context.dbType === 'mysql' ? [item(context, 'move-table-folder', '移动到目录', 'moveRight', { enabled: context.can('view_data') })] : []),
     item(context, 'rename-object', '重命名', 'edit', { enabled: manageSchema, shortcut: 'F2' }),
     item(context, 'refresh', '刷新', 'refresh', { shortcut: 'F5' }),
     item(context, 'optimize-table', '优化表', 'zap', { enabled: manageSchema && supports('optimize') }),
     item(context, 'copy-ddl', '复制 DDL', 'clipboard'),
-    ...commonDisabled(context).slice(1),
-    item(context, 'delete-object-menu', '删除', 'trash', { enabled: manageSchema, danger: true, children: [
+    ...(context.dbType === 'mysql' ? [
+      item(context, 'data-transfer', '数据传输', 'databaseBackup', { separatorBefore: true, children: [
+        item(context, 'copy-data', '复制数据', 'copy', { enabled: context.can('view_data') && importExport }),
+        item(context, 'paste-data', '数据粘贴', 'clipboard', { enabled: context.can('modify_data') && importExport }),
+      ] }),
+      item(context, 'sync', '同步', 'refresh', { children: [
+        item(context, 'sync-structure', '结构同步', 'settings', { enabled: context.can('view_data') && manageSchema }),
+        item(context, 'sync-data', '数据同步', 'refresh', { enabled: context.can('view_data') && context.can('modify_data') }),
+      ] }),
+    ] : commonDisabled(context).slice(1)),
+    item(context, 'delete-object-menu', '删除', 'trash', { enabled: manageSchema || context.can('modify_data'), danger: true, children: [
       item(context, 'drop-object', '删除表', 'trash', { enabled: manageSchema, danger: true }),
-      item(context, 'delete-rows', '清空数据', 'trash', { enabled: manageSchema, danger: true }),
-      item(context, 'truncate-table', '快速清空数据', 'zap', { enabled: manageSchema && supports('truncate'), danger: true }),
+      item(context, 'delete-rows', context.dbType === 'mysql' ? '删除数据' : '清空数据', 'trash', { enabled: context.dbType === 'mysql' ? context.can('modify_data') : manageSchema, danger: true }),
+      item(context, 'truncate-table', context.dbType === 'mysql' ? '截断表' : '快速清空数据', 'zap', { enabled: manageSchema && supports('truncate'), danger: true }),
     ] }),
-    item(context, 'export-sql', '导出 SQL', 'fileCode', { enabled: importExport && dumpSupported }),
-    item(context, 'import-table', '导入 SQL', 'upload', { enabled: importExport && dumpSupported && context.can('import_data') }),
+    ...(context.dbType === 'mysql' ? [item(context, 'table-export', '导出', 'download', { enabled: importExport && context.can('view_data'), children: (['sql', 'xlsx', 'dictionary', 'txt', 'csv', 'json'] as const).map((format, index) => item(context, `export-format-${format}`, ['SQL', 'Excel', '数据字典', 'TXT', 'CSV', 'JSON'][index], 'download', { enabled: importExport && context.can('view_data') && (format !== 'dictionary' || manageSchema) })) })] : [item(context, 'export-sql', '导出 SQL', 'fileCode', { enabled: importExport && dumpSupported })]),
+    item(context, 'import-table', context.dbType === 'mysql' ? '导入' : '导入 SQL', 'upload', { enabled: importExport && dumpSupported && context.can('import_data') }),
   ];
   if (target.category === 'view') return [
     item(context, 'open-object', '打开视图', 'eye', { enabled: target.kind === 'object', shortcut: 'Enter' }),

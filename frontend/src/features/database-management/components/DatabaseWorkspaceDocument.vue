@@ -11,6 +11,8 @@ import { errorMessage } from '@shared/utils/errors';
 import { connectionCan } from '../utils/mysqlConnection';
 import { formatSqlText, compressSqlText } from '../utils/sqlText';
 import DatabaseAccountDialog from './DatabaseAccountDialog.vue';
+import DatabaseTableData from './DatabaseTableData.vue';
+import DatabaseTableStructure from './DatabaseTableStructure.vue';
 import DatabaseObjectEditor, { type DatabaseObjectEditorContext } from './DatabaseObjectEditor.vue';
 const DatabaseDiagram = defineAsyncComponent(() => import('./DatabaseDiagram.vue'));
 import { createSavedDatabaseQuery, updateSavedDatabaseQuery, executeDatabaseSql, type DatabaseAsset } from '../api/databaseManagement';
@@ -31,6 +33,7 @@ const savedId = ref<number | null>(null);
 const savedText = ref('');
 const database = props.document.database || '';
 const schema = props.document.schema || '';
+const tableTarget = computed(() => ({ assetId: props.asset.id, database, schema, table: props.document.table || '' }));
 const editorContext = computed<DatabaseObjectEditorContext>(() => ({ assetId: props.asset.id, database, schema, dbType: props.asset.dbType, mode: 'create', objectType: 'table', name: 'new_table' }));
 let view: EditorView | null = null;
 let controller: AbortController | null = null;
@@ -87,7 +90,9 @@ onUnmounted(() => { disposed = true; controller?.abort(); view?.destroy(); });
     <el-table v-if="resultColumns.length" :data="resultRows" border height="38%"><el-table-column v-for="field in resultColumns" :key="field" :prop="field" :label="field" min-width="140" /></el-table>
   </section>
   <DatabaseDiagram v-else-if="document.documentType === 'er'" :asset-id="asset.id" :database="database" />
-  <DatabaseObjectEditor v-else-if="document.documentType === 'table'" embedded :model-value="true" :readonly="!can('manage_schema')" :context="editorContext" @saved="emit('dirty', false); emit('saved')" />
+  <DatabaseTableData v-else-if="document.documentType === 'table-data'" :asset="asset" :target="tableTarget" @dirty="emit('dirty', $event)" />
+  <DatabaseTableStructure v-else-if="document.documentType === 'table-structure'" :asset="asset" :target="tableTarget" @dirty="emit('dirty', $event)" @saved="emit('saved')" />
+  <DatabaseObjectEditor v-else-if="document.documentType === 'table' || document.documentType === 'table-create'" embedded :model-value="true" :readonly="!can('manage_schema')" :context="editorContext" @saved="emit('dirty', false); emit('saved')" />
   <DatabaseAccountDialog v-else-if="can('manage_accounts')" embedded :read-only="!connectionCan(asset, 'write_accounts')" :model-value="true" :asset-id="asset.id" :database="database" :db-type="asset.dbType" :schema="schema" />
   <el-empty v-else description="当前账号没有账号管理权限" />
 </template>
