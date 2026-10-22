@@ -122,6 +122,8 @@ kubectl -n middleware port-forward service/devops-tools-web 8088:80
 
 数据目录为节点上的 `/data/middleware/devops-tools/{data,static,redis}`。Service 默认 ClusterIP。需要外部 HTTPS 时，修改 `04-project-ingress.yaml` 的域名、IngressClass 和 TLS Secret，再单独 apply；模板不依赖特定的 cert-manager Issuer，证书 Secret 需预先提供。更新 Secret/ConfigMap 后重启 app/web Deployment。
 
+使用 HTTP NodePort 访问时，`DJANGO_SESSION_COOKIE_SECURE` 和 `DJANGO_CSRF_COOKIE_SECURE` 必须保持 `0`（模板默认值）；仅在使用 HTTPS 访问时改成 `1`。否则浏览器无法回传 Session Cookie，滑块挑战即使刚生成也会提示“滑块验证已过期”。修改已有部署的私有 Secret 配置后，重新 apply 并执行 `kubectl -n middleware rollout restart deployment/devops-tools-app`，待启动完成后清除站点 Cookie 并刷新页面重试。`DJANGO_CSRF_TRUSTED_ORIGINS` 也应填写实际来源（包含协议和非默认端口）。
+
 ## 备份与升级
 
 停止 API、Worker 和 Redis 后备份运行配置及全部数据目录；外部 MySQL 单独备份。更新镜像后重新启动，backend 会执行迁移。回滚代码不会回滚数据库，恢复时需要匹配的数据库、文件和配置备份。
