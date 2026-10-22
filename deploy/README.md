@@ -101,9 +101,9 @@ sh publish-images.sh v1.0.0 --keep-images
 
 部署前修改：
 
-1. `deployment-app.yaml`、`deployment-web.yaml`、`redis.yaml` 的 `REPLACE_WITH_NODE_NAME` 必须填写同一个节点的 `kubernetes.io/hostname` 标签值。hostPath 数据属于该节点，不能直接迁移到其他节点。
+1. `deployment-app.yaml`、`deployment-web.yaml` 的 `REPLACE_WITH_NODE_NAME` 必须填写同一个节点的 `kubernetes.io/hostname` 标签值，以共享静态文件。`redis.yaml` 的 `REPLACE_WITH_REDIS_NODE_NAME` 单独指定 Redis 固定节点，可以与 app/web 不同。Redis 通过 ClusterIP Service 访问，应用连接地址不需要改为节点 IP。hostPath 数据属于指定节点，切换节点前必须迁移数据。
 2. 所有前后端镜像改成已发布的固定版本。应用保持单副本和 Recreate，避免 SQLite 多实例写入。
-3. 复制 `app-config.secret.example` 为 `app-config.local.yaml`，填写稳定密钥、域名和数据库配置。Kubernetes 使用 `GUACD_HOST=127.0.0.1`。私有文件已忽略，不提交。
+3. 复制 `app-config.secret.example` 为 `app-config.local.yaml`，按环境修改域名和数据库配置。样例内置仅用于首次启动的演示密钥，生产环境必须替换为稳定的随机密钥；已有加密凭据时必须沿用原密钥。Kubernetes 使用 `GUACD_HOST=127.0.0.1`。私有文件已忽略，不提交。
 
 ```bash
 cp deploy/k8s/app-config.secret.example deploy/k8s/app-config.local.yaml

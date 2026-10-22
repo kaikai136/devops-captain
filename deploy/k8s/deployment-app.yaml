@@ -76,7 +76,7 @@ spec:
               cpu: '1'
               memory: 1Gi
         - name: guacd
-          image: guacamole/guacd:1.5.5
+          image: registry.cn-beijing.aliyuncs.com/kaikai136/guacd:1.5.5
       volumes:
         - name: data
           hostPath:
