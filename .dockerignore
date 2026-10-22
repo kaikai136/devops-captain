@@ -19,6 +19,9 @@ frontend/.vite/
 
 data/
 deploy/data/
+deploy/app.conf
+deploy/redis.conf
+deploy/k8s/*.local.yaml
 media/
 *.log
 

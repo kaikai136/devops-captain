@@ -122,7 +122,27 @@ class ConfigFileTests(SimpleTestCase):
         self.assertEqual(database["PASSWORD"], "secret-password")
         self.assertEqual(database["HOST"], "mysql.example.com")
         self.assertEqual(database["PORT"], "3306")
-        self.assertEqual(database["OPTIONS"], {"charset": "utf8mb4"})
+        self.assertEqual(database["OPTIONS"], {"charset": "utf8mb4", "connect_timeout": 10})
+
+    def test_database_connection_tuning_from_config(self):
+        from ops_tool import settings
+
+        database = settings.database_config({
+            "DATABASE_ENGINE": "mysql",
+            "DATABASE_CONNECT_TIMEOUT": "25",
+            "DATABASE_CHARSET": "utf8mb4",
+            "DATABASE_CONN_MAX_AGE": "60",
+            "DATABASE_CONN_HEALTH_CHECKS": "1",
+        })
+        self.assertEqual(database["OPTIONS"]["connect_timeout"], 25)
+        self.assertEqual(database["CONN_MAX_AGE"], 60)
+        self.assertTrue(database["CONN_HEALTH_CHECKS"])
+
+        sqlite = settings.database_config({
+            "DATABASE_ENGINE": "sqlite",
+            "DATABASE_SQLITE_TIMEOUT": "30",
+        })
+        self.assertEqual(sqlite["OPTIONS"]["timeout"], 30)
 
     def test_database_config_mysql_default_host_is_not_compose_service(self):
         from ops_tool import settings
@@ -134,22 +154,24 @@ class ConfigFileTests(SimpleTestCase):
     def test_database_config_keeps_sqlite_default(self):
         from ops_tool import settings
 
-        database = settings.database_config({"DATABASE_ENGINE": "sqlite", "DJANGO_DB_PATH": "/tmp/app.sqlite3"})
+        database_path = Path(TemporaryDirectory().name).resolve() / "app.sqlite3"
+        database = settings.database_config({"DATABASE_ENGINE": "sqlite", "DJANGO_DB_PATH": str(database_path)})
 
         self.assertEqual(database["ENGINE"], "django.db.backends.sqlite3")
-        self.assertEqual(database["NAME"], Path("/tmp/app.sqlite3"))
+        self.assertEqual(database["NAME"], database_path)
 
     def test_config_path_resolves_relative_values_from_config_root(self):
         from ops_tool import settings
 
         original_config_file = settings.APP_CONFIG_FILE
         try:
-            settings.APP_CONFIG_FILE = Path("/repo/config/local.app.conf")
+            config_root = Path("/repo").resolve()
+            settings.APP_CONFIG_FILE = config_root / "config/local.app.conf"
             path = settings.config_path("DJANGO_DB_PATH", Path("/fallback.sqlite3"), config={"DJANGO_DB_PATH": "backend/db.sqlite3"})
         finally:
             settings.APP_CONFIG_FILE = original_config_file
 
-        self.assertEqual(path, Path("/repo/backend/db.sqlite3"))
+        self.assertEqual(path, config_root / "backend/db.sqlite3")
 
     def test_runtime_uses_local_cache_db_sessions_and_redis_channels(self):
         from ops_tool import settings

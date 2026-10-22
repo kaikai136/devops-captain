@@ -572,47 +572,47 @@ function markAssetDisconnected(assetId: number) {
   }
 }
 function closeAssetWorkspaceTabs(assetId: number) {
+  saveWorkspaceSnapshot();
   const closedIds = new Set(workspaceTabs.value.filter(item => item.assetId === assetId).map(item => item.id));
-  if (!closedIds.size) return;
-  const wasActive = closedIds.has(activeWorkspaceTabId.value);
-  const firstClosedIndex = workspaceTabs.value.findIndex(item => closedIds.has(item.id));
-  workspaceTabs.value = workspaceTabs.value.filter(item => !closedIds.has(item.id));
+  closeDatabaseDialogs(assetId);
   workspaceSnapshots.delete(assetId);
-  if (!wasActive) return;
-  const next = workspaceTabs.value[Math.max(0, firstClosedIndex - 1)] || workspaceTabs.value[0];
-  const nextId = next?.id || 'list';
-  // Set the list tab first so activating another asset does not snapshot the asset being disconnected.
-  activeWorkspaceTabId.value = 'list';
-  if (nextId === 'list') {
+  expandedAssets.value = expandedAssets.value.filter(id => id !== assetId);
+  if (selected.value?.id === assetId) {
     connectVersion++;
     selected.value = null;
     resetWorkspace();
-  } else void activateWorkspaceTab(nextId);
+  }
+  removeWorkspaceTabs(closedIds);
+}
+function removeWorkspaceTabs(ids: Set<string>) {
+  const activeRemoved = ids.has(activeWorkspaceTabId.value);
+  workspaceTabs.value = workspaceTabs.value.filter(item => !ids.has(item.id));
+  ids.forEach(id => { delete dirtyDocuments.value[id]; });
+  if (!activeRemoved) return;
+  const next = [...recentWorkspaceTabs].reverse().find(id => !ids.has(id) && workspaceTabs.value.some(item => item.id === id)) || 'list';
+  activeWorkspaceTabId.value = 'list';
+  if (next === 'list') {
+    connectVersion++;
+    resetWorkspace();
+  } else void activateWorkspaceTab(next);
 }
 function closeWorkspaceTab(id: string, confirmed = false) {
   const index = workspaceTabs.value.findIndex(item => item.id === id);
   if (index < 0 || workspaceTabs.value[index].sticky) return;
   if (!confirmed && dirtyDocuments.value[id]) { requestConfirm('关闭标签', '编辑内容尚未保存，确定丢弃并关闭吗？', '关闭', async () => closeWorkspaceTab(id, true)); return; }
-  const wasActive = activeWorkspaceTabId.value === id;
-  workspaceTabs.value.splice(index, 1);
-  delete dirtyDocuments.value[id];
-  if (id.startsWith('asset-')) workspaceSnapshots.delete(Number(id.replace('asset-', '')));
-  if (!wasActive) return;
-  const next = [...recentWorkspaceTabs].reverse().find(recent => workspaceTabs.value.some(item => item.id === recent)) || 'list';
-  activeWorkspaceTabId.value = 'list';
-  if (next === 'list') resetWorkspace(); else void activateWorkspaceTab(next);
+  saveWorkspaceSnapshot();
+  removeWorkspaceTabs(new Set([id]));
 }
 function closeOtherWorkspaceTabs(id: string, confirmed = false) {
   if (!confirmed && documentTabs.value.some(item => item.id !== id && dirtyDocuments.value[item.id])) { requestConfirm('关闭其他标签', '其他标签中有未保存的编辑，确定丢弃吗？', '关闭', async () => closeOtherWorkspaceTabs(id, true)); return; }
-  workspaceTabs.value.filter(item => item.kind === 'asset' && item.id !== id).forEach(item => workspaceSnapshots.delete(item.assetId || 0));
-  workspaceTabs.value = workspaceTabs.value.filter(item => item.sticky || item.id === id);
+  saveWorkspaceSnapshot();
+  removeWorkspaceTabs(new Set(workspaceTabs.value.filter(item => !item.sticky && item.id !== id).map(item => item.id)));
   if (activeWorkspaceTabId.value !== id) void activateWorkspaceTab(id);
 }
 function closeAllWorkspaceTabs(confirmed = false) {
   if (!confirmed && documentTabs.value.some(item => dirtyDocuments.value[item.id])) { requestConfirm('关闭全部标签', '标签中有未保存的编辑，确定丢弃吗？', '关闭', async () => closeAllWorkspaceTabs(true)); return; }
-  workspaceSnapshots.clear();
-  workspaceTabs.value = workspaceTabs.value.filter(item => item.sticky);
-  void activateWorkspaceTab('list');
+  saveWorkspaceSnapshot();
+  removeWorkspaceTabs(new Set(workspaceTabs.value.filter(item => !item.sticky).map(item => item.id)));
 }
 function reorderWorkspaceTabs(payload: { id: string; beforeId: string }) {
   const sourceIndex = workspaceTabs.value.findIndex(item => item.id === payload.id);
@@ -1194,11 +1194,11 @@ const recentWorkspaceTabs: string[] = [];
 watch(activeWorkspaceTabId, id => { const index = recentWorkspaceTabs.indexOf(id); if (index >= 0) recentWorkspaceTabs.splice(index, 1); recentWorkspaceTabs.push(id); }, { flush: 'sync' });
 let documentSequence = 0;
 function openDatabaseDocument(asset: DatabaseAsset, database: string, owner: string, documentType: NonNullable<DatabaseWorkspaceTab['documentType']>, table = '') {
+  saveWorkspaceSnapshot();
   if (table) {
     const existing = workspaceTabs.value.find(item => item.kind === 'document' && item.assetId === asset.id && item.database === database && (item.schema || '') === owner && item.table === table && item.documentType === documentType);
     if (existing) { activeWorkspaceTabId.value = existing.id; return; }
   }
-  saveWorkspaceSnapshot();
   const number = ++documentSequence;
   const id = `document-${number}`;
   const labels = { table: '新建表', 'table-data': '打开数据', 'table-structure': '编辑结构', 'table-create': '新建表', query: '查询', er: 'ER 图', accounts: '账号管理' };
@@ -1208,15 +1208,41 @@ function openDatabaseDocument(asset: DatabaseAsset, database: string, owner: str
 }
 function closeDatabaseDocuments(assetId: number, database: string) {
   saveWorkspaceSnapshot();
-  const cachedDatabase = selected.value?.id === assetId && activeWorkspaceTabId.value === workspaceTabId(assetId) ? activeDatabase.value : workspaceSnapshots.get(assetId)?.database;
+  const snapshot = workspaceSnapshots.get(assetId);
+  const cachedDatabase = snapshot?.database;
   const ids = new Set(workspaceTabs.value.filter(item => item.assetId === assetId && (item.kind === 'document' ? item.database === database : item.kind === 'asset' && cachedDatabase === database)).map(item => item.id));
-  const activeRemoved = ids.has(activeWorkspaceTabId.value);
-  workspaceTabs.value = workspaceTabs.value.filter(item => !ids.has(item.id));
-  ids.forEach(id => { delete dirtyDocuments.value[id]; });
-  if (activeRemoved) {
-    activeWorkspaceTabId.value = 'list';
-    const next = [...recentWorkspaceTabs].reverse().find(id => id !== 'list' && workspaceTabs.value.some(item => item.id === id)) || 'list';
-    if (next === 'list') resetWorkspace(); else void activateWorkspaceTab(next);
+  closeDatabaseDialogs(assetId, database);
+  if (snapshot?.database === database) {
+    const cleared: WorkspaceSnapshot = {
+      ...snapshot, database: '', schemas: [], schema: '', table: '', tab: 'tables', objectCategory: 'table',
+      expandedDatabase: '', expandedSchema: '', expandedCategory: '', expandedQuery: false,
+      tableView: 'table', objectSearch: '', sql: '', page: 1, sort: '', direction: 'asc',
+      whereField: '', whereValue: '', selectedFields: [], tables: [], selectedTables: [], columns: [], indexes: [],
+      rows: [], total: 0, objectCounts: { table: null, view: null, procedure: null, function: null },
+      sqlRows: [], sqlMessage: '', transaction: false, stagedChanges: [], queries: [], activeQueryId: null,
+    };
+    workspaceSnapshots.set(assetId, cleared);
+    if (selected.value?.id === assetId && activeDatabase.value === database) {
+      resetObjectCounts();
+      sqlRequestVersion++;
+      restoreCachedWorkspace(selected.value, cleared);
+    }
+  }
+  removeWorkspaceTabs(ids);
+}
+function closeDatabaseDialogs(assetId: number, database?: string) {
+  const matches = (target?: { assetId: number; database: string } | null) => target?.assetId === assetId && (database === undefined || target.database === database);
+  if (matches(mysqlEditDatabase.value)) mysqlEditDatabase.value = null;
+  if (matches(mysqlImportDatabase.value)) mysqlImportDatabase.value = null;
+  if (matches(databaseExportTarget.value)) databaseExportTarget.value = null;
+  if (matches(tableOperation.value?.source) || matches(tableOperation.value?.initialTarget)) tableOperation.value = null;
+  if (matches(tableDelete.value?.target)) tableDelete.value = null;
+  if (matches(tableFolderTarget.value)) tableFolderTarget.value = null;
+  if (matches(objectEditorContext.value)) { objectEditorOpen.value = false; objectEditorContext.value = null; }
+  if (matches(dumpTarget.value)) { dumpDialog.value = false; dumpTarget.value = null; }
+  if (matches(importTarget.value)) importTarget.value = null;
+  if (selected.value?.id === assetId && (database === undefined || activeDatabase.value === database)) {
+    rowDialog.value = false; schemaDialog.value = false; accountDialogOpen.value = false; databaseDialog.value = false;
   }
 }
 async function refreshMysqlDatabase(assetId: number, database: string, deleted = false) {

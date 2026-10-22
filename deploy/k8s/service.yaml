@@ -1,8 +1,38 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: devops-tools
+  name: devops-tools-app
+  namespace: middleware
 spec:
-  selector: {app: devops-tools}
+  type: ClusterIP
+  selector:
+    app: devops-tools-app
   ports:
-    - {name: http, port: 80, targetPort: 80}
+    - port: 8000
+      targetPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-tools-web
+  namespace: middleware
+spec:
+  type: ClusterIP
+  selector:
+    app: devops-tools-web
+  ports:
+    - port: 80
+      targetPort: 80
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: devops-tools-redis
+  namespace: middleware
+spec:
+  type: ClusterIP
+  selector:
+    app: devops-tools-redis
+  ports:
+    - port: 6379
+      targetPort: 6379

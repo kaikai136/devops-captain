@@ -55,9 +55,9 @@
 - 后端：Django、Django REST Framework、Django Channels、Daphne。
 - 前端：Vue 3、Vite、TypeScript、ECharts、xterm.js、Guacamole Common JS。
 - 终端能力：SSH 连接依赖 Paramiko，RDP 连接依赖 guacamole/guacd。
-- 静态资源：前端构建后由 Django + WhiteNoise 提供。
+- 静态资源：部署时由 Nginx 提供 Vue 页面和 Django 静态文件。
 - 数据存储：支持远程 MySQL 或 SQLite，上传文件和密钥通过挂载目录持久化。
-- 部署方式：Docker 多阶段构建，Docker Compose 编排 app 与 guacd 服务，数据库由运行时 `data/config/app.conf` 指定。
+- 部署方式：采用 fileHub 的前后端双镜像模式，Docker Compose 编排 API、前端、Worker、Redis 和 guacd，运行配置为 `deploy/app.conf` 与 `deploy/redis.conf`。
 
 ## 目录结构
 
@@ -79,12 +79,13 @@ django-vue/
 │   ├── src/services/        # API 请求封装
 │   └── src/styles/          # 全局样式和功能模块样式
 └── deploy/                  # Docker Compose、Dockerfile、启动脚本和 K8s 部署文件
-    ├── config/app.conf      # 运行时 data/config/app.conf 的默认模板
-    ├── docker/              # 容器启动脚本
+    ├── app.conf.example     # 应用配置样例
+    ├── redis.conf.example   # Redis 配置样例
+    ├── data/                # 数据和静态文件（Git 忽略）
     ├── k8s/                 # Kubernetes 部署清单
-    ├── scripts/             # 本地/远程部署脚本
-    ├── Dockerfile           # 前后端多阶段构建镜像
-    └── docker-compose.yml   # app + guacd 基础服务编排
+    ├── backend.Dockerfile   # Django/Daphne 镜像
+    ├── frontend.Dockerfile  # Vue 构建与 Nginx 镜像
+    └── docker-compose.yaml  # 五个服务的编排入口
 ```
 
 ## 本地开发
@@ -105,7 +106,7 @@ VITE_API_TARGET=http://127.0.0.1:8001
 VITE_WS_TARGET=ws://127.0.0.1:8001
 ```
 
-本地配置只放安全默认值。生产和 Docker Compose 部署不要改这个文件，部署环境继续使用 `data/config/app.conf`。
+本地配置只放安全默认值。部署使用 `deploy/app.conf` 与 `deploy/redis.conf`，详见 [部署指南](deploy/README.md)。
 
 ### 后端手动启动
 
@@ -184,7 +185,12 @@ http://localhost:5173
 完整的启动、配置、数据迁移及 Kubernetes 说明见 [deploy/README.md](deploy/README.md)。
 
 ```bash
-bash deploy/scripts/compose-up.sh
+cp deploy/app.conf.example deploy/app.conf
+cp deploy/redis.conf.example deploy/redis.conf
+# 按部署指南填写密钥及站点配置后构建启动
+docker build -f deploy/backend.Dockerfile -t devops-tools-backend:latest .
+docker build -f deploy/frontend.Dockerfile -t devops-tools-frontend:latest .
+docker compose -f deploy/docker-compose.yaml up -d
 ```
 
 入口为 `http://localhost:8088`。

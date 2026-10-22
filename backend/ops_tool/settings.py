@@ -161,12 +161,18 @@ def database_config(config: dict[str, str] | None = None) -> dict:
             "PASSWORD": config_value("DATABASE_PASSWORD", "", config=config),
             "HOST": config_value("DATABASE_HOST", "127.0.0.1", config=config),
             "PORT": config_value("DATABASE_PORT", "3306", config=config),
-            "OPTIONS": {"charset": "utf8mb4"},
+            "CONN_MAX_AGE": config_int("DATABASE_CONN_MAX_AGE", 0, config=config),
+            "CONN_HEALTH_CHECKS": config_bool("DATABASE_CONN_HEALTH_CHECKS", False, config=config),
+            "OPTIONS": {
+                "charset": config_value("DATABASE_CHARSET", "utf8mb4", config=config),
+                "connect_timeout": config_int("DATABASE_CONNECT_TIMEOUT", 10, config=config),
+            },
         }
 
     return {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": config_path("DJANGO_DB_PATH", BASE_DIR / "db.sqlite3", config=config),
+        "OPTIONS": {"timeout": config_int("DATABASE_SQLITE_TIMEOUT", 5, config=config)},
     }
 
 
@@ -174,6 +180,27 @@ SECRET_KEY = django_secret_key()
 DEBUG = config_bool("DJANGO_DEBUG", True)
 ALLOWED_HOSTS = config_list("DJANGO_ALLOWED_HOSTS", ["*"])
 CSRF_TRUSTED_ORIGINS = config_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+
+# HTTPS is commonly terminated by Nginx/Ingress; trust its header only when enabled.
+SECURE_PROXY_SSL_HEADER = (
+    ("HTTP_X_FORWARDED_PROTO", "https")
+    if config_bool("DJANGO_TRUST_PROXY_SSL_HEADER", False) else None
+)
+USE_X_FORWARDED_HOST = config_bool("DJANGO_USE_X_FORWARDED_HOST", False)
+SECURE_SSL_REDIRECT = config_bool("DJANGO_SECURE_SSL_REDIRECT", False)
+SECURE_HSTS_SECONDS = config_int("DJANGO_SECURE_HSTS_SECONDS", 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = config_bool("DJANGO_SECURE_HSTS_INCLUDE_SUBDOMAINS", False)
+SECURE_HSTS_PRELOAD = config_bool("DJANGO_SECURE_HSTS_PRELOAD", False)
+SESSION_COOKIE_SECURE = config_bool("DJANGO_SESSION_COOKIE_SECURE", False)
+SESSION_COOKIE_HTTPONLY = config_bool("DJANGO_SESSION_COOKIE_HTTPONLY", True)
+SESSION_COOKIE_SAMESITE = config_value("DJANGO_SESSION_COOKIE_SAMESITE", "Lax")
+SESSION_COOKIE_DOMAIN = config_value("DJANGO_SESSION_COOKIE_DOMAIN") or None
+SESSION_COOKIE_AGE = config_int("DJANGO_SESSION_COOKIE_AGE", 1209600)
+SESSION_EXPIRE_AT_BROWSER_CLOSE = config_bool("DJANGO_SESSION_EXPIRE_AT_BROWSER_CLOSE", False)
+CSRF_COOKIE_SECURE = config_bool("DJANGO_CSRF_COOKIE_SECURE", False)
+CSRF_COOKIE_HTTPONLY = config_bool("DJANGO_CSRF_COOKIE_HTTPONLY", False)
+CSRF_COOKIE_SAMESITE = config_value("DJANGO_CSRF_COOKIE_SAMESITE", "Lax")
+CSRF_COOKIE_DOMAIN = config_value("DJANGO_CSRF_COOKIE_DOMAIN") or None
 
 INSTALLED_APPS = [
     "daphne",
@@ -236,10 +263,10 @@ ASGI_APPLICATION = "ops_tool.asgi.application"
 
 DATABASES = {"default": database_config()}
 
-LANGUAGE_CODE = "zh-hans"
+LANGUAGE_CODE = config_value("DJANGO_LANGUAGE_CODE", "zh-hans")
 TIME_ZONE = config_value("TZ", "Asia/Shanghai")
-USE_I18N = True
-USE_TZ = True
+USE_I18N = config_bool("DJANGO_USE_I18N", True)
+USE_TZ = config_bool("DJANGO_USE_TZ", True)
 
 STATIC_URL = config_value("DJANGO_STATIC_URL", "/static/")
 STATIC_ROOT = config_path("DJANGO_STATIC_ROOT", BASE_DIR / "staticfiles")
@@ -259,12 +286,17 @@ BULK_EXECUTION_FORKS = config_int("BULK_EXECUTION_FORKS", 10)
 BULK_EXECUTION_TIMEOUT_SECONDS = config_int("BULK_EXECUTION_TIMEOUT_SECONDS", 300)
 BULK_EXECUTION_RUN_ASYNC = config_bool("BULK_EXECUTION_RUN_ASYNC", True)
 DATA_UPLOAD_MAX_NUMBER_FILES = config_int("DATA_UPLOAD_MAX_NUMBER_FILES", 1000)
+DATA_UPLOAD_MAX_MEMORY_SIZE = config_int("DATA_UPLOAD_MAX_MEMORY_SIZE", 2621440)
+FILE_UPLOAD_MAX_MEMORY_SIZE = config_int("FILE_UPLOAD_MAX_MEMORY_SIZE", 2621440)
+DATA_UPLOAD_MAX_NUMBER_FIELDS = config_int("DATA_UPLOAD_MAX_NUMBER_FIELDS", 1000)
+FILE_UPLOAD_TEMP_DIR = config_value("FILE_UPLOAD_TEMP_DIR") or None
 WHITENOISE_AUTOREFRESH = config_bool("WHITENOISE_AUTOREFRESH", DEBUG)
 WHITENOISE_USE_FINDERS = config_bool("WHITENOISE_USE_FINDERS", DEBUG)
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 CORS_ALLOW_ALL_ORIGINS = config_bool("DJANGO_CORS_ALLOW_ALL_ORIGINS", DEBUG)
 CORS_ALLOWED_ORIGINS = config_list("DJANGO_CORS_ALLOWED_ORIGINS")
+CORS_ALLOW_CREDENTIALS = config_bool("DJANGO_CORS_ALLOW_CREDENTIALS", False)
 
 STORAGES = {
     "default": {

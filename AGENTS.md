@@ -37,4 +37,4 @@ Follow existing `fix:`, `feat:`, and `refactor:` prefixes with concise descripti
 
 ## Security & Configuration
 
-Use `APP_CONFIG_FILE` for backend configuration and `config/local.app.conf` for Vite settings. API and workers must share Redis configuration. Use `deploy/config/app.conf` as the deployment template. Never commit credentials, databases, recordings, or runtime files; never log plaintext secrets.
+Use `APP_CONFIG_FILE` for backend configuration and `config/local.app.conf` for Vite settings. API and workers must share Redis configuration. Use `deploy/app.conf.example` and `deploy/redis.conf.example` as deployment templates; keep runtime configuration in ignored `deploy/app.conf` and `deploy/redis.conf`. Never commit credentials, databases, recordings, or runtime files; never log plaintext secrets.

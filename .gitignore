@@ -10,6 +10,9 @@ env/
 .env
 .env.*
 deploy/config/*.local.conf
+/deploy/app.conf
+/deploy/redis.conf
+/deploy/k8s/*.local.yaml
 
 # Node / Vue
 1Panel/

@@ -1,0 +1,26 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: devops-tools
+  namespace: middleware
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: '0'
+    nginx.ingress.kubernetes.io/proxy-read-timeout: '3600'
+    nginx.ingress.kubernetes.io/proxy-send-timeout: '3600'
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - ops.example.com
+      secretName: devops-tools-tls
+  rules:
+    - host: ops.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: devops-tools-web
+                port:
+                  number: 80
