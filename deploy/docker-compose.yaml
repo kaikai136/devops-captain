@@ -8,7 +8,6 @@ services:
       - ./app.conf:/etc/devops-tools/app.conf:ro
       - ./redis.conf:/etc/devops-tools/redis.conf:ro
       - ./data/devops_data:/data
-      - ./data/devops_static:/app/backend/staticfiles
     depends_on:
       redis:
         condition: service_healthy
@@ -34,7 +33,6 @@ services:
       - 8088:80
     volumes:
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - ./data/devops_static:/srv/devops-static:ro
   transfer-worker:
     image: devops-tools-backend:latest
     restart: unless-stopped
@@ -44,7 +42,6 @@ services:
       - ./app.conf:/etc/devops-tools/app.conf:ro
       - ./redis.conf:/etc/devops-tools/redis.conf:ro
       - ./data/devops_data:/data
-      - ./data/devops_static:/app/backend/staticfiles
     depends_on:
       backend:
         condition: service_healthy

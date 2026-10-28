@@ -1,6 +1,6 @@
 # 部署
 
-沿用 fileHub 的部署模式：前后端独立镜像、显式配置文件、独立数据和静态文件挂载，Kubernetes 拆分 app/web Deployment。以下命令在仓库根目录执行，要求 Docker Compose v2；Windows 请在 WSL/Linux 容器环境运行。
+沿用 fileHub 的部署模式：前后端独立镜像、显式配置文件和独立数据目录。Django 静态资源在构建 frontend 镜像时收集并打包进 Nginx 镜像；Kubernetes 拆分 app/web Deployment。以下命令在仓库根目录执行，要求 Docker Compose v2；Windows 请在 WSL/Linux 容器环境运行。
 
 ## 目录
 
@@ -10,7 +10,7 @@ deploy/
 ├── redis.conf.example        # API/Worker 共用 Redis 配置样例
 ├── backend.Dockerfile        # API 和 Worker 共用镜像
 ├── backend-entrypoint.sh     # 校验配置、迁移、收集静态文件和启动
-├── frontend.Dockerfile       # Vue 构建 + Nginx
+├── frontend.Dockerfile       # Vue 和 Django 静态文件构建 + Nginx
 ├── nginx.conf                # Compose 的代理配置
 ├── docker-compose.yaml       # 使用已构建的镜像启动
 └── k8s/                      # app/web、Redis、Service 和可选 Ingress
@@ -65,12 +65,11 @@ docker compose -f deploy/docker-compose.yaml ps
 curl -f http://localhost:8088/api/health/
 ```
 
-入口为 `http://localhost:8088`，需要更换端口时修改 frontend 的 `ports`。backend 启动时迁移数据库、收集静态文件，再运行 Daphne。Worker 等待 backend 健康后启动，不重复执行迁移。Redis 开启 AOF；Redis 和 guacd 不对宿主机暴露端口。
+入口为 `http://localhost:8088`，需要更换端口时修改 frontend 的 `ports`。frontend 镜像构建时运行 Django `collectstatic`，并将产物放入 Nginx 镜像的 `/srv/devops-static`，由 Nginx 提供 `/static/`。backend 启动时也会收集静态文件供 WhiteNoise 使用，然后运行 Daphne。更新后端 Admin 或其他 Django 静态资源时，需重新构建并部署 frontend 镜像。Worker 等待 backend 健康后启动，不重复执行迁移。Redis 开启 AOF；Redis 和 guacd 不对宿主机暴露端口。
 
 | 宿主机目录 | 容器路径 | 内容 |
 | --- | --- | --- |
 | `deploy/data/devops_data/` | `/data` | SQLite、媒体、录像、数据库资产文件 |
-| `deploy/data/devops_static/` | 后端 `/app/backend/staticfiles`、前端 `/srv/devops-static` | collectstatic 产物 |
 | `deploy/data/redis/` | Redis `/data` | AOF 和持久化数据 |
 
 创建管理员、检查日志和停止服务：
