@@ -1,0 +1,90 @@
+{
+  "task": {
+    "id": "6c5de185-84e9-49a0-8ec7-04f46834ee98",
+    "assetId": 1,
+    "assetName": "perf_25ae50fd9dcf",
+    "direction": "export",
+    "scope": "table",
+    "format": "csv",
+    "operationMode": "",
+    "database": "",
+    "schema": "",
+    "objectName": "perf_rows",
+    "status": "succeeded",
+    "stage": "complete",
+    "progress": 100,
+    "processedRows": 10000,
+    "processedBytes": 1068904,
+    "totalRows": null,
+    "totalBytes": 1068904,
+    "preview": {
+      "files": [
+        {
+          "name": "perf_rows.csv",
+          "size": 1068904
+        }
+      ],
+      "warnings": []
+    },
+    "checkpoints": {
+      "completedTables": [
+        "perf_rows"
+      ],
+      "failedTables": [],
+      "currentTable": "perf_rows",
+      "tableRows": 10000,
+      "tableTotal": 10000,
+      "completedSteps": 1,
+      "totalSteps": 1,
+      "logs": [
+        {
+          "time": "2026-10-22T16:29:20.935358+00:00",
+          "level": "info",
+          "message": "\u5f00\u59cb\u5bfc\u51fa\uff1aperf_rows"
+        },
+        {
+          "time": "2026-10-22T16:31:31.737402+00:00",
+          "level": "success",
+          "message": "\u5bfc\u51fa\u5b8c\u6210\uff1aperf_rows"
+        },
+        {
+          "time": "2026-10-22T16:31:37.948774+00:00",
+          "level": "info",
+          "message": "\u6b63\u5728\u751f\u6210\u6587\u4ef6"
+        },
+        {
+          "time": "2026-10-22T16:34:01.307191+00:00",
+          "level": "success",
+          "message": "\u5168\u90e8\u5bfc\u51fa\u5b8c\u6210"
+        }
+      ]
+    },
+    "sourceName": "database-export.csv",
+    "error": "",
+    "conflictPolicy": "",
+    "cancelRequested": false,
+    "createdAt": "2026-10-22T16:29:13.730826Z",
+    "startedAt": "2026-10-22T16:29:14.619180Z",
+    "finishedAt": "2026-10-22T16:34:04.383295Z",
+    "expiresAt": "2026-10-29T16:29:13.729441Z",
+    "canDownload": true
+  },
+  "download_status": 200,
+  "bytes": 1068904,
+  "verified_rows": 10000,
+  "cleanup": [
+    {
+      "path": "transfers/6c5de185-84e9-49a0-8ec7-04f46834ee98/delete/",
+      "status": 200
+    },
+    {
+      "path": "assets/1/database/",
+      "status": 200
+    },
+    {
+      "path": "assets/1/",
+      "status": 200
+    }
+  ],
+  "remaining_assets": 0
+}

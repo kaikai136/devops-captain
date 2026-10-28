@@ -1,0 +1,147 @@
+[
+  {
+    "path": "/",
+    "concurrency": 50,
+    "duration_s": 20.33,
+    "requests": 2261,
+    "codes": {
+      "200": 2261
+    },
+    "rps": 111.19,
+    "p50_ms": 290.89,
+    "p95_ms": 1355.13,
+    "p99_ms": 2082.03,
+    "max_ms": 3596.77,
+    "samples": [
+      {
+        "elapsed": 1.08,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           87m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          1m           4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   631m         15%      2675Mi          36%         \nk8svip-162   376m         9%       2029Mi          27%         \nk8svip-163   407m         10%      2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 6.13,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           87m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          1m           4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   631m         15%      2675Mi          36%         \nk8svip-162   376m         9%       2029Mi          27%         \nk8svip-163   407m         10%      2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 11.13,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           87m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          1m           4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   631m         15%      2675Mi          36%         \nk8svip-162   376m         9%       2029Mi          27%         \nk8svip-163   407m         10%      2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 16.21,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           88m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   13m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          12m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   724m         18%      2678Mi          36%         \nk8svip-162   391m         9%       2028Mi          27%         \nk8svip-163   390m         9%       2072Mi          28%         \n"
+      },
+      {
+        "elapsed": 21.32,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           88m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   13m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          12m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   724m         18%      2678Mi          36%         \nk8svip-162   391m         9%       2028Mi          27%         \nk8svip-163   390m         9%       2072Mi          28%         \n"
+      }
+    ]
+  },
+  {
+    "path": "/api/health/",
+    "concurrency": 50,
+    "duration_s": 20.21,
+    "requests": 1778,
+    "codes": {
+      "200": 1778
+    },
+    "rps": 87.98,
+    "p50_ms": 467.19,
+    "p95_ms": 1154.75,
+    "p99_ms": 2080.78,
+    "max_ms": 3983.34,
+    "samples": [
+      {
+        "elapsed": 0.96,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           99m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          27m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   919m         22%      2686Mi          36%         \nk8svip-162   371m         9%       2028Mi          27%         \nk8svip-163   430m         10%      2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 5.85,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           99m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          27m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   919m         22%      2686Mi          36%         \nk8svip-162   371m         9%       2028Mi          27%         \nk8svip-163   430m         10%      2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 10.78,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           99m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          27m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   919m         22%      2686Mi          36%         \nk8svip-162   371m         9%       2028Mi          27%         \nk8svip-163   430m         10%      2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 15.85,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           99m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          23m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1132m        28%      2701Mi          36%         \nk8svip-162   339m         8%       2029Mi          27%         \nk8svip-163   381m         9%       2071Mi          28%         \n"
+      },
+      {
+        "elapsed": 20.85,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           99m          126Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   12m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             12m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          23m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1132m        28%      2701Mi          36%         \nk8svip-162   339m         8%       2029Mi          27%         \nk8svip-163   381m         9%       2071Mi          28%         \n"
+      }
+    ]
+  },
+  {
+    "path": "/api/auth/slider-challenge/",
+    "concurrency": 10,
+    "duration_s": 20.12,
+    "requests": 1208,
+    "codes": {
+      "200": 1208
+    },
+    "rps": 60.05,
+    "p50_ms": 138.41,
+    "p95_ms": 342.24,
+    "p99_ms": 554.41,
+    "max_ms": 962.2,
+    "samples": [
+      {
+        "elapsed": 0.94,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           754m         141Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   8m           77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             10m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          23m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1657m        41%      2696Mi          36%         \nk8svip-162   331m         8%       2027Mi          27%         \nk8svip-163   372m         9%       2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 5.76,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           754m         141Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   8m           77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             10m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          23m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1657m        41%      2696Mi          36%         \nk8svip-162   331m         8%       2027Mi          27%         \nk8svip-163   372m         9%       2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 10.61,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           754m         141Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   8m           77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             10m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          23m          4Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1657m        41%      2696Mi          36%         \nk8svip-162   331m         8%       2027Mi          27%         \nk8svip-163   372m         9%       2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 15.82,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           500m         129Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   10m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             10m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          13m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1257m        31%      2696Mi          36%         \nk8svip-162   328m         8%       2028Mi          27%         \nk8svip-163   356m         8%       2072Mi          28%         \n"
+      },
+      {
+        "elapsed": 20.84,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           500m         129Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   10m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             10m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          13m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1257m        31%      2696Mi          36%         \nk8svip-162   328m         8%       2028Mi          27%         \nk8svip-163   356m         8%       2072Mi          28%         \n"
+      }
+    ]
+  },
+  {
+    "path": "/api/auth/slider-challenge/",
+    "concurrency": 50,
+    "duration_s": 20.94,
+    "requests": 1256,
+    "codes": {
+      "200": 1255,
+      "400": 1
+    },
+    "rps": 59.99,
+    "p50_ms": 543.12,
+    "p95_ms": 2262.88,
+    "p99_ms": 3599.57,
+    "max_ms": 5897.98,
+    "samples": [
+      {
+        "elapsed": 1.01,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           948m         131Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   10m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             8m           9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          13m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1875m        46%      2695Mi          36%         \nk8svip-162   294m         7%       2026Mi          27%         \nk8svip-163   337m         8%       2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 5.88,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           948m         131Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   10m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             8m           9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          13m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1875m        46%      2695Mi          36%         \nk8svip-162   294m         7%       2026Mi          27%         \nk8svip-163   337m         8%       2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 10.74,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           948m         131Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   10m          77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             8m           9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          13m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1875m        46%      2695Mi          36%         \nk8svip-162   294m         7%       2026Mi          27%         \nk8svip-163   337m         8%       2070Mi          28%         \n"
+      },
+      {
+        "elapsed": 15.7,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           638m         147Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   9m           77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             11m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          16m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1316m        32%      2703Mi          36%         \nk8svip-162   333m         8%       2026Mi          27%         \nk8svip-163   368m         9%       2071Mi          28%         \n"
+      },
+      {
+        "elapsed": 20.54,
+        "top": "POD                                   NAME              CPU(cores)   MEMORY(bytes)   \ndevops-tools-app-6fd8ccf6d6-2zvhd     backend           638m         147Mi           \ndevops-tools-app-6fd8ccf6d6-2zvhd     guacd             0m           10Mi            \ndevops-tools-app-6fd8ccf6d6-2zvhd     transfer-worker   9m           77Mi            \ndevops-tools-redis-79896b46cb-52tws   redis             11m          9Mi             \ndevops-tools-web-6f567fd45c-bdrvs     frontend          16m          5Mi             \nNAME         CPU(cores)   CPU(%)   MEMORY(bytes)   MEMORY(%)   \nk8svip-161   1316m        32%      2703Mi          36%         \nk8svip-162   333m         8%       2026Mi          27%         \nk8svip-163   368m         9%       2071Mi          28%         \n"
+      }
+    ]
+  }
+]

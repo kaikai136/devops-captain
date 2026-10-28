@@ -1,0 +1,14 @@
+{
+  "scenario": "independent_cookies",
+  "concurrency": 50,
+  "requests": 500,
+  "duration_s": 20.13,
+  "rps": 24.83,
+  "codes": {
+    "200": 500
+  },
+  "p50_ms": 415.95,
+  "p95_ms": 7255.47,
+  "p99_ms": 13008.72,
+  "errors": []
+}
