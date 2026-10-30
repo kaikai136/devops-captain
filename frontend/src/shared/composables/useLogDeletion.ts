@@ -14,7 +14,8 @@ export function useLogDeletion(options: {
   const mutationLoading = ref(false);
   function clearSelection() { selectedIds.value = []; }
   function selectionChanged(rows: { id: number }[]) {
-    if (!mutationLoading.value) selectedIds.value = rows.map((row) => row.id);
+    if (mutationLoading.value) return;
+    selectedIds.value = rows.map((row) => row.id);
   }
   async function execute(clear: boolean) {
     if (mutationLoading.value || (!clear && !selectedIds.value.length)) return;

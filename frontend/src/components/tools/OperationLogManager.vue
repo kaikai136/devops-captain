@@ -80,8 +80,8 @@ const someColumnsVisible = computed(() => visibleColumnCount.value > 0);
 
 onMounted(loadLogs);
 
-const { selectedIds, mutationLoading, clearSelection, selectionChanged, removeSelected, clearAllLogs } = useLogDeletion({
-  endpoint: '/api/system/operation-logs/', label: '操作日志', reload: loadLogs,
+const { selectedIds, mutationLoading, selectionChanged, removeSelected, clearAllLogs } = useLogDeletion({
+  endpoint: '/api/system/operation-logs/', label: '操作日志', reload: async () => { logTable.value?.clearSelection(); await loadLogs(); },
   resetPage: () => { page.value = 1; }, onError: (error) => { message.value = error; },
 });
 
@@ -91,8 +91,6 @@ watch(pageSize, () => {
 });
 
 async function loadLogs() {
-  clearSelection();
-  logTable.value?.clearSelection();
   isLoading.value = true;
   message.value = '';
   try {
@@ -126,13 +124,11 @@ async function loadLogs() {
 }
 
 function searchLogs() {
-  clearSelection();
   page.value = 1;
   loadLogs();
 }
 
 function resetSearch() {
-  clearSelection();
   actionName.value = '';
   operationIp.value = '';
   username.value = '';
@@ -281,7 +277,7 @@ function formatTime(value: string) {
 
         <div class="login-log-table-wrap app-data-table-wrap">
           <el-table ref="logTable" :data="logs" row-key="id" class="login-log-table app-data-table" v-loading="isLoading || mutationLoading" empty-text="暂无操作记录" @selection-change="selectionChanged">
-            <el-table-column v-if="canUsePageAction('operationLogs', 'delete')" type="selection" width="48" />
+            <el-table-column v-if="canUsePageAction('operationLogs', 'delete')" type="selection" :reserve-selection="true" width="48" />
             <el-table-column v-if="isColumnVisible('createdAt')" label="时间" min-width="170">
               <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
             </el-table-column>
