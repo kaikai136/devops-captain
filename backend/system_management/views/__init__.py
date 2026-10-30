@@ -6,7 +6,15 @@ from .common import (
     required_role_update_actions,
     required_user_update_actions,
 )
-from .logs import dashboard_summary, login_logs, operation_logs
+from .logs import (
+    dashboard_summary,
+    login_logs,
+    login_logs_bulk_delete,
+    login_logs_clear,
+    operation_logs,
+    operation_logs_bulk_delete,
+    operation_logs_clear,
+)
 from .roles import permissions, role_detail, role_options, role_users, roles
 from .settings import system_setting_detail, system_settings
 from .users import (
@@ -27,7 +35,11 @@ __all__ = [
     "required_user_update_actions",
     "dashboard_summary",
     "login_logs",
+    "login_logs_bulk_delete",
+    "login_logs_clear",
     "operation_logs",
+    "operation_logs_bulk_delete",
+    "operation_logs_clear",
     "permissions",
     "role_detail",
     "role_options",

@@ -93,3 +93,45 @@ def operation_logs(request):
     queryset = _filter_created_at(queryset, request)
 
     return Response(paginate_queryset(queryset, request, serializer=OperationLogSerializer, default_page_size=10))
+
+
+def _delete_logs(request, model, feature_key, *, clear=False):
+    access_error = require_system_permission(request, feature_key, "clear" if clear else "delete")
+    if access_error:
+        return access_error
+    if not isinstance(request.data, dict):
+        return Response({"error": "请求参数必须是对象"}, status=400)
+    queryset = model.objects.all()
+    if clear:
+        if request.data.get("confirmed") is not True:
+            return Response({"error": "请确认清空全部日志"}, status=400)
+    else:
+        ids = request.data.get("ids")
+        if not isinstance(ids, list) or not ids or any(type(value) is not int or value <= 0 or value > 9223372036854775807 for value in ids):
+            return Response({"error": "ids 必须是非空的正整数数组"}, status=400)
+        ids = set(ids)
+        if len(ids) > 1000:
+            return Response({"error": "一次最多删除 1000 条日志"}, status=400)
+        queryset = queryset.filter(pk__in=ids)
+    _, deleted_by_model = queryset.delete()
+    return Response({"deletedCount": deleted_by_model.get(model._meta.label, 0)})
+
+
+@api_view(["POST"])
+def login_logs_bulk_delete(request):
+    return _delete_logs(request, LoginLog, "loginLogs")
+
+
+@api_view(["POST"])
+def login_logs_clear(request):
+    return _delete_logs(request, LoginLog, "loginLogs", clear=True)
+
+
+@api_view(["POST"])
+def operation_logs_bulk_delete(request):
+    return _delete_logs(request, OperationLog, "operationLogs")
+
+
+@api_view(["POST"])
+def operation_logs_clear(request):
+    return _delete_logs(request, OperationLog, "operationLogs", clear=True)

@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 
 import { apiGet } from '../../api';
 import { useAppContext } from '@app/context';
+import { useLogDeletion } from '@shared/composables/useLogDeletion';
 import { errorMessage } from '@shared/utils/errors';
 import AppIcon from '@shared/components/AppIcon.vue';
 import AppPagination from '@shared/components/AppPagination.vue';
@@ -46,6 +47,7 @@ const columnOptions: readonly ColumnOption[] = [
 
 const { activeTool, canUsePageAction, canUseAnyPageAction } = useAppContext();
 
+const logTable = ref<{ clearSelection: () => void }>();
 const logs = ref<LoginLog[]>([]);
 const username = ref('');
 const loginIp = ref('');
@@ -74,12 +76,19 @@ const someColumnsVisible = computed(() => visibleColumnCount.value > 0);
 
 onMounted(loadLogs);
 
+const { selectedIds, mutationLoading, clearSelection, selectionChanged, removeSelected, clearAllLogs } = useLogDeletion({
+  endpoint: '/api/system/login-logs/', label: '登录日志', reload: loadLogs,
+  resetPage: () => { page.value = 1; }, onError: (error) => { message.value = error; },
+});
+
 watch(pageSize, () => {
   page.value = 1;
   loadLogs();
 });
 
 async function loadLogs() {
+  clearSelection();
+  logTable.value?.clearSelection();
   isLoading.value = true;
   message.value = '';
   try {
@@ -101,7 +110,7 @@ async function loadLogs() {
     logs.value = data.results;
     total.value = data.total;
     if (data.page !== page.value) page.value = data.page;
-    if (page.value > totalPages.value) setPage(totalPages.value);
+    if (page.value > totalPages.value) { page.value = totalPages.value; await loadLogs(); }
   } catch (error) {
     logs.value = [];
     total.value = 0;
@@ -112,11 +121,13 @@ async function loadLogs() {
 }
 
 function searchLogs() {
+  clearSelection();
   page.value = 1;
   loadLogs();
 }
 
 function resetSearch() {
+  clearSelection();
   username.value = '';
   loginIp.value = '';
   statusFilter.value = '';
@@ -180,8 +191,8 @@ function statusTagType(status: LoginLogStatus) {
 
 <template>
   <section v-if="activeTool === 'loginLogs'" class="login-log-page" :class="{ fullscreen }" @click="columnsOpen = false">
-    <template v-if="canUseAnyPageAction('loginLogs', ['refresh', 'filter', 'columns'])">
-      <SystemSearchPanel v-if="canUsePageAction('loginLogs', 'filter')">
+    <template v-if="canUseAnyPageAction('loginLogs', ['refresh', 'filter', 'columns', 'delete', 'clear'])">
+      <SystemSearchPanel :inert="mutationLoading || undefined" v-if="canUsePageAction('loginLogs', 'filter')">
         <el-form class="system-search-form" inline label-position="left" @submit.prevent="searchLogs">
           <el-form-item label="账户名称">
             <el-input v-model="username" class="system-search-field" placeholder="请输入用户名称" clearable @keyup.enter="searchLogs" />
@@ -220,10 +231,12 @@ function statusTagType(status: LoginLogStatus) {
         </el-form>
       </SystemSearchPanel>
 
-      <article class="login-log-list-panel">
+      <article class="login-log-list-panel" :inert="mutationLoading || undefined">
         <div class="login-log-toolbar">
           <h2>登录记录</h2>
           <div class="login-log-actions">
+            <el-button v-if="canUsePageAction('loginLogs', 'delete')" type="danger" plain :loading="mutationLoading" :disabled="!selectedIds.length || mutationLoading || isLoading" @click="removeSelected">删除所选{{ selectedIds.length ? ` (${selectedIds.length})` : '' }}</el-button>
+            <el-button v-if="canUsePageAction('loginLogs', 'clear')" type="danger" plain :loading="mutationLoading" :disabled="isLoading" @click="clearAllLogs">一键清空</el-button>
             <span v-if="canUseAnyPageAction('loginLogs', ['filter', 'refresh', 'columns'])" class="login-log-toolbar-divider"></span>
             <el-tooltip v-if="canUsePageAction('loginLogs', 'refresh')" content="刷新" placement="top">
               <el-button circle @click="loadLogs"><AppIcon name="refresh" :size="18" /></el-button>
@@ -273,7 +286,8 @@ function statusTagType(status: LoginLogStatus) {
         <p v-if="message" class="login-log-message">{{ message }}</p>
 
         <div class="login-log-table-wrap app-data-table-wrap">
-          <el-table :data="logs" row-key="id" class="login-log-table app-data-table" v-loading="isLoading" empty-text="暂无登录记录">
+          <el-table ref="logTable" :data="logs" row-key="id" class="login-log-table app-data-table" v-loading="isLoading || mutationLoading" empty-text="暂无登录记录" @selection-change="selectionChanged">
+            <el-table-column v-if="canUsePageAction('loginLogs', 'delete')" type="selection" width="48" />
             <el-table-column v-if="isColumnVisible('createdAt')" label="时间" min-width="170">
               <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
             </el-table-column>

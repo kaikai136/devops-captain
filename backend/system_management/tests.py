@@ -1442,3 +1442,43 @@ class SystemUserLoginFlowTests(TestCase):
 
         self.assertEqual(response.status_code, 400)
         self.assertIn("大写字母", response.json()["error"])
+
+
+class LogDeletionTests(TestCase):
+    def setUp(self):
+        ensure_feature_permissions()
+        self.user = get_user_model().objects.create_superuser(username="log-deleter", password="test-pass")
+        self.client.force_login(self.user)
+
+    def test_deletion_validation_isolation_and_clear(self):
+        for slug, model, values in (("login-logs", LoginLog, {"status": "success"}), ("operation-logs", OperationLog, {"module": "test", "action": "test"})):
+            row = model.objects.create(username="viewer", **values)
+            for ids in (None, [], "1", [True], [0], [-1], [1.2], ["1"], [None], [2**100], list(range(1, 1002))):
+                response = self.client.post(f"/api/system/{slug}/bulk-delete/", {"ids": ids}, content_type="application/json")
+                self.assertEqual(response.status_code, 400)
+                self.assertTrue(model.objects.filter(pk=row.pk).exists())
+            response = self.client.post(f"/api/system/{slug}/bulk-delete/", {"ids": [row.pk, row.pk, 9223372036854775807]}, content_type="application/json")
+            self.assertEqual(response.json(), {"deletedCount": 1})
+            model.objects.create(username="viewer", **values)
+            for body in ({}, {"confirmed": False}, {"confirmed": "true"}, {"confirmed": 1}, []):
+                self.assertEqual(self.client.post(f"/api/system/{slug}/clear/", body, content_type="application/json").status_code, 400)
+            response = self.client.post(f"/api/system/{slug}/clear/?username=missing", {"confirmed": True}, content_type="application/json")
+            self.assertEqual(response.json(), {"deletedCount": 1})
+            self.assertEqual(model.objects.count(), 0)
+            self.assertEqual(self.client.post(f"/api/system/{slug}/clear/", {"confirmed": True}, content_type="application/json").json(), {"deletedCount": 0})
+
+    def test_permissions(self):
+        user = get_user_model().objects.create_user(username="log-reader", password="test-pass")
+        self.client.force_login(user)
+        for slug, key in (("login-logs", "loginLogs"), ("operation-logs", "operationLogs")):
+            for suffix, action, body in (("bulk-delete", "delete", {"ids": [1]}), ("clear", "clear", {"confirmed": True})):
+                permission = Permission.objects.get(codename=PAGE_ACTION_PERMISSION_CODE_BY_KEY[(key, action)])
+                user.user_permissions.set([permission])
+                url = f"/api/system/{slug}/{suffix}/"
+                self.assertEqual(self.client.post(url, body, content_type="application/json").status_code, 403)
+                user.user_permissions.set([Permission.objects.get(codename=FEATURE_PERMISSION_CODE_BY_KEY[key])])
+                self.assertEqual(self.client.post(url, body, content_type="application/json").status_code, 403)
+                user.user_permissions.add(permission)
+                self.assertEqual(self.client.post(url, body, content_type="application/json").status_code, 200)
+        self.client.logout()
+        self.assertEqual(self.client.post("/api/system/login-logs/clear/", {"confirmed": True}, content_type="application/json").status_code, 401)
