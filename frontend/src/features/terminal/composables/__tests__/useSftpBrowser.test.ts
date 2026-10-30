@@ -84,6 +84,26 @@ function createBrowser(api = createApi(), options: Record<string, unknown> = {})
 }
 
 describe('useSftpBrowser', () => {
+  it('downloads files through the browser when the directory picker is unavailable', async () => {
+    const click = vi.fn();
+    const link = { href: '', download: '', click, remove: vi.fn() };
+    vi.stubGlobal('window', {});
+    vi.stubGlobal('document', { createElement: () => link, body: { appendChild: vi.fn() } });
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:test');
+    vi.useFakeTimers();
+    try {
+      const fetcher = vi.fn().mockResolvedValue(new Response('hello'));
+      const { browser } = createBrowser(createApi(), { fetcher });
+      await browser.downloadFiles([alphaEntry]);
+      expect(fetcher).toHaveBeenCalled();
+      expect(click).toHaveBeenCalledOnce();
+      expect(link.download).toBe('alpha.txt');
+      expect(browser.transferRecords.value[0].status).toBe('success');
+      expect(browser.error.value).toBe('');
+    } finally {
+      vi.clearAllTimers(); vi.useRealTimers(); createUrl.mockRestore(); vi.unstubAllGlobals();
+    }
+  });
   beforeEach(() => clearSftpFileClipboard());
 
   it('copies and pastes across tabs on the same host but not across hosts', async () => {

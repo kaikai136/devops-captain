@@ -524,8 +524,19 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
     if (!session || !downloadableEntries.length) return;
     try {
       error.value = '';
+      const browserDownload = !options.pickDownloadDirectory && !('showDirectoryPicker' in window);
       const directoryHandle = await pickDownloadDirectory();
-      if (!directoryHandle) return;
+      if (!directoryHandle && !browserDownload) return;
+      if (!directoryHandle) {
+        const files = downloadableEntries.filter((entry) => entry.type === 'file');
+        const directories = downloadableEntries.filter((entry) => entry.type === 'directory');
+        if (directories.length) throw new Error('下载文件夹需要使用 HTTPS 或 localhost 打开页面。');
+        for (const entry of files) {
+          const record = createTransferRecord('download', entry.name, entry.path, 1);
+          await runTransfer(record, () => downloadFileToBrowser(entry, session.hostId, record));
+        }
+        return;
+      }
       const usedNames = new Set<string>();
       for (const entry of downloadableEntries) {
         const record = createTransferRecord('download', entry.name, entry.path, entry.type === 'file' ? 1 : 0);
@@ -539,8 +550,27 @@ export function useSftpBrowser(options: UseSftpBrowserOptions) {
   async function pickDownloadDirectory() {
     if (options.pickDownloadDirectory) return options.pickDownloadDirectory();
     const picker = (window as Window & { showDirectoryPicker?: (pickerOptions?: { id?: string; mode?: 'read' | 'readwrite' }) => Promise<SftpLocalDirectoryHandle> }).showDirectoryPicker;
-    if (!picker) throw new Error('当前浏览器不支持选择下载目录，请使用新版 Chrome 或 Edge，并通过 HTTPS 或 localhost 打开。');
+    if (!picker) return null;
     return picker({ id: 'terminal-download-directory', mode: 'readwrite' });
+  }
+
+  async function downloadFileToBrowser(entry: TerminalFileEntry, hostId: number, record?: SftpTransferRecord) {
+    throwIfTransferCanceled(record);
+    setTransferCurrentFile(record, entry.name);
+    const response = await fetcher(api.buildDownloadUrl(hostId, entry.path, downloadProtocol.value), { credentials: 'include', ...transferRequestOptions(record) });
+    if (response.status === 401) throw new ApiUnauthorizedError(await readDownloadError(response));
+    if (!response.ok) throw new Error(await readDownloadError(response));
+    const blob = await response.blob();
+    throwIfTransferCanceled(record);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = sanitizeLocalFilename(responseFilename(response) || entry.name || 'download');
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    completeTransferFile(record);
   }
   async function downloadDirectory(entry: TerminalFileEntry, directoryHandle: SftpLocalDirectoryHandle, usedNames: Set<string>, hostId: number, record?: SftpTransferRecord) {
     throwIfTransferCanceled(record);
