@@ -2,7 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: devops-tools-web-config
-  namespace: middleware
+  namespace: cockpit
 data:
   nginx.conf: |
     map $http_x_forwarded_proto $devops_forwarded_proto {

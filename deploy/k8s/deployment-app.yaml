@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: devops-tools-app
-  namespace: middleware
+  namespace: cockpit
 spec:
   replicas: 1
   strategy:
@@ -15,19 +15,18 @@ spec:
       labels:
         app: devops-tools-app
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: REPLACE_WITH_NODE_NAME
+      # nodeSelector:
+      #   kubernetes.io/hostname: k8svip-161
       containers:
         - name: backend
-          image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools-backend:latest
+          image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools-backend:v5.0.0
           ports:
             - name: http
               containerPort: 8000
           volumeMounts:
             - name: data
               mountPath: /data
-            - name: static
-              mountPath: /app/backend/staticfiles
+
             - name: app-config
               mountPath: /etc/devops-tools
               readOnly: true
@@ -54,7 +53,7 @@ spec:
               cpu: '2'
               memory: 2Gi
         - name: transfer-worker
-          image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools-backend:latest
+          image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools-backend:v5.0.0
           args:
             - transfer-worker
           env:
@@ -63,8 +62,6 @@ spec:
           volumeMounts:
             - name: data
               mountPath: /data
-            - name: static
-              mountPath: /app/backend/staticfiles
             - name: app-config
               mountPath: /etc/devops-tools
               readOnly: true
@@ -78,14 +75,16 @@ spec:
         - name: guacd
           image: registry.cn-beijing.aliyuncs.com/kaikai136/guacd:1.5.5
       volumes:
+        # - name: data
+        #   hostPath:
+        #     path: /data/middleware/devops-tools/data
+        #     type: DirectoryOrCreate
+
+
         - name: data
-          hostPath:
-            path: /data/middleware/devops-tools/data
-            type: DirectoryOrCreate
-        - name: static
-          hostPath:
-            path: /data/middleware/devops-tools/static
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: devops-tools-runtime-pvc
+
         - name: app-config
           secret:
             secretName: devops-tools-config

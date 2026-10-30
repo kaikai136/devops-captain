@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: devops-tools-redis
-  namespace: middleware
+  namespace: cockpit
 spec:
   replicas: 1
   strategy:
@@ -15,9 +15,9 @@ spec:
       labels:
         app: devops-tools-redis
     spec:
-      nodeSelector:
-        # Redis data is local to this node; do not change without migrating /data.
-        kubernetes.io/hostname: REPLACE_WITH_REDIS_NODE_NAME
+      # nodeSelector:
+      #   # Redis data is local to this node; do not change without migrating /data.
+      #   kubernetes.io/hostname: k8svip-161
       containers:
         - name: redis
           image: registry.cn-beijing.aliyuncs.com/kaikai136/redis:8.0
@@ -35,7 +35,7 @@ spec:
                 - redis-cli
                 - ping
       volumes:
+
         - name: data
-          hostPath:
-            path: /data/middleware/devops-tools/redis
-            type: DirectoryOrCreate
+          persistentVolumeClaim:
+            claimName: devops-tools-runtime-pvc

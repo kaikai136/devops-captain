@@ -2,7 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: devops-tools-web
-  namespace: middleware
+  namespace: cockpit
 spec:
   replicas: 1
   strategy:
@@ -15,17 +15,14 @@ spec:
       labels:
         app: devops-tools-web
     spec:
-      nodeSelector:
-        kubernetes.io/hostname: REPLACE_WITH_NODE_NAME
+      # nodeSelector:
+      #   kubernetes.io/hostname: k8svip-161
       containers:
         - name: frontend
-          image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools-frontend:latest
+          image: registry.cn-beijing.aliyuncs.com/kaikai136/devops-tools-frontend:v5.0.0
           ports:
             - containerPort: 80
           volumeMounts:
-            - name: static
-              mountPath: /srv/devops-static
-              readOnly: true
             - name: web-config
               mountPath: /etc/nginx/conf.d/default.conf
               subPath: nginx.conf
@@ -42,10 +39,6 @@ spec:
               cpu: 500m
               memory: 256Mi
       volumes:
-        - name: static
-          hostPath:
-            path: /data/middleware/devops-tools/static
-            type: DirectoryOrCreate
         - name: web-config
           configMap:
             name: devops-tools-web-config
