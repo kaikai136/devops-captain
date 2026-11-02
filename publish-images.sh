@@ -59,8 +59,10 @@ if [ "$DRY_RUN" = false ] && ! command -v docker >/dev/null 2>&1; then
     exit 1
 fi
 
-run_docker build -f deploy/backend.Dockerfile -t "$BACKEND_IMAGE" .
-run_docker build -f deploy/frontend.Dockerfile -t "$FRONTEND_IMAGE" .
+# Alibaba Cloud Registry does not accept the OCI attestation manifest emitted
+# by recent BuildKit versions, so publish classic image manifests only.
+run_docker buildx build --provenance=false --sbom=false --load -f deploy/backend.Dockerfile -t "$BACKEND_IMAGE" .
+run_docker buildx build --provenance=false --sbom=false --load -f deploy/frontend.Dockerfile -t "$FRONTEND_IMAGE" .
 run_docker push "$BACKEND_IMAGE"
 run_docker push "$FRONTEND_IMAGE"
 

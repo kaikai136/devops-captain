@@ -92,6 +92,8 @@ sh publish-images.sh v1.0.0 --dry-run
 sh publish-images.sh v1.0.0 --keep-images
 ```
 
+发布脚本需要 Docker Buildx，构建时使用 `--provenance=false --sbom=false --load`，避免阿里云仓库拒绝 OCI 证明清单并报 `unknown manifest class for application/vnd.oci.empty.v1+json`。遇到该错误需要重新构建镜像，仅重试 `docker push` 不会移除已有证明。可先用 `sh publish-images.sh v5.0.1 --dry-run` 检查命令，再用 `sh publish-images.sh v5.0.1 --keep-images` 重新构建并发布。
+
 默认发布后删除本地对应标签，`--keep-images` 保留。使用发布镜像部署 Compose 时，把两个服务和 Worker 的 `image` 改成相同版本的完整仓库地址，再执行 `pull` 和 `up -d`。
 
 ## Kubernetes

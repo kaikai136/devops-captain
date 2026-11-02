@@ -11,13 +11,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app/backend \
     APP_CONFIG_FILE=/tmp/static-build/app.conf \
     DJANGO_STATIC_ROOT=/app/backend/staticfiles \
-    DJANGO_DEBUG=0 \
-    DJANGO_SECRET_KEY=static-build-only-secret-key
+    DJANGO_DEBUG=0
 WORKDIR /app/backend
 COPY backend/requirements.txt /tmp/requirements.txt
 RUN pip install --no-cache-dir -r /tmp/requirements.txt
 COPY backend/ ./
-RUN python manage.py collectstatic --noinput
+RUN DJANGO_SECRET_KEY=static-build-only-secret-key python manage.py collectstatic --noinput
 
 FROM swr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/nginx:1.27-alpine
 COPY --from=frontend-build /src/dist /usr/share/nginx/html
