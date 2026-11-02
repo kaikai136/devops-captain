@@ -1,4 +1,4 @@
-FROM wr.cn-north-4.myhuaweicloud.com/ddn-k8s/docker.io/node:22-alpine AS frontend-build
+FROM docker.m.daocloud.io/library/node:22-alpine AS frontend-build
 WORKDIR /src
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
