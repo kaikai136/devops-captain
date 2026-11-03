@@ -232,6 +232,26 @@ class MysqlDumpTaskTests(TestCase):
         self.assertEqual(DatabaseTransferTask.objects.get(pk=response.data["id"]).parameters["options"], payload["options"])
         self.assertEqual(self.client.post(self.base + "uploads/", {**payload, "options": {"continueOnError": "yes"}}, format="json").status_code, 400)
 
+    def test_chunk_upload_streams_past_request_memory_limit_and_cleans_oversized_chunks(self):
+        payload = {"assetId": self.asset.pk, "scope": "table", "format": "sql", "objectName": "sample",
+                   "fileName": "sample.sql", "chunks": 1, "totalBytes": 8}
+        response = self.client.post(self.base + "uploads/", payload, format="json")
+        self.assertEqual(response.status_code, 201)
+        task_id = response.data["id"]
+        oversized_payload = {**payload, "chunks": 2, "totalBytes": 9}
+        response = self.client.post(self.base + "uploads/", oversized_payload, format="json")
+        self.assertEqual(response.status_code, 201)
+        oversized_id = response.data["id"]
+        with override_settings(DATA_UPLOAD_MAX_MEMORY_SIZE=1):
+            response = self.client.put(f"{self.base}{task_id}/chunks/0/", b"12345678", content_type="application/octet-stream")
+            self.assertEqual(response.status_code, 200)
+            self.assertEqual(Path(transfers.task_path(task_id, ".chunk.0")).read_bytes(), b"12345678")
+
+            response = self.client.put(f"{self.base}{oversized_id}/chunks/0/", b"123456789", content_type="application/octet-stream")
+            self.assertEqual(response.status_code, 400)
+            self.assertFalse(Path(transfers.task_path(oversized_id, ".chunk.0")).exists())
+            self.assertFalse(Path(transfers.task_path(oversized_id, ".chunk.0.tmp")).exists())
+
     def test_export_normalizes_format_and_database_type(self):
         self.asset.db_type = "MySQL"
         self.asset.save(update_fields=["db_type"])

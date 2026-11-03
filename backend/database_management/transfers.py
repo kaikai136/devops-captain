@@ -325,13 +325,25 @@ def upload_chunk(request, task_id, index):
     if denied: return denied
     if task.status != "uploading": return bad_request("任务不在分片上传状态")
     try:
-        chunk = request.body
-        if len(chunk) > settings.DATABASE_TRANSFER_CHUNK_BYTES: raise ValueError("上传分片超过配置大小")
         expected_count = task.parameters.get("chunkCount")
         if index < 0 or not isinstance(expected_count, int) or index >= expected_count: raise ValueError("分片序号无效")
         path = task_path(task.pk, f".chunk.{index}")
-        path.write_bytes(chunk)
-        return Response({"index": index, "bytes": len(chunk)})
+        temporary_path = task_path(task.pk, f".chunk.{index}.tmp")
+        total = 0
+        try:
+            with temporary_path.open("wb") as output:
+                while True:
+                    chunk = request.stream.read(64 * 1024)
+                    if not chunk: break
+                    total += len(chunk)
+                    if total > settings.DATABASE_TRANSFER_CHUNK_BYTES:
+                        raise ValueError("上传分片超过配置大小")
+                    output.write(chunk)
+            temporary_path.replace(path)
+        except Exception:
+            temporary_path.unlink(missing_ok=True)
+            raise
+        return Response({"index": index, "bytes": total})
     except Exception as exc:
         return bad_request(str(exc))
 
