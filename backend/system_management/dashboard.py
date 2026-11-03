@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 from datetime import timedelta
+from ipaddress import ip_address
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -15,7 +17,7 @@ from host_management.models import HostCredential, HostGroup, ManagedHost
 
 from .models import LoginLog
 
-EGRESS_CACHE_KEY = "dashboard.egress_network.v1"
+EGRESS_CACHE_KEY = "dashboard.egress_network.v2"
 EGRESS_CACHE_SECONDS = getattr(settings, "EGRESS_CACHE_SECONDS", 300)
 DASHBOARD_SUMMARY_CACHE_KEY = "dashboard.summary.v1"
 DASHBOARD_CACHE_SECONDS = getattr(settings, "DASHBOARD_CACHE_SECONDS", 30)
@@ -238,31 +240,43 @@ def get_egress_network() -> dict:
         "error": "",
     }
     curl_bin = shutil.which("curl") or shutil.which("curl.exe") or "curl"
-    try:
-        completed = subprocess.run(
-            [curl_bin, "-sS", "--max-time", "6", "cip.cc"],
-            capture_output=True,
-            text=True,
-            timeout=8,
-            encoding="utf-8",
-            errors="replace",
-        )
-    except (OSError, subprocess.TimeoutExpired) as error:
-        payload = {**base, "error": str(error)}
-        cache.set(EGRESS_CACHE_KEY, payload, EGRESS_CACHE_SECONDS)
-        return payload
+    errors = []
+    raw = ""
+    parsed = {}
+    for url, parser in (("http://cip.cc", parse_cip_output), ("https://ipwho.is/", parse_ipwhois_output)):
+        try:
+            completed = subprocess.run(
+                [curl_bin, "-fsS", "--connect-timeout", "2", "--max-time", "4", url],
+                capture_output=True,
+                text=True,
+                timeout=5,
+                encoding="utf-8",
+                errors="replace",
+            )
+        except (OSError, subprocess.TimeoutExpired) as error:
+            errors.append(str(error))
+            continue
 
-    raw = (completed.stdout or "").strip()
-    if completed.returncode != 0:
-        error = (completed.stderr or raw or f"curl exited with {completed.returncode}").strip()
-        payload = {**base, "raw": raw, "error": error}
-        cache.set(EGRESS_CACHE_KEY, payload, EGRESS_CACHE_SECONDS)
-        return payload
+        response = (completed.stdout or "").strip()
+        if completed.returncode != 0:
+            errors.append((completed.stderr or response or f"curl exited with {completed.returncode}").strip())
+            continue
 
-    parsed = parse_cip_output(raw)
-    payload = {**base, **parsed, "raw": raw, "status": "ok" if parsed.get("ip") else "error"}
+        result = parser(response)
+        if valid_egress_ip(result.get("ip")):
+            raw = response
+            parsed = result
+            base["url"] = url
+            break
+        raw = response
+        errors.append("未能解析出口 IP")
+
     if not parsed.get("ip"):
-        payload["error"] = "未能从 cip.cc 响应中解析出口 IP"
+        payload = {**base, "raw": raw, "error": "; ".join(errors)}
+        cache.set(EGRESS_CACHE_KEY, payload, min(EGRESS_CACHE_SECONDS, 30))
+        return payload
+
+    payload = {**base, **parsed, "raw": raw, "status": "ok"}
     cache.set(EGRESS_CACHE_KEY, payload, EGRESS_CACHE_SECONDS)
     return payload
 
@@ -284,3 +298,31 @@ def parse_cip_output(raw: str) -> dict:
         if target:
             parsed[target] = value.strip()
     return parsed
+
+
+def parse_ipwhois_output(raw: str) -> dict:
+    try:
+        data = json.loads(raw)
+    except (TypeError, json.JSONDecodeError):
+        return {"ip": "", "location": "", "isp": "", "url": ""}
+    if not isinstance(data, dict) or not data.get("success", True):
+        return {"ip": "", "location": "", "isp": "", "url": ""}
+
+    location = " ".join(str(data.get(key) or "").strip() for key in ("country", "region", "city")).strip()
+    connection = data.get("connection") or {}
+    if not isinstance(connection, dict):
+        connection = {}
+    return {
+        "ip": str(data.get("ip") or "").strip(),
+        "location": location,
+        "isp": str(connection.get("isp") or connection.get("org") or "").strip(),
+        "url": "https://ipwho.is/",
+    }
+
+
+def valid_egress_ip(value: str | None) -> bool:
+    try:
+        ip_address(value)
+    except (ValueError, TypeError):
+        return False
+    return True
