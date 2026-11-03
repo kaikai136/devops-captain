@@ -7,7 +7,7 @@ from rest_framework.response import Response
 
 from operations.responses import paginate_queryset
 
-from ..dashboard import build_dashboard_summary
+from ..dashboard import build_dashboard_summary, get_egress_network
 from ..models import LoginLog, OperationLog
 from ..serializers import LoginLogSerializer, OperationLogSerializer
 from .common import require_dashboard_access, require_system_permission
@@ -38,6 +38,14 @@ def dashboard_summary(request):
     if access_error:
         return access_error
     return Response(build_dashboard_summary())
+
+
+@api_view(["GET"])
+def dashboard_egress_network(request):
+    access_error = require_dashboard_access(request)
+    if access_error:
+        return access_error
+    return Response(get_egress_network())
 
 
 @api_view(["GET"])

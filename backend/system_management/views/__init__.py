@@ -7,6 +7,7 @@ from .common import (
     required_user_update_actions,
 )
 from .logs import (
+    dashboard_egress_network,
     dashboard_summary,
     login_logs,
     login_logs_bulk_delete,
@@ -34,6 +35,7 @@ __all__ = [
     "required_role_update_actions",
     "required_user_update_actions",
     "dashboard_summary",
+    "dashboard_egress_network",
     "login_logs",
     "login_logs_bulk_delete",
     "login_logs_clear",

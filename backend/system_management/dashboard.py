@@ -19,7 +19,7 @@ from .models import LoginLog
 
 EGRESS_CACHE_KEY = "dashboard.egress_network.v2"
 EGRESS_CACHE_SECONDS = getattr(settings, "EGRESS_CACHE_SECONDS", 300)
-DASHBOARD_SUMMARY_CACHE_KEY = "dashboard.summary.v1"
+DASHBOARD_SUMMARY_CACHE_KEY = "dashboard.summary.v2"
 DASHBOARD_CACHE_SECONDS = getattr(settings, "DASHBOARD_CACHE_SECONDS", 30)
 
 
@@ -93,8 +93,21 @@ def _compute_dashboard_summary() -> dict:
         },
         "recentLogins": recent_logins(),
         "groupRanking": group_ranking(),
-        "egressNetwork": get_egress_network(),
+        "egressNetwork": empty_egress_network(),
         "generatedAt": now.isoformat(),
+    }
+
+
+def empty_egress_network() -> dict:
+    return {
+        "ip": "",
+        "location": "",
+        "isp": "",
+        "url": "",
+        "raw": "",
+        "checkedAt": "",
+        "status": "error",
+        "error": "",
     }
 
 

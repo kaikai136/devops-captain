@@ -744,17 +744,7 @@ class DashboardSummaryApiTests(TestCase):
         self.assertEqual(response.status_code, 403)
 
     @patch("system_management.dashboard.get_egress_network")
-    def test_dashboard_returns_summary_for_permitted_user(self, mock_egress):
-        mock_egress.return_value = {
-            "ip": "203.0.113.8",
-            "location": "中国 江苏 南京",
-            "isp": "电信",
-            "url": "http://www.cip.cc/203.0.113.8",
-            "raw": "",
-            "checkedAt": timezone.now().isoformat(),
-            "status": "ok",
-            "error": "",
-        }
+    def test_dashboard_returns_summary_without_egress_lookup(self, mock_egress):
         role = Group.objects.create(name="dashboard-viewer")
         role.permissions.add(self.dashboard_permission)
         self.user.groups.add(role)
@@ -777,18 +767,44 @@ class DashboardSummaryApiTests(TestCase):
         self.assertEqual(payload["assets"]["cpuCores"], 12)
         self.assertEqual(payload["assets"]["memoryGb"], 24)
         self.assertEqual(payload["assets"]["credentials"], 1)
-        self.assertEqual(payload["egressNetwork"]["ip"], "203.0.113.8")
+        self.assertEqual(payload["egressNetwork"]["ip"], "")
+        mock_egress.assert_not_called()
         self.assertEqual(len(payload["loginTrend"]), 7)
         self.assertTrue(any(item["label"] == "生产" and item["value"] == 2 for item in payload["groupRanking"]))
 
-    @patch("system_management.dashboard.get_egress_network")
-    def test_superuser_can_access_dashboard_without_role_permission(self, mock_egress):
-        mock_egress.return_value = {"ip": "", "location": "", "isp": "", "url": "", "raw": "", "checkedAt": "", "status": "error", "error": ""}
+    def test_superuser_can_access_dashboard_without_role_permission(self):
         self.client.force_login(self.admin)
 
         response = self.client.get("/api/dashboard/summary/")
 
         self.assertEqual(response.status_code, 200)
+
+    def test_egress_network_requires_dashboard_access(self):
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/dashboard/egress-network/")
+
+        self.assertEqual(response.status_code, 403)
+
+    def test_egress_network_requires_login(self):
+        response = self.client.get("/api/dashboard/egress-network/")
+
+        self.assertEqual(response.status_code, 401)
+
+    @patch("system_management.views.logs.get_egress_network")
+    def test_egress_network_returns_result_for_permitted_user(self, mock_egress):
+        role = Group.objects.create(name="egress-viewer")
+        role.permissions.add(self.dashboard_permission)
+        self.user.groups.add(role)
+        result = {"ip": "203.0.113.8", "location": "test", "isp": "test-isp", "url": "", "raw": "", "checkedAt": "", "status": "ok", "error": ""}
+        mock_egress.return_value = result
+        self.client.force_login(self.user)
+
+        response = self.client.get("/api/dashboard/egress-network/")
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), result)
+        mock_egress.assert_called_once_with()
 
     @patch("system_management.dashboard.urlopen")
     @patch("system_management.dashboard.cache")

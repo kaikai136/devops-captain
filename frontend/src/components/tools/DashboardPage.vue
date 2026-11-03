@@ -17,6 +17,17 @@ type DistributionWithPercent = DashboardDistributionItem & { percent: number };
 const { currentUser, isWorkspaceDark, localIp, siteIdentity, dashboardHero, uiTheme } = useAppContext();
 
 const summary = ref<DashboardSummary | null>(null);
+const egressNetwork = ref<DashboardSummary['egressNetwork']>({
+  ip: '',
+  location: '',
+  isp: '',
+  url: '',
+  raw: '',
+  checkedAt: '',
+  status: 'error',
+  error: '',
+});
+const isEgressLoading = ref(true);
 const isLoading = ref(false);
 const message = ref('');
 const now = ref(new Date());
@@ -306,6 +317,7 @@ const verificationBarOption = computed<DashboardChartOption>(() => {
 
 onMounted(() => {
   loadSummary();
+  loadEgressNetwork();
   clockTimer = window.setInterval(() => {
     now.value = new Date();
   }, 1000);
@@ -325,6 +337,17 @@ async function loadSummary() {
     message.value = errorMessage(error);
   } finally {
     isLoading.value = false;
+  }
+}
+
+async function loadEgressNetwork() {
+  isEgressLoading.value = true;
+  try {
+    egressNetwork.value = await apiGet<DashboardSummary['egressNetwork']>('/api/dashboard/egress-network/');
+  } catch {
+    // Egress lookup is optional and must not hold up the dashboard.
+  } finally {
+    isEgressLoading.value = false;
   }
 }
 
@@ -520,13 +543,13 @@ defineExpose({
 
     <div v-if="summary" class="dashboard-content">
       <div class="dashboard-card-grid">
-        <article class="dashboard-stat-card dashboard-egress-card" :class="{ error: summary.egressNetwork.status !== 'ok' }">
+        <article class="dashboard-stat-card dashboard-egress-card" :class="{ error: !isEgressLoading && egressNetwork.status !== 'ok' }">
           <div class="dashboard-egress-info">
             <span>出口网络</span>
-            <strong>{{ summary.egressNetwork.ip || '--' }}</strong>
+            <strong>{{ egressNetwork.ip || '--' }}</strong>
             <div class="dashboard-egress-meta">
-              <em>{{ summary.egressNetwork.status === 'ok' ? summary.egressNetwork.isp || '运营商未知' : '探测异常' }}</em>
-              <small>{{ summary.egressNetwork.location || '位置未知' }}</small>
+              <em>{{ isEgressLoading ? '查询中' : egressNetwork.status === 'ok' ? egressNetwork.isp || '运营商未知' : '探测异常' }}</em>
+              <small>{{ egressNetwork.location || '位置未知' }}</small>
             </div>
           </div>
           <i><AppIcon name="globe" :size="22" /></i>
