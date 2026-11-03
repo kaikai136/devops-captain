@@ -6,6 +6,9 @@ import math
 import re
 import shutil
 import tempfile
+import time as clock
+from collections import OrderedDict
+from contextlib import ExitStack
 from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from pathlib import Path
@@ -322,11 +325,45 @@ def generated_column(extra):
     return bool(re.search(r"\b(?:VIRTUAL|STORED) GENERATED\b", str(extra).upper()))
 
 
+def spool_value(value):
+    if isinstance(value, Decimal):
+        return {"decimal": str(value)}
+    if isinstance(value, bytes):
+        return {"bytes": value.hex()}
+    raise TypeError(f"Unsupported SQL value: {type(value).__name__}")
+
+
+def unspool_value(value):
+    if "decimal" in value:
+        return Decimal(value["decimal"])
+    if "bytes" in value:
+        return bytes.fromhex(value["bytes"])
+    return value
+
+
 def scan_dump(task, spool=None, heartbeat=None, on_read=None):
     definitions, drops, details = {}, set(), {}
     indices = {}
     statement_count = 0
-    with Path(task.input_path).open("r", encoding="utf-8-sig") as source:
+    next_disk_check = 0
+    last_disk_check = 0.0
+
+    def check_spool_space(required_bytes=0, force=False):
+        nonlocal next_disk_check, last_disk_check
+        if not spool:
+            return
+        now = clock.monotonic()
+        if force or required_bytes >= 64 * 1024 * 1024 or next_disk_check <= 0 or now - last_disk_check >= 1:
+            for output in outputs.values():
+                output.flush()
+            if shutil.disk_usage(spool).free < settings.DATABASE_TRANSFER_MIN_FREE_BYTES + required_bytes:
+                raise DumpError("服务器临时磁盘空间不足")
+            next_disk_check = 64 * 1024 * 1024
+            last_disk_check = now
+
+    with ExitStack() as stack, Path(task.input_path).open("r", encoding="utf-8-sig") as source:
+        outputs = OrderedDict()
+        check_spool_space(force=True)
         for sql in statements(source, on_read=on_read):
             item = parse_statement(sql, (lambda: on_read(source.tell(), True)) if on_read else None)
             statement_count += 1
@@ -348,11 +385,20 @@ def scan_dump(task, spool=None, heartbeat=None, on_read=None):
                 elif len(item["rows"][0]) not in detail["implicitWidths"]:
                     detail["implicitWidths"].append(len(item["rows"][0]))
                 if spool:
-                    if shutil.disk_usage(spool).free < settings.DATABASE_TRANSFER_MIN_FREE_BYTES:
-                        raise DumpError("服务器临时磁盘空间不足")
-                    path = spool / f"{indices[name]}.jsonl"
-                    with path.open("a", encoding="utf-8") as output:
-                        output.write(json.dumps(sql, ensure_ascii=False) + "\n")
+                    if name in outputs:
+                        output = outputs.pop(name)
+                    else:
+                        if len(outputs) >= 16:
+                            _, oldest = outputs.popitem(last=False)
+                            oldest.close()
+                        output = (spool / f"{indices[name]}.jsonl").open("a", encoding="utf-8", buffering=1024 * 1024)
+                        stack.callback(output.close)
+                    outputs[name] = output
+                    line = json.dumps(item, ensure_ascii=False, default=spool_value) + "\n"
+                    line_bytes = len(line.encode("utf-8"))
+                    check_spool_space(line_bytes)
+                    output.write(line)
+                    next_disk_check -= line_bytes
     if heartbeat: heartbeat()
     if not details: raise DumpError("文件不包含表结构或数据")
     if drops - definitions.keys(): raise DumpError("DROP TABLE 必须有对应的 CREATE TABLE 定义")
@@ -499,9 +545,25 @@ def import_dump(task, report):
     continue_on_error = options.get("continueOnError", False)
     failures = []
     logs = list(task.checkpoints.get("logs", []))
+    last_report = 0.0
+
+    def report_progress(*, stage, rows, total, force=False):
+        nonlocal last_report
+        now = clock.monotonic()
+        if force or now - last_report >= 1:
+            report(task, stage=stage, rows=rows, total=total)
+            last_report = now
+
     with tempfile.TemporaryDirectory(prefix=f"{task.pk}-", dir=Path(task.input_path).parent) as folder:
         def heartbeat():
-            resource_guard(task); report(task, stage="validating_sql")
+            resource_guard(task)
+            if hasattr(task, "refresh_from_db"):
+                task.refresh_from_db()
+            if getattr(task, "cancel_requested", False):
+                raise InterruptedError("用户取消任务")
+            if not require_task_permissions(task.owner, task):
+                raise PermissionError("任务所需权限已被撤销")
+            report_progress(stage="validating_sql", rows=None, total=None)
         definitions, details = scan_dump(task, Path(folder), heartbeat)
         if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
         completed = set(task.checkpoints.get("completedTables", []))
@@ -517,7 +579,7 @@ def import_dump(task, report):
                     if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
                     name = detail["name"]
                     if name in completed: continue
-                    report(task, stage=f"importing_table:{name}", rows=done_rows, total=total_rows)
+                    report_progress(stage=f"importing_table:{name}", rows=done_rows, total=total_rows, force=True)
                     resource_guard(task)
                     definition, exists = definitions.get(name), name in existing
                     if task.conflict_policy == "skip" and exists:
@@ -547,22 +609,29 @@ def import_dump(task, report):
                                 nonlocal count, pending_rows, pending_fields
                                 if not pending_rows:
                                     return
+                                if hasattr(task, "refresh_from_db"):
+                                    task.refresh_from_db()
+                                if getattr(task, "cancel_requested", False):
+                                    raise InterruptedError("用户取消任务")
+                                from .connection_config import enforce_policy
+                                enforce_policy(task.asset, write=True)
                                 if not require_task_permissions(task.owner, task):
                                     raise PermissionError("任务所需权限已被撤销")
                                 sql = f"INSERT INTO {quote(name)} ({', '.join(quote(field) for field in pending_fields)}) VALUES ({', '.join(['%s'] * len(pending_fields))})"
                                 with conn.cursor() as cursor:
                                     cursor.executemany(sql, pending_rows)
                                 count += len(pending_rows)
-                                report(task, stage=f"importing_table:{name}", rows=done_rows + count, total=total_rows)
                                 resource_guard(task)
+                                report_progress(stage=f"importing_table:{name}", rows=done_rows + count, total=total_rows)
                                 pending_rows = []
 
                             with data_path.open(encoding="utf-8") as source:
                                 for line in source:
-                                    item = parse_statement(json.loads(line))
+                                    item = json.loads(line)
                                     fields = item["columns"] or (definition["columns"] if definition else all_fields)
                                     if any(field not in all_fields or field in generated for field in fields): raise DumpError("INSERT 字段与目标结构不兼容")
-                                    if len(fields) != len(item["rows"][0]): raise DumpError("INSERT 值数量与目标结构不兼容")
+                                    item["rows"] = [[unspool_value(value) if isinstance(value, dict) else value for value in row] for row in item["rows"]]
+                                    if not item["rows"] or any(len(fields) != len(row) for row in item["rows"]): raise DumpError("INSERT 值数量与目标结构不兼容")
                                     if pending_fields is not None and fields != pending_fields:
                                         flush_batch()
                                     pending_fields = fields
@@ -572,6 +641,7 @@ def import_dump(task, report):
                                             flush_batch()
                             flush_batch()
                         conn.commit()
+                        report_progress(stage=f"importing_table:{name}", rows=done_rows + count, total=total_rows, force=True)
                     except Exception as exc:
                         conn.rollback()
                         update(task, processed_rows=done_rows)

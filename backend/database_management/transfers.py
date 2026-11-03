@@ -477,7 +477,9 @@ def task_confirm(request, task_id):
         try: inspect_rows(task, progress, mapping)
         except ValueError as exc: return bad_request(str(exc))
         parameters = {**parameters, "fieldMapping": mapping}
-    update(task, parameters=parameters, conflict_policy=policy, status="queued", stage="queued", error="", progress=0)
+    values = {"parameters": parameters, "conflict_policy": policy, "status": "queued", "stage": "queued", "error": "", "progress": 0}
+    if task.direction == "import" and task.format == "sql": values["processed_bytes"] = 0
+    update(task, **values)
     return Response(serialize(task), status=202)
 
 

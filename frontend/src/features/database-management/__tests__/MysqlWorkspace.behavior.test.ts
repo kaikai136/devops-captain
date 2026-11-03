@@ -298,6 +298,20 @@ describe('MySQL workspace behavior', () => {
     expect(api.confirmDatabaseTransfer).toHaveBeenCalledWith(task.id, 'skip', true, undefined);
     await state.cancel(); expect(api.cancelDatabaseTransfer).toHaveBeenCalledWith(task.id);
   });
+  it('shows sub-percent row progress and labels import bytes as file size', () => {
+    const task = Vue.reactive({
+      id: 'task-progress', direction: 'import', status: 'running', stage: 'importing_table:sample',
+      processedRows: 17, totalRows: 10000, progress: 0, processedBytes: 0, totalBytes: 51691931,
+      preview: {}, checkpoints: {},
+    });
+    const { state } = setup('DatabaseImportProgress', { tasks: [task] });
+    state.taskId.value = task.id;
+    expect(state.progressLabel.value).toBe('<1%');
+    expect(state.byteProgressText.value).toBe('文件大小 51,691,931 字节');
+    task.stage = 'validating_sql';
+    task.processedBytes = 1234;
+    expect(state.byteProgressText.value).toBe('已扫描 1,234 / 51,691,931 字节');
+  });
   it('filters collations and saves the selected charset pair to the captured target', async () => {
     const { state, api, mounted } = setup('MysqlDatabaseDialog', { assetId: 7, database: 'tele' });
     api.getMysqlMetadata.mockResolvedValue({ charset: 'utf8mb4', collation: 'utf8mb4_bin', choices: [{ charset: 'utf8mb4', collation: 'utf8mb4_bin' }, { charset: 'latin1', collation: 'latin1_bin' }] });

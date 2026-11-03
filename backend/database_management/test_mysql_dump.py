@@ -1,4 +1,5 @@
 import io
+import json
 import tempfile
 from decimal import Decimal
 from pathlib import Path
@@ -9,7 +10,7 @@ from django.test import SimpleTestCase, TestCase, override_settings
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 
-from .mysql_dump import DumpError, generated_column, literal, parse_statement, scan_dump, sql_literal, statements
+from .mysql_dump import DumpError, generated_column, literal, parse_statement, scan_dump, sql_literal, statements, unspool_value
 from . import mysql_dump, transfers
 from .models import DatabaseAsset, DatabaseTransferTask
 
@@ -90,6 +91,33 @@ class MysqlDumpParserTests(SimpleTestCase):
                 path.write_text(sql, encoding="utf-8")
                 with self.assertRaises(DumpError): scan_dump(task)
 
+    def test_scan_spools_parsed_rows_and_preserves_decimal_and_binary_values(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "dump.sql"
+            task = SimpleNamespace(input_path=str(path), scope="table", object_name="sample")
+            path.write_text("INSERT INTO sample (id, amount, payload) VALUES (1, 123.4500, X'00ff');", encoding="utf-8")
+            (Path(folder) / "spool").mkdir()
+            scan_dump(task, Path(folder) / "spool")
+            item = json.loads((Path(folder) / "spool" / "0.jsonl").read_text(encoding="utf-8"))
+            self.assertEqual(item["kind"], "insert")
+            self.assertEqual(item["rows"][0][0], 1)
+            self.assertEqual(unspool_value(item["rows"][0][1]), Decimal("123.4500"))
+            self.assertEqual(unspool_value(item["rows"][0][2]), b"\x00\xff")
+
+    @override_settings(DATABASE_TRANSFER_MIN_FREE_BYTES=5)
+    def test_scan_checks_disk_space_during_a_single_large_insert(self):
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "dump.sql"
+            spool = Path(folder) / "spool"
+            spool.mkdir()
+            task = SimpleNamespace(input_path=str(path), scope="table", object_name="sample")
+            path.write_text("INSERT INTO sample (id) VALUES (1);", encoding="utf-8")
+            with patch.object(mysql_dump.clock, "monotonic", side_effect=[0, 2]), patch.object(
+                mysql_dump.shutil, "disk_usage", side_effect=[SimpleNamespace(free=10), SimpleNamespace(free=5)]
+            ):
+                with self.assertRaisesRegex(DumpError, "临时磁盘空间不足"):
+                    scan_dump(task, spool)
+
     def test_default_generated_is_not_a_generated_column(self):
         self.assertFalse(generated_column("DEFAULT_GENERATED on update CURRENT_TIMESTAMP"))
         self.assertTrue(generated_column("VIRTUAL GENERATED"))
@@ -135,6 +163,8 @@ class MysqlDumpExecutionTests(SimpleTestCase):
         stack.enter_context(patch.object(mysql_dump, "table_metadata", return_value={"sample": {"ENGINE": "InnoDB"}}))
         stack.enter_context(patch.object(mysql_dump, "table_columns", return_value=[{"COLUMN_NAME": "id", "EXTRA": ""}, {"COLUMN_NAME": "doubled", "EXTRA": "STORED GENERATED"}]))
         stack.enter_context(patch.object(transfers, "require_task_permissions", return_value=True))
+        from . import connection_config
+        stack.enter_context(patch.object(connection_config, "enforce_policy"))
         stack.enter_context(patch.object(transfers, "update", side_effect=self.update))
         return stack
 
@@ -199,6 +229,35 @@ class MysqlDumpExecutionTests(SimpleTestCase):
                 ("INSERT INTO `sample` (`other`) VALUES (%s)", [[4], [5]]),
             ],
         )
+
+    @override_settings(DATABASE_TRANSFER_BATCH_ROWS=1)
+    def test_import_throttles_batch_reports_and_forces_table_completion_report(self):
+        self.path.write_text(
+            "INSERT INTO sample (id) VALUES (1); INSERT INTO sample (id) VALUES (2); INSERT INTO sample (id) VALUES (3);",
+            encoding="utf-8",
+        )
+        report = MagicMock()
+        with self.context(), patch.object(mysql_dump.clock, "monotonic", return_value=10):
+            mysql_dump.import_dump(self.task, report)
+        self.assertEqual(report.call_count, 3)
+        self.assertEqual(report.call_args_list[0].kwargs["stage"], "validating_sql")
+        self.assertEqual(report.call_args_list[1].kwargs["stage"], "importing_table:sample")
+        self.assertEqual(report.call_args_list[2].kwargs, {"stage": "importing_table:sample", "rows": 3, "total": 3})
+
+    def test_import_checks_revoked_permissions_before_each_batch_write(self):
+        self.path.write_text("INSERT INTO sample (id) VALUES (1);", encoding="utf-8")
+        with self.context() as stack:
+            stack.enter_context(patch.object(transfers, "require_task_permissions", side_effect=[True, True, False]))
+            with self.assertRaises(PermissionError):
+                mysql_dump.import_dump(self.task, MagicMock())
+        self.conn.cursor.return_value.__enter__.return_value.executemany.assert_not_called()
+
+    def test_import_checks_cancellation_before_each_batch_write(self):
+        self.path.write_text("INSERT INTO sample (id) VALUES (1);", encoding="utf-8")
+        self.task.cancel_requested = True
+        with self.context(), self.assertRaises(InterruptedError):
+            mysql_dump.import_dump(self.task, MagicMock())
+        self.conn.cursor.return_value.__enter__.return_value.executemany.assert_not_called()
 
     def test_data_only_overwrite_deletes_without_drop(self):
         self.path.write_text("INSERT INTO sample (id) VALUES (1);", encoding="utf-8")
