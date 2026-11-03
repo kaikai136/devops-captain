@@ -1,10 +1,10 @@
 from __future__ import annotations
 
 import json
-import shutil
-import subprocess
 from datetime import timedelta
 from ipaddress import ip_address
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -239,27 +239,20 @@ def get_egress_network() -> dict:
         "status": "error",
         "error": "",
     }
-    curl_bin = shutil.which("curl") or shutil.which("curl.exe") or "curl"
     errors = []
     raw = ""
     parsed = {}
-    for url, parser in (("http://cip.cc", parse_cip_output), ("https://ipwho.is/", parse_ipwhois_output)):
+    providers = (
+        ("http://cip.cc", parse_cip_output),
+        ("https://ipwho.is/", parse_ipwhois_output),
+    )
+    for url, parser in providers:
         try:
-            completed = subprocess.run(
-                [curl_bin, "-fsS", "--connect-timeout", "2", "--max-time", "4", url],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                encoding="utf-8",
-                errors="replace",
-            )
-        except (OSError, subprocess.TimeoutExpired) as error:
+            with urlopen(url, timeout=5) as response:
+                response_body = response.read()
+            response = response_body.decode("utf-8", errors="replace").strip()
+        except (OSError, TimeoutError, URLError) as error:
             errors.append(str(error))
-            continue
-
-        response = (completed.stdout or "").strip()
-        if completed.returncode != 0:
-            errors.append((completed.stderr or response or f"curl exited with {completed.returncode}").strip())
             continue
 
         result = parser(response)

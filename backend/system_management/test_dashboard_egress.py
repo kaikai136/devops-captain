@@ -1,6 +1,6 @@
 import json
-import subprocess
 from unittest.mock import Mock, patch
+from urllib.error import URLError
 
 from django.test import SimpleTestCase
 
@@ -8,7 +8,7 @@ from .dashboard import EGRESS_CACHE_KEY, get_egress_network, parse_ipwhois_outpu
 
 
 @patch("system_management.dashboard.cache")
-@patch("system_management.dashboard.subprocess.run")
+@patch("system_management.dashboard.urlopen")
 class EgressNetworkTests(SimpleTestCase):
     def setUp(self):
         self.fallback = json.dumps({
@@ -20,11 +20,15 @@ class EgressNetworkTests(SimpleTestCase):
             "connection": {"isp": "电信"},
         })
 
-    def test_falls_back_after_timeout(self, mock_run, mock_cache):
+    def test_falls_back_after_timeout(self, mock_urlopen, mock_cache):
         mock_cache.get.return_value = None
-        mock_run.side_effect = [
-            subprocess.TimeoutExpired("curl", 5),
-            Mock(returncode=0, stdout=self.fallback),
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = self.fallback.encode()
+        mock_urlopen.side_effect = [
+            TimeoutError("operation timed out"),
+            response,
         ]
 
         payload = get_egress_network()
@@ -34,38 +38,38 @@ class EgressNetworkTests(SimpleTestCase):
         self.assertEqual(payload["location"], "中国 江苏 南京")
         self.assertEqual(payload["isp"], "电信")
         self.assertEqual(payload["error"], "")
-        self.assertEqual(mock_run.call_args.args[0][-1], "https://ipwho.is/")
+        self.assertEqual(mock_urlopen.call_args.args[0], "https://ipwho.is/")
+        self.assertEqual(mock_urlopen.call_args.kwargs["timeout"], 5)
 
-    def test_falls_back_after_curl_http_error(self, mock_run, mock_cache):
+    def test_falls_back_after_http_error(self, mock_urlopen, mock_cache):
         mock_cache.get.return_value = None
-        mock_run.side_effect = [
-            Mock(returncode=22, stdout="", stderr="HTTP 403"),
-            Mock(returncode=0, stdout=self.fallback),
-        ]
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = self.fallback.encode()
+        mock_urlopen.side_effect = [URLError("HTTP 403"), response]
 
         self.assertEqual(get_egress_network()["status"], "ok")
 
-    def test_falls_back_after_html_or_invalid_ip_response(self, mock_run, mock_cache):
+    def test_falls_back_after_html_or_invalid_ip_response(self, mock_urlopen, mock_cache):
         mock_cache.get.return_value = None
         for response in ("<html>blocked</html>", "IP: unavailable"):
             with self.subTest(response=response):
-                mock_run.side_effect = [
-                    Mock(returncode=0, stdout=response),
-                    Mock(returncode=0, stdout=self.fallback),
-                ]
+                primary, fallback = mocked_responses(response, self.fallback)
+                mock_urlopen.side_effect = [primary, fallback]
 
                 self.assertEqual(get_egress_network()["ip"], "203.0.113.8")
 
-    def test_successful_primary_does_not_request_fallback(self, mock_run, mock_cache):
+    def test_successful_primary_does_not_request_fallback(self, mock_urlopen, mock_cache):
         mock_cache.get.return_value = None
-        mock_run.return_value = Mock(returncode=0, stdout="IP: 203.0.113.7\n地址: 中国")
+        mock_urlopen.return_value = mocked_response("IP: 203.0.113.7\n地址: 中国")
 
         self.assertEqual(get_egress_network()["ip"], "203.0.113.7")
-        mock_run.assert_called_once()
+        mock_urlopen.assert_called_once()
 
-    def test_all_sources_failed_are_cached_briefly(self, mock_run, mock_cache):
+    def test_all_sources_failed_are_cached_briefly(self, mock_urlopen, mock_cache):
         mock_cache.get.return_value = None
-        mock_run.return_value = Mock(returncode=28, stdout="", stderr="operation timed out")
+        mock_urlopen.side_effect = TimeoutError("operation timed out")
 
         payload = get_egress_network()
 
@@ -74,11 +78,23 @@ class EgressNetworkTests(SimpleTestCase):
         self.assertEqual(mock_cache.set.call_args.args[0], EGRESS_CACHE_KEY)
         self.assertLessEqual(mock_cache.set.call_args.args[2], 30)
 
-    def test_cached_result_skips_network(self, mock_run, mock_cache):
+    def test_cached_result_skips_network(self, mock_urlopen, mock_cache):
         mock_cache.get.return_value = {"ip": "203.0.113.8", "status": "ok"}
 
         self.assertEqual(get_egress_network(), mock_cache.get.return_value)
-        mock_run.assert_not_called()
+        mock_urlopen.assert_not_called()
+
+
+def mocked_response(content):
+    response = Mock()
+    response.__enter__ = Mock(return_value=response)
+    response.__exit__ = Mock(return_value=False)
+    response.read.return_value = content.encode()
+    return response
+
+
+def mocked_responses(primary, fallback):
+    return mocked_response(primary), mocked_response(fallback)
 
 
 class EgressJsonParsingTests(SimpleTestCase):

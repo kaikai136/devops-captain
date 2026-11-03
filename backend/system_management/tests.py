@@ -790,17 +790,17 @@ class DashboardSummaryApiTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
 
-    @patch("system_management.dashboard.subprocess.run")
+    @patch("system_management.dashboard.urlopen")
     @patch("system_management.dashboard.cache")
-    def test_egress_network_parses_cip_output(self, mock_cache, mock_run):
+    def test_egress_network_parses_cip_output(self, mock_cache, mock_urlopen):
         from .dashboard import get_egress_network
 
         mock_cache.get.return_value = None
-        mock_run.return_value = Mock(
-            returncode=0,
-            stdout="IP\t: 222.94.156.34\n地址\t: 中国 江苏 南京\n运营商\t: 电信\n\nURL\t: http://www.cip.cc/222.94.156.34\n",
-            stderr="",
-        )
+        response = Mock()
+        response.__enter__ = Mock(return_value=response)
+        response.__exit__ = Mock(return_value=False)
+        response.read.return_value = "IP\t: 222.94.156.34\n地址\t: 中国 江苏 南京\n运营商\t: 电信\n\nURL\t: http://www.cip.cc/222.94.156.34\n".encode()
+        mock_urlopen.return_value = response
 
         payload = get_egress_network()
 
@@ -809,13 +809,13 @@ class DashboardSummaryApiTests(TestCase):
         self.assertEqual(payload["location"], "中国 江苏 南京")
         self.assertEqual(payload["isp"], "电信")
 
-    @patch("system_management.dashboard.subprocess.run")
+    @patch("system_management.dashboard.urlopen")
     @patch("system_management.dashboard.cache")
-    def test_egress_network_handles_curl_failure(self, mock_cache, mock_run):
+    def test_egress_network_handles_network_failure(self, mock_cache, mock_urlopen):
         from .dashboard import get_egress_network
 
         mock_cache.get.return_value = None
-        mock_run.return_value = Mock(returncode=28, stdout="", stderr="operation timed out")
+        mock_urlopen.side_effect = TimeoutError("operation timed out")
 
         payload = get_egress_network()
 
