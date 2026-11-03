@@ -45,6 +45,22 @@ class MysqlDumpParserTests(SimpleTestCase):
         self.assertEqual(len(list(statements(TinyReader(sql)))), 2)
         self.assertEqual(parse_statement(list(statements(TinyReader(sql)))[0])["rows"], [["a'b;--", "c'd"]])
 
+    def test_splitter_reports_read_progress_with_one_long_statement(self):
+        sql = "INSERT INTO sample VALUES ('" + "x" * 150000 + "');"
+        positions = []
+        parsed = list(statements(io.StringIO(sql), on_read=positions.append))
+        self.assertEqual(parsed, [sql[:-1]])
+        self.assertGreater(len(positions), 1)
+        self.assertLess(positions[0], len(sql))
+        self.assertEqual(positions[-1], len(sql))
+
+    def test_large_insert_parser_sends_heartbeat(self):
+        sql = "INSERT INTO sample VALUES " + ",".join("(1)" for _ in range(25000))
+        heartbeat = MagicMock()
+        parsed = parse_statement(sql, heartbeat=heartbeat)
+        self.assertEqual(len(parsed["rows"]), 25000)
+        heartbeat.assert_called()
+
     def test_rejects_unsafe_and_malformed_statements(self):
         for sql in ["DROP DATABASE test", "DROP TABLE `t`", "INSERT INTO other.t VALUES (1)",
                     "INSERT INTO t SELECT 1", "INSERT INTO t VALUES (SLEEP(1))", "INSERT INTO t VALUES (1) ON DUPLICATE KEY UPDATE id=1",
@@ -156,6 +172,33 @@ class MysqlDumpExecutionTests(SimpleTestCase):
                 self.assertEqual(any(sql.startswith("DROP TABLE") for sql in sqls), policy == "overwrite")
                 self.assertEqual(self.task.processed_rows, 0 if policy == "skip" else 3)
                 self.assertEqual(self.queries[-1], ("SET FOREIGN_KEY_CHECKS=%s", (1,)))
+
+    def test_import_batches_consecutive_single_row_inserts_by_columns(self):
+        self.path.write_text(
+            "INSERT INTO sample (id) VALUES (1); INSERT INTO sample (id) VALUES (2); "
+            "INSERT INTO sample (id) VALUES (3); INSERT INTO sample (other) VALUES (4); "
+            "INSERT INTO sample (other) VALUES (5);",
+            encoding="utf-8",
+        )
+        with self.context(), patch.object(
+            mysql_dump,
+            "table_columns",
+            return_value=[
+                {"COLUMN_NAME": "id", "EXTRA": ""},
+                {"COLUMN_NAME": "other", "EXTRA": ""},
+                {"COLUMN_NAME": "doubled", "EXTRA": "STORED GENERATED"},
+            ],
+        ):
+            mysql_dump.import_dump(self.task, MagicMock())
+        calls = self.conn.cursor.return_value.__enter__.return_value.executemany.call_args_list
+        self.assertEqual(
+            [(call.args[0], call.args[1]) for call in calls],
+            [
+                ("INSERT INTO `sample` (`id`) VALUES (%s)", [[1], [2]]),
+                ("INSERT INTO `sample` (`id`) VALUES (%s)", [[3]]),
+                ("INSERT INTO `sample` (`other`) VALUES (%s)", [[4], [5]]),
+            ],
+        )
 
     def test_data_only_overwrite_deletes_without_drop(self):
         self.path.write_text("INSERT INTO sample (id) VALUES (1);", encoding="utf-8")
@@ -297,9 +340,13 @@ class MysqlDumpTaskTests(TestCase):
         self.assertEqual(response.status_code, 202)
         task = transfers.claim_one()
         self.assertEqual(task.stage, "inspection_running")
+        self.assertEqual(task.processed_bytes, 0)
+        self.assertEqual(task.progress, 0)
         self.assertIsNone(transfers.claim_one())
         with patch.object(transfers, "inspect_input", return_value={"requiresExplicitConfirmation": True, "objects": [{"name": "sample", "hasStructure": False}]}):
             transfers.run_task(task)
+        task.refresh_from_db()
+        self.assertEqual(task.progress, 100)
         self.assertEqual(self.client.post(f"{self.base}{task_id}/confirm/", {"conflictPolicy": "overwrite"}, format="json").status_code, 400)
         self.assertEqual(self.client.post(f"{self.base}{task_id}/confirm/", {"conflictPolicy": "append", "confirmed": True}, format="json").status_code, 202)
 

@@ -52,23 +52,31 @@ def identifier(token):
     return name
 
 
-def tokens(sql):
+def tokens(sql, heartbeat=None):
     result, end = [], 0
-    for match in TOKEN.finditer(sql):
+    for index, match in enumerate(TOKEN.finditer(sql), 1):
         if match.start() != end:
             raise DumpError("SQL 包含不支持的语法")
         end = match.end()
         if not match.group().isspace():
             result.append(match.group())
+        if heartbeat and index % 100000 == 0:
+            heartbeat()
     if end != len(sql):
         raise DumpError("SQL 包含不支持的语法")
     return result
 
 
-def statements(source, limit=None):
+def statements(source, limit=None, on_read=None):
     """Two-character lookahead survives read boundaries, including comments and escapes."""
     limit = limit or getattr(settings, "DATABASE_TRANSFER_MAX_SQL_STATEMENT_BYTES", 64 * 1024 * 1024)
-    chars = (char for chunk in iter(lambda: source.read(65536), "") for char in chunk)
+    def chunks():
+        for chunk in iter(lambda: source.read(65536), ""):
+            if on_read:
+                on_read(source.tell())
+            yield from chunk
+
+    chars = chunks()
     char = next(chars, "")
     following = next(chars, "")
     buffer, size, quoted, comment = io.StringIO(), 0, None, None
@@ -176,8 +184,8 @@ def literal(token):
     raise DumpError("INSERT 仅支持常量，不支持表达式、函数或子查询")
 
 
-def parse_statement(sql):
-    parts = tokens(sql)
+def parse_statement(sql, heartbeat=None):
+    parts = tokens(sql, heartbeat)
     upper = [part.upper() for part in parts]
     if not parts:
         raise DumpError("空 SQL")
@@ -314,13 +322,13 @@ def generated_column(extra):
     return bool(re.search(r"\b(?:VIRTUAL|STORED) GENERATED\b", str(extra).upper()))
 
 
-def scan_dump(task, spool=None, heartbeat=None):
+def scan_dump(task, spool=None, heartbeat=None, on_read=None):
     definitions, drops, details = {}, set(), {}
     indices = {}
     statement_count = 0
     with Path(task.input_path).open("r", encoding="utf-8-sig") as source:
-        for sql in statements(source):
-            item = parse_statement(sql)
+        for sql in statements(source, on_read=on_read):
+            item = parse_statement(sql, (lambda: on_read(source.tell(), True)) if on_read else None)
             statement_count += 1
             if heartbeat and statement_count % max(1, settings.DATABASE_TRANSFER_BATCH_ROWS) == 0: heartbeat()
             if item["kind"] == "setting": continue
@@ -358,7 +366,7 @@ def scan_dump(task, spool=None, heartbeat=None):
 
 
 def inspect_dump(task, heartbeat=None):
-    definitions, details = scan_dump(task, heartbeat=heartbeat)
+    definitions, details = scan_dump(task, on_read=heartbeat)
     with Path(task.input_path).open("r", encoding="utf-8-sig") as source:
         header = source.read(16384)
     initial_comment = re.match(r"\s*/\*(.*?)\*/", header, re.S)
@@ -533,20 +541,36 @@ def import_dump(task, report):
                             query(conn, f"DELETE FROM {quote(name)}")
                         count, data_path = 0, Path(folder) / f"{index}.jsonl"
                         if data_path.exists():
+                            pending_rows, pending_fields = [], None
+
+                            def flush_batch():
+                                nonlocal count, pending_rows, pending_fields
+                                if not pending_rows:
+                                    return
+                                if not require_task_permissions(task.owner, task):
+                                    raise PermissionError("任务所需权限已被撤销")
+                                sql = f"INSERT INTO {quote(name)} ({', '.join(quote(field) for field in pending_fields)}) VALUES ({', '.join(['%s'] * len(pending_fields))})"
+                                with conn.cursor() as cursor:
+                                    cursor.executemany(sql, pending_rows)
+                                count += len(pending_rows)
+                                report(task, stage=f"importing_table:{name}", rows=done_rows + count, total=total_rows)
+                                resource_guard(task)
+                                pending_rows = []
+
                             with data_path.open(encoding="utf-8") as source:
                                 for line in source:
                                     item = parse_statement(json.loads(line))
                                     fields = item["columns"] or (definition["columns"] if definition else all_fields)
                                     if any(field not in all_fields or field in generated for field in fields): raise DumpError("INSERT 字段与目标结构不兼容")
                                     if len(fields) != len(item["rows"][0]): raise DumpError("INSERT 值数量与目标结构不兼容")
-                                    sql = f"INSERT INTO {quote(name)} ({', '.join(quote(field) for field in fields)}) VALUES ({', '.join(['%s'] * len(fields))})"
-                                    for offset in range(0, len(item["rows"]), batch_size):
-                                        if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
-                                        batch = item["rows"][offset:offset + batch_size]
-                                        with conn.cursor() as cursor: cursor.executemany(sql, batch)
-                                        count += len(batch)
-                                        report(task, stage=f"importing_table:{name}", rows=done_rows + count, total=total_rows)
-                                        resource_guard(task)
+                                    if pending_fields is not None and fields != pending_fields:
+                                        flush_batch()
+                                    pending_fields = fields
+                                    for row in item["rows"]:
+                                        pending_rows.append(row)
+                                        if len(pending_rows) >= batch_size:
+                                            flush_batch()
+                            flush_batch()
                         conn.commit()
                     except Exception as exc:
                         conn.rollback()

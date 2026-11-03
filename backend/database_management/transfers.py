@@ -392,7 +392,16 @@ def inspect_input(task):
             from .table_imports import inspect_rows
             return inspect_rows(task, progress, strict=False)
         from .mysql_dump import inspect_dump
-        return inspect_dump(task, lambda: progress(task, stage="validating_sql"))
+        progress(task, stage="validating_sql", byte_count=0)
+        last_report = time.monotonic()
+
+        def report_read(byte_count, parsing=False):
+            nonlocal last_report
+            if time.monotonic() - last_report >= 5:
+                progress(task, stage="parsing_sql" if parsing else "validating_sql", byte_count=byte_count)
+                last_report = time.monotonic()
+
+        return inspect_dump(task, report_read)
     if task.format == "snapshot" or suffix == ".json":
         with path.open("r", encoding="utf-8-sig") as stream:
             payload = json.load(stream)
@@ -433,7 +442,8 @@ def upload_complete(request, task_id):
             return Response(serialize(task), status=202)
         preview = inspect_input(task)
         preview["sha256"] = digest
-        update(task, status="awaiting_confirmation", stage="awaiting_confirmation", preview=preview)
+        update(task, status="awaiting_confirmation", stage="awaiting_confirmation", preview=preview,
+               progress=100, processed_bytes=task.total_bytes or task.processed_bytes)
         return Response(serialize(task))
     except Exception as exc:
         update(task, status="failed", stage="validation_failed", error=str(exc), finished_at=timezone.now())
@@ -467,7 +477,7 @@ def task_confirm(request, task_id):
         try: inspect_rows(task, progress, mapping)
         except ValueError as exc: return bad_request(str(exc))
         parameters = {**parameters, "fieldMapping": mapping}
-    update(task, parameters=parameters, conflict_policy=policy, status="queued", stage="queued", error="")
+    update(task, parameters=parameters, conflict_policy=policy, status="queued", stage="queued", error="", progress=0)
     return Response(serialize(task), status=202)
 
 
@@ -599,6 +609,8 @@ def progress(task, *, stage=None, rows=None, byte_count=None, total=None):
     if byte_count is not None: values["processed_bytes"] = byte_count
     if total is not None: values["total_rows"] = total
     if total and rows is not None: values["progress"] = min(99, int(rows * 100 / total))
+    elif stage in {"validating_sql", "parsing_sql"} and byte_count is not None and task.total_bytes:
+        values["progress"] = min(99, int(byte_count * 100 / task.total_bytes))
     update(task, **values)
 
 
@@ -696,7 +708,8 @@ def run_task(task):
         preview = inspect_input(task)
         progress(task, stage="inspection_running")
         preview["sha256"] = task.parameters.get("sha256", "")
-        update(task, status="awaiting_confirmation", stage="awaiting_confirmation", preview=preview)
+        update(task, status="awaiting_confirmation", stage="awaiting_confirmation", preview=preview,
+               progress=100, processed_bytes=task.total_bytes or task.processed_bytes)
         return
     if not require_task_permissions(task.owner, task): raise PermissionError("任务所需权限已被撤销")
     task.refresh_from_db()
@@ -769,7 +782,9 @@ def claim_one():
         task = DatabaseTransferTask.objects.filter(Q(status="queued") | Q(status="inspecting", stage="inspection_queued")).order_by("created_at").first()
         if not task: return None
         inspection = task.status == "inspecting"
-        changed = DatabaseTransferTask.objects.filter(pk=task.pk, status=task.status, stage=task.stage).update(status="running", stage="inspection_running" if inspection else "starting", started_at=timezone.now())
+        changed = DatabaseTransferTask.objects.filter(pk=task.pk, status=task.status, stage=task.stage).update(
+            status="running", stage="inspection_running" if inspection else "starting", started_at=timezone.now(),
+            processed_bytes=0 if inspection else task.processed_bytes, progress=0 if inspection else task.progress)
         if not changed: return None
         task.refresh_from_db(); emit(task)
         return task
